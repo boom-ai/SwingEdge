@@ -30,7 +30,8 @@ object SimTests {
        "stats":{"n":0,"winPct":0,"avgPct":0,"pf":0,"maxDdPct":0,"oosN":0,"oosAvgPct":0},"why":""}],
      "scorecard": {"n":0,"winPct":0,"netRs":0,"avgPct":0,"paperN":0,"paperWinPct":0,"paperAvgPct":0,
        "recent":[{"sym":"","closedAt":0,"result":"","pnlRs":0,"pnlPct":0,"paper":false}]},
-     "feed": [{"ts":0,"kind":"buy","title":"","body":""}]
+     "feed": [{"ts":0,"kind":"buy","title":"","body":""}],
+     "watch": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"ema10":0,"ema20":0,"gapPct":0,"status":""}]
     }""").asObj()
 
     private val ENUMS = mapOf(
@@ -406,7 +407,7 @@ object SimTests {
         val q = FakePlatform.standard()
         q.setTime(day(2026, 10, 5), 8 * 60)
         val st = state(SwingApp(q), "untested")
-        T.check(st.list("strategies").size == 6 && st.list("strategies").all { it.asObj().str("verdict") == "UNTESTED" }, "UNTESTED before the first run")
+        T.check(st.list("strategies").size == 7 && st.list("strategies").all { it.asObj().str("verdict") == "UNTESTED" }, "UNTESTED before the first run")
     }
 
     fun bear() {
@@ -464,7 +465,7 @@ object SimTests {
         var s = state(app, "brand-new, never ticked, offline")
         T.eq(s.long("lastScanAt"), 0L, "never scanned"); T.eq(s.obj("settings").num("capital"), 100000.0, "default capital"); T.eq(s.obj("settings").num("riskPct"), 0.75, "default risk")
         T.eq(s.obj("settings").num("costPct"), 0.25, "default charges"); T.eq(s.obj("settings").int("maxOpenTrades"), 4, "default max trades")
-        T.eq(s.list("strategies").size, 6, "strategies listed even with no data")
+        T.eq(s.list("strategies").size, 7, "strategies listed even with no data")
         T.check(!app.tick("open").startsWith("Error"), "offline tick does not fail")
         s = state(app, "offline after tick")
         T.eq(s.str("lastScanStatus"), "No internet — showing last data", "offline status line")

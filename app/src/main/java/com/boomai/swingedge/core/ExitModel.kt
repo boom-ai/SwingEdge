@@ -42,8 +42,10 @@ object ExitModel {
     const val STOP = 2
     const val T2 = 4
     const val TIME = 8
+    /** Closed above its short moving average: the bounce the trade was waiting for has happened. */
+    const val MA = 16
 
-    fun step(p: Pos, o: Double, h: Double, l: Double, c: Double, lastDay: Boolean): Int {
+    fun step(p: Pos, o: Double, h: Double, l: Double, c: Double, lastDay: Boolean, bounceExit: Boolean = false): Int {
         if (p.closed) return NONE
         var ev = NONE
         // 1. stop first
@@ -69,6 +71,11 @@ object ExitModel {
             close(p, if (o > p.t2) o else p.t2, T2)
             return ev or T2
         }
+        // 3b. bounce exit at the close (rules that sell on the first close above a short average)
+        if (bounceExit) {
+            close(p, c, MA)
+            return ev or MA
+        }
         // 4. time exit
         if (lastDay) {
             close(p, c, TIME)
@@ -92,6 +99,7 @@ object ExitModel {
     fun resultText(reason: Int, t1Done: Boolean): String = when {
         reason and T2 != 0 -> "T2 hit"
         reason and STOP != 0 -> if (t1Done) "T1 hit, rest at entry" else "Stop-loss hit"
+        reason and MA != 0 -> "Sold on the bounce"
         reason and TIME != 0 -> "Time exit on day " + Params.HOLD_DAYS
         else -> "Closed"
     }

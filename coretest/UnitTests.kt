@@ -398,7 +398,7 @@ object UnitTests {
         val mixed = trend("^NSEI", 260, 20000.0, 0.1); append(mixed, 19900.0, 19900.0, 18900.0, 19000.0, 0.0)
         T.eq(Strategies.regime(mixed, mixed.n - 1), 0, "NEUTRAL between the two")
         T.eq(Strategies.regime(trend("^NSEI", 100, 20000.0, 0.1), 99), 0, "NEUTRAL without 200 bars")
-        T.eq(Strategies.all.map { it.id }, listOf("WASHOUT_DIP", "MONTHLY_LEADERS", "DIP_UPTREND", "MOM_PULLBACK", "BREAKOUT_VOL", "WEEKLY_LEADERS"), "six strategies registered")
+        T.eq(Strategies.all.map { it.id }, listOf("WASHOUT_DIP", "LEADER_DIP", "MONTHLY_LEADERS", "DIP_UPTREND", "MOM_PULLBACK", "BREAKOUT_VOL", "WEEKLY_LEADERS"), "six strategies registered")
         T.check(Strategies.all.all { it.params().isNotEmpty() && it.label.isNotEmpty() && it.desc.isNotEmpty() }, "labels, descriptions, params present")
         Params.DIP_UPTREND_ENABLED = false
         T.check(eval(DipUptrend, dip, bull) == null, "disabled strategy never fires")

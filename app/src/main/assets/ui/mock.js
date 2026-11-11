@@ -257,6 +257,7 @@
           null
         ],
         scorecard: { n: null, winPct: 'NaN', netRs: -1e15, recent: [{ sym: null, closedAt: -5, pnlRs: 'x', paper: 'maybe' }, null, { sym: 'OK', closedAt: 8.7e15, result: LONG, pnlRs: 1e14, pnlPct: 1e6, paper: true }] },
+        watch: [{ sym: 'POLYCAB', name: 'Polycab India', ltp: 7421.5, dayChgPct: 0.84, ema10: 7350.2, ema20: 7361.9, gapPct: 0.16, status: 'NEAR' }, { sym: 'CUMMINSIND', name: 'Cummins India', ltp: 3980.1, dayChgPct: 1.92, ema10: 3921.4, ema20: 3915.0, gapPct: -0.16, status: 'CROSSED' }, { sym: 'FEDERALBNK', name: 'Federal Bank', ltp: 212.4, dayChgPct: -0.21, ema10: 210.3, ema20: 211.1, gapPct: 0.38, status: 'NEAR' }],
         feed: [
           { ts: T0 - MIN, kind: 'explode', title: LONG, body: LONG + ' ' + LONG },
           { ts: 'NaN', kind: null, title: null, body: null },
@@ -416,8 +417,9 @@
       if (t0 && t0.status === 'OPEN') lv = [{ kind: 'entry', label: 'Bought', v: t0.entry }, { kind: 'stop', label: 'Stop-loss', v: t0.sl }, { kind: 'target', label: 'Target 1', v: t0.t1 }, { kind: 'target', label: 'Target 2', v: t0.t2 }];
       else if (g0) lv = [{ kind: 'entry', label: 'Entry', v: g0.entry }, { kind: 'stop', label: 'Stop-loss', v: g0.sl }, { kind: 'target', label: 'Target 1', v: g0.t1 }, { kind: 'target', label: 'Target 2', v: g0.t2 }];
       else if (h0) lv = [{ kind: 'entry', label: 'Your avg', v: h0.avg }, { kind: 'stop', label: 'Trailing stop', v: h0.stop }, { kind: 'target', label: 'Book near', v: h0.bookAt }];
+      var e10 = [], e20 = [], x1 = c[0], x2 = c[0]; for (i = 0; i < n; i++) { x1 += 2 / 11 * (c[i] - x1); x2 += 2 / 21 * (c[i] - x2); e10.push(+x1.toFixed(2)); e20.push(+x2.toFixed(2)); }
       setTimeout(function () {
-        finish('getChart', { ok: true, sym: sym, name: (h0 && h0.name) || (g0 && g0.name) || sym, d: d, o: o, h: h, l: l, c: c, sma50: m50, sma200: m200, levels: lv,
+        finish('getChart', { ok: true, sym: sym, ema10: e10, ema20: e20, name: (h0 && h0.name) || (g0 && g0.name) || sym, d: d, o: o, h: h, l: l, c: c, sma50: m50, sma200: m200, levels: lv,
           stats: { ltp: ltp, ret5: 2.1, ret21: 6.4, ret63: 12.8, ret126: 21.5, sma50: m50[n - 1], sma200: m200[n - 1], rsi14: 58, high52: Math.max.apply(null, h), low52: Math.min.apply(null, l) } });
       }, 300);
     }

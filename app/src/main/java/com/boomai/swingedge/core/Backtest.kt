@@ -128,7 +128,8 @@ object Backtest {
                     var j = i + 1
                     while (j < s.n && !pos.closed) {
                         val dayNo = j - i + 1
-                        ExitModel.step(pos, s.o[j], s.h[j], s.l[j], s.c[j], dayNo >= strategies[si].holdDays)
+                        val xs = strategies[si].exitAboveSma
+                        ExitModel.step(pos, s.o[j], s.h[j], s.l[j], s.c[j], dayNo >= strategies[si].holdDays, xs > 0 && s.c[j] > Ind.sma(s.c, j, xs))
                         j++
                     }
                     val exitDay = if (pos.closed) s.d[j - 1] else Int.MAX_VALUE

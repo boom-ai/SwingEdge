@@ -39,6 +39,7 @@ object T {
 fun main(args: Array<String>) {
     // Tests exercise every strategy; shipped defaults keep the research-rejected ones off.
     com.boomai.swingedge.core.Params.MOM_PULLBACK_ENABLED = true
+    com.boomai.swingedge.core.Params.DIP_UPTREND_ENABLED = true
     com.boomai.swingedge.core.Params.BREAKOUT_VOL_ENABLED = true
     com.boomai.swingedge.core.Params.WEEKLY_LEADERS_ENABLED = true
     com.boomai.swingedge.core.Params.DIP_RSI_MAX = 8.0

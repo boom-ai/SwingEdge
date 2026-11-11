@@ -450,6 +450,17 @@
       return '<button type="button" class="mvr" data-c="chart" data-id="' + esc(T(x.sym)) + '"><b>' + tx(x.sym) + '</b><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + pc(x.dayChgPct, true, true) + '</span></button>';
     }).join('') + '</div>';
   }
+  function watchList(S) {
+    var ws = A(S.watch).filter(function (x) { return T(x.sym).trim() && N(x.ltp) > 0; });
+    var h = '<div class="sec" id="watch"><h2>EMA 10/20 watchlist</h2>' + (ws.length ? '<span class="cnt">' + ws.length + '</span>' : '') + '</div>';
+    if (!ws.length) return h + '<div class="hint hintpad">' + ic('info') + '<span class="t">No uptrend stock has its 10-day EMA closing in on the 20-day right now. The list refreshes with each full scan.</span></div>';
+    h += '<div class="card mv">' + ws.map(function (x) {
+      var crossed = T(x.status) === 'CROSSED', g = N(x.gapPct);
+      return '<button type="button" class="mvr wt" data-c="chart" data-id="' + esc(T(x.sym)) + '"><span class="wn"><b>' + tx(x.sym) + '</b><span class="ws ' + (crossed ? 'up' : '') + '">' +
+        (crossed ? 'Crossed above today' : '10 EMA ' + (g === null ? '' : Math.abs(g).toFixed(2) + '% ') + 'below 20 EMA, closing') + '</span></span><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + pc(x.dayChgPct, true, true) + '</span></button>';
+    }).join('') + '</div>';
+    return h + '<div class="hint hintpad">' + ic('info') + '<span class="t">A list for your own chart reading, not buy calls: liquid stocks above their 200-day average. On 13 years of NSE data this setup did no better than a random uptrend stock over the next 6 days. Tap a row for the chart.</span></div>';
+  }
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
     var h = banner(ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs);
@@ -458,7 +469,7 @@
       h += '<div class="empty"><div class="ei">' + ic(bs.icon) + '</div><h3>' + esc(bs.title) + '</h3><p>' + esc(bs.text) + '</p>' +
         (bs.link ? '<div class="btns">' + btn('strategies', null, bs.link, 'sm') + '</div>' : '') + '</div>';
       var ot = openTrades(S).length;
-      h += movers(S);
+      h += watchList(S) + movers(S);
       if (ot) h += '<div class="hint hintpad">' + ic('check') + '<span class="t">' + ot + ' open trade' + (ot > 1 ? 's are' : ' is') + ' on HOLD. Nothing to do on ' + (ot > 1 ? 'them' : 'it') + '.</span></div>';
       return h;
     }
@@ -473,7 +484,7 @@
       h += c;
     });
     if (!hasBuy) h += hintLine(bs);
-    return h;
+    return h + watchList(S);
   }
 
   /* ---------- Trades ---------- */
@@ -810,7 +821,7 @@
       if (pts.length > 1) seg += '<polyline class="' + cls + '" points="' + pts.join(' ') + '"/>';
       return seg;
     };
-    g += line(m200, 'ma200') + line(m50, 'ma50');
+    g += line(m200, 'ma200') + line(m50, 'ma50') + line(nums(res.ema20), 'ema20') + line(nums(res.ema10), 'ema10');
     for (i = 0; i < n; i++) {
       if (!(c[i] > 0)) continue;
       var up = c[i] >= o[i], x = X(i), y1 = Y(Math.max(o[i], c[i])), y2 = Y(Math.min(o[i], c[i]));
@@ -832,7 +843,7 @@
     var body = (nm && nm !== sym ? '<p class="lead cname">' + esc(nm) + '</p>' : '') +
       '<div class="cpx"><span class="big num">' + px(st.ltp) + '</span><span class="num ' + tone(st.ret5) + '">' + pc(st.ret5, true) + ' in a week</span></div>' +
       chartSvg(res) +
-      '<div class="cleg"><span><i class="s50"></i>50-day average</span><span><i class="s200"></i>200-day average</span></div>';
+      '<div class="cleg"><span><i class="e10"></i>10-day EMA</span><span><i class="e20"></i>20-day EMA</span><span><i class="s50"></i>50-day avg</span><span><i class="s200"></i>200-day avg</span></div>';
     if (lv.length) body += '<div class="clv">' + lv.map(function (x) {
       var k = T(x.kind), cls = k === 'stop' ? 'lstop' : k === 'target' ? 'ltgt' : 'lent';
       var diff = N(st.ltp) > 0 ? (N(x.v) / N(st.ltp) - 1) * 100 : null;

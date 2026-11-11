@@ -7,6 +7,7 @@ import java.util.concurrent.locks.ReentrantLock
  * last published snapshot (plus live clock fields and `busy`).
  */
 class SwingApp(private val p: Platform) {
+    @Volatile private var watchItems: List<Map<String, Any?>> = emptyList()
 
     private val lock = ReentrantLock()
     private var st: AppState = AppState()
@@ -396,6 +397,7 @@ class SwingApp(private val p: Platform) {
         val inWindow = weekday && indexToday && st.holidayDay != day &&
             min >= Params.BUY_WINDOW_START_MIN && min <= Params.BUY_WINDOW_END_MIN
         if (inWindow) makeSignals(now, day)
+        try { computeWatch() } catch (e: Throwable) { p.log("watch: " + e) }
 
         st.lastScanAt = now
         st.lastScanStatus = when {
@@ -476,6 +478,7 @@ class SwingApp(private val p: Platform) {
                 val recent = if (ss.n == 0) "No trades of this kind in the phone's recent data yet." else "Recent check on this phone: " + Fmt.plural(ss.n, "trade") + ", " + Fmt.pct(ss.avgPct) + " per trade."
                 x.why = if (!sg.enabled()) "Switched off in this version of the app."
                 else if (recentBad) "Passed the 15-year test, but lost " + Fmt.p1(-ss.avgPct) + "% per trade over " + Fmt.plural(ss.n, "recent trade") + " — paused until that recovers."
+                else if (!Gate.passes(rs)) "On 15 years of NSE data (2011–2026) it made only " + Fmt.pct(rs.avgPct) + " per trade after charges over " + rs.n + " trades (" + Fmt.pct(rs.oosAvgPct) + " since 2022) — too thin to trust. Shown as a test idea only. " + recent
                 else "Passed on 15 years of NSE data (2011–2026): " + rs.n + " trades, " + Math.round(rs.winPct) + "% winners, " + Fmt.pct(rs.avgPct) + " per trade after charges; worst year −0.9% per trade. " + recent
             } else {
             x.n = ss.n; x.winPct = ss.winPct; x.avgPct = ss.avgPct; x.pf = ss.pf; x.maxDdPct = ss.maxDdPct; x.oosN = ss.oosN; x.oosAvgPct = ss.oosAvgPct
@@ -497,6 +500,42 @@ class SwingApp(private val p: Platform) {
 
     /** Shares to buy so that the loss at the stop INCLUDING charges stays within riskPct of capital; 0 if not affordable. */
     private fun sizeFor(entry: Double, sl: Double): Int = positionSize(st.settings.capital, st.settings.riskPct, st.settings.costPct, entry, sl)
+
+    /** EMA 10/20 watchlist: liquid stocks above their 200-day average whose 10-day EMA is closing in on, or has just crossed above, the 20-day EMA. A chart-reading list, not buy calls. */
+    private fun computeWatch() {
+        val out = ArrayList<Pair<Double, Map<String, Any?>>>()
+        val k10 = 2.0 / 11.0; val k20 = 2.0 / 21.0
+        for (sym in universe) {
+            val s = live[sym] ?: continue
+            val n = s.n
+            if (n < 210) continue
+            val c = s.c[n - 1]
+            if (!(c >= Params.MIN_PRICE)) continue
+            var tv = 0.0
+            for (j in n - 21 until n - 1) tv += s.c[j] * s.v[j]
+            if (tv / 20.0 < Params.MIN_AVG_TURNOVER_RS) continue
+            val sma200 = Ind.sma(s.c, n - 1, 200)
+            if (sma200.isNaN() || !(c > sma200)) continue
+            // EMAs over the last 120 bars; keep the last 3 gaps (as a fraction of EMA20)
+            val from = n - 120
+            var e10 = s.c[from]; var e20 = s.c[from]
+            var g0 = 0.0; var g1 = 0.0; var g2 = 0.0
+            for (j in from + 1 until n) {
+                e10 += k10 * (s.c[j] - e10); e20 += k20 * (s.c[j] - e20)
+                g2 = g1; g1 = g0; g0 = (e20 - e10) / e20
+            }
+            val near = g0 > 0 && g0 < Params.WATCH_EMA_GAP_MAX && g0 < g1 && g1 < g2 && c > e20
+            val crossed = g0 <= 0 && g1 > 0
+            if (!near && !crossed) continue
+            val prev = s.c[n - 2]
+            val m = linkedMapOf<String, Any?>("sym" to sym, "name" to nameOf(sym), "ltp" to Fmt.r2(c),
+                "dayChgPct" to Fmt.r2(if (prev > 0) (c / prev - 1) * 100.0 else 0.0), "ema10" to Fmt.r2(e10), "ema20" to Fmt.r2(e20),
+                "gapPct" to Fmt.r2(g0 * 100.0), "status" to (if (crossed) "CROSSED" else "NEAR"))
+            out.add(Pair(if (crossed) -1.0 else g0, m))
+        }
+        out.sortBy { it.first }
+        watchItems = out.take(Params.WATCH_MAX).map { it.second }
+    }
 
     private fun makeSignals(now: Long, day: Int) {
         val reallyLive = Strategies.all.filter { it.enabled() && st.strat(it.id).verdict == "LIVE" }
@@ -612,13 +651,14 @@ class SwingApp(private val p: Platform) {
                     // if T1 was already acted on intraday that day, the day's low may predate it: judge the stop on the close only
                     val lo = if (seenLive) s.c[k] else s.l[k]
                     val op = if (seenLive) s.c[k] else s.o[k]
-                    ExitModel.step(pos, op, s.h[k], lo, s.c[k], dn >= t.maxDays)
+                    val xs = Strategies.byId(t.strategyId)?.exitAboveSma ?: 0
+                    ExitModel.step(pos, op, s.h[k], lo, s.c[k], dn >= t.maxDays, xs > 0 && s.c[k] > Ind.sma(s.c, k, xs))
                     if (pos.t1Done && !t.t1Done) { t.t1Done = true; t.t1Px = pos.t1Px; t.t1Day = if (t.paper) d else today; t.sl = pos.sl }
                     if (pos.closed) {
                         if (t.paper) {
                             closeTrade(t, pos.exitPx, Clock.msAt(d, Clock.CLOSE_MIN), ExitModel.resultText(pos.reason, pos.t1Done), cost)
                         } else {
-                            t.exitDue = if (pos.reason and ExitModel.STOP != 0) ExitModel.STOP else if (pos.reason and ExitModel.T2 != 0) ExitModel.T2 else ExitModel.TIME
+                            t.exitDue = if (pos.reason and ExitModel.STOP != 0) ExitModel.STOP else if (pos.reason and ExitModel.T2 != 0) ExitModel.T2 else if (pos.reason and ExitModel.MA != 0) ExitModel.MA else ExitModel.TIME
                         }
                     }
                 }
@@ -645,6 +685,10 @@ class SwingApp(private val p: Platform) {
                     if (!t.t1Done && t.t1 > 0 && highSeen >= t.t1) { t.t1Done = true; t.t1Px = t.t1; t.t1Day = today; if (t.entry > t.sl) t.sl = t.entry }
                     if (t.t2 > 0 && highSeen >= t.t2) t.exitDue = ExitModel.T2
                     else if (t.day >= t.maxDays && min >= Params.TIME_EXIT_FROM_MIN) t.exitDue = ExitModel.TIME
+                    else if (!entryToday && min >= Params.TIME_EXIT_FROM_MIN) {
+                        val xs = Strategies.byId(t.strategyId)?.exitAboveSma ?: 0
+                        if (xs > 0 && ltp > Ind.sma(s.c, i, xs)) t.exitDue = ExitModel.MA
+                    }
                 }
             }
             t.pnlRs = t.pnlAt(ltp, cost); t.pnlPct = t.pnlRs / (t.entry * t.qty) * 100.0
@@ -667,6 +711,11 @@ class SwingApp(private val p: Platform) {
                 t.action = "EXIT"; key = "EXIT_T2"
                 t.actionNote = "Target 2 " + Fmt.rs(t.t2) + " reached. Sell the remaining shares and book the profit."
                 title = t.sym + " hit Target 2 — sell"
+            }
+            t.exitDue == ExitModel.MA -> {
+                t.action = "EXIT"; key = "EXIT_MA"
+                t.actionNote = "It has bounced back above its 5-day average (last price " + Fmt.rs(t.ltp) + "). That was the plan — sell before the 3:30 pm close."
+                title = t.sym + " bounced — sell today"
             }
             t.exitDue == ExitModel.TIME -> {
                 t.action = "TIME_EXIT"; key = "TIME_EXIT"
@@ -914,8 +963,12 @@ class SwingApp(private val p: Platform) {
                 val from = maxOf(0, x.n - Params.CHART_BARS)
                 val d = ArrayList<Any?>(); val o = ArrayList<Any?>(); val h = ArrayList<Any?>(); val l = ArrayList<Any?>(); val c = ArrayList<Any?>()
                 val m50 = ArrayList<Any?>(); val m200 = ArrayList<Any?>()
+                val x10 = ArrayList<Any?>(); val x20 = ArrayList<Any?>()
+                var e10 = x.c[maxOf(0, from - 100)]; var e20 = e10
+                for (i in maxOf(0, from - 100) + 1 until from) { e10 += (2.0 / 11.0) * (x.c[i] - e10); e20 += (2.0 / 21.0) * (x.c[i] - e20) }
                 for (i in from until x.n) {
                     d.add(x.d[i].toLong() * Clock.DAY_MS); o.add(Fmt.r2(x.o[i])); h.add(Fmt.r2(x.h[i])); l.add(Fmt.r2(x.l[i])); c.add(Fmt.r2(x.c[i]))
+                    e10 += (2.0 / 11.0) * (x.c[i] - e10); e20 += (2.0 / 21.0) * (x.c[i] - e20); x10.add(Fmt.r2(e10)); x20.add(Fmt.r2(e20))
                     val a50 = Ind.sma(x.c, i, 50); val a200 = Ind.sma(x.c, i, 200)
                     m50.add(if (a50.isNaN()) 0.0 else Fmt.r2(a50)); m200.add(if (a200.isNaN()) 0.0 else Fmt.r2(a200))
                 }
@@ -931,7 +984,7 @@ class SwingApp(private val p: Platform) {
                 val a50 = Ind.sma(x.c, last, 50); val a200 = Ind.sma(x.c, last, 200); val rsi = Ind.rsi(x.c, last, 14)
                 val hi = Ind.highest(x.h, last, minOf(250, x.n)); val lo = Ind.lowest(x.l, last, minOf(250, x.n))
                 fun rt(n: Int): Double { val r = Ind.ret(x.c, last, n); return if (r.isNaN()) 0.0 else Fmt.r2(r * 100.0) }
-                return ok("sym" to sym, "name" to nameOf(sym), "d" to d, "o" to o, "h" to h, "l" to l, "c" to c, "sma50" to m50, "sma200" to m200, "levels" to levels,
+                return ok("sym" to sym, "name" to nameOf(sym), "d" to d, "o" to o, "h" to h, "l" to l, "c" to c, "sma50" to m50, "sma200" to m200, "ema10" to x10, "ema20" to x20, "levels" to levels,
                     "stats" to linkedMapOf<String, Any?>("ltp" to Fmt.r2(x.c[last]), "sma50" to (if (a50.isNaN()) 0.0 else Fmt.r2(a50)), "sma200" to (if (a200.isNaN()) 0.0 else Fmt.r2(a200)),
                         "rsi14" to (if (rsi.isNaN()) 0.0 else Fmt.r1(rsi)), "high52" to (if (hi.isNaN()) 0.0 else Fmt.r2(hi)), "low52" to (if (lo.isNaN()) 0.0 else Fmt.r2(lo)),
                         "ret5" to rt(5), "ret21" to rt(21), "ret63" to rt(63), "ret126" to rt(126), "bars" to x.n))
@@ -1029,6 +1082,7 @@ class SwingApp(private val p: Platform) {
             }
             m["scorecard"] = scorecard(s)
             m["feed"] = s.feed.take(AppState.MAX_FEED).map { it.toMap() }
+            m["watch"] = watchItems
             return m
         }
     }

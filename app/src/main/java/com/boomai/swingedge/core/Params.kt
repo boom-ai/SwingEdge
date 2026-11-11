@@ -12,7 +12,7 @@ object Params {
     /** Set false to disable a strategy completely (it is then shown as PAUSED and never emits). */
     var MOM_PULLBACK_ENABLED = false   // rejected on 2013-2026 NSE data (research/REPORT.md)
     var BREAKOUT_VOL_ENABLED = false   // rejected on 2013-2026 NSE data
-    var DIP_UPTREND_ENABLED = true
+    var DIP_UPTREND_ENABLED = false   // replaced by LEADER_DIP: this looser version lost money as a 4-position portfolio
     var WEEKLY_LEADERS_ENABLED = false // rejected on 2013-2026 NSE data
 
     // ---------------------------------------------------------------- common filters
@@ -57,6 +57,16 @@ object Params {
     var BO_T1_R = 1.0
     var BO_T2_R = 2.0
 
+    // ---------------------------------------------------------------- LEADER_DIP (research/REPORT3.md)
+    var LD_ENABLED = true
+    var LD_RSI_MAX = 5.0
+    var LD_TOP_FRACTION = 0.30
+    var LD_STOP_ATR = 3.0
+    var LD_STOP_CAP_PCT = 15.0
+    var LD_SLOPE_BARS = 10
+    var LD_EXIT_SMA = 5
+    /** Filled from the long real-data run of this exact rule through the app's engine; null = judge on the phone's data only. */
+    var LD_RESEARCH: StratStats? = StratStats().also { it.n = 1228; it.winPct = 61.6; it.avgPct = 0.14; it.pf = 1.07; it.maxDdPct = 64.0; it.oosN = 589; it.oosAvgPct = 0.55 }
     // ---------------------------------------------------------------- DIP_UPTREND
     var DIP_RSI_PERIOD = 2
     var DIP_RSI_MAX = 5.0
@@ -156,6 +166,9 @@ object Params {
     /** Up to this many stocks, every scan fetches a live quote for all of them; above it, only when buys are possible. */
     var FULL_QUOTE_MAX_UNIVERSE = 250
     /** When no strategy is LIVE, still show (clearly labelled, paper-tracked) setups from enabled strategies that failed the test. */
+    /** EMA 10/20 watchlist: 10-day EMA within this fraction below the 20-day EMA and closing for 2 days. */
+    var WATCH_EMA_GAP_MAX = 0.005
+    var WATCH_MAX = 15
     var EXPERIMENTAL_ENABLED = true
     var EXPERIMENTAL_MAX_PER_DAY = 3
     /** A strategy judged on its long research test is paused if the phone's own recent test has at least this many trades and lost money. */

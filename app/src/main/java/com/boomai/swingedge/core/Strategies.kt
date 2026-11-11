@@ -27,6 +27,8 @@ class Ctx {
     var breadth = Double.NaN
     /** Risk-adjusted 6-month momentum needed to be a monthly leader; NaN = nobody qualifies. */
     var monthlyCutoff = Double.NaN
+    /** Skip-month momentum needed to be in the top slice of stocks ABOVE their 200-day average (leader-dip rule); NaN = nobody. */
+    var dipCutoff = Double.NaN
 }
 
 /** Per-bar features shared by all strategies. One instance is reused; compute() allocates nothing. */
@@ -67,6 +69,8 @@ interface Strategy {
     fun evaluate(s: Series, i: Int, f: Feat, ctx: Ctx): Setup?
     /** Trading days a position is held before the time exit. */
     val holdDays: Int get() = Params.HOLD_DAYS
+    /** If > 0: sell at the first close above this many days' average (checked from the day after entry). */
+    val exitAboveSma: Int get() = 0
     /** True for rules that are meant to buy during market sell-offs. */
     fun allowInBear(): Boolean = false
     /**
@@ -79,7 +83,7 @@ interface Strategy {
 }
 
 object Strategies {
-    val all: List<Strategy> = listOf(WashoutDip, MonthlyLeaders, DipUptrend, MomPullback, BreakoutVol, WeeklyLeaders)
+    val all: List<Strategy> = listOf(WashoutDip, LeaderDip, MonthlyLeaders, DipUptrend, MomPullback, BreakoutVol, WeeklyLeaders)
     fun byId(id: String): Strategy? = all.firstOrNull { it.id == id }
 
     /** Common gates + the strategy's own rules. The single entry point for the live scan and the backtest. */
@@ -152,6 +156,24 @@ object Strategies {
             if (take < 1) take = 1
             ctx.momCutoff = scratch[m - take]
         } else ctx.momCutoff = Double.NaN
+        // leader dips: top slice by the same momentum, counted only among stocks above their 200DMA
+        m = 0
+        for (k in universe.indices) {
+            val i = idx[k]
+            if (i < 0) continue
+            val s = universe[k]
+            val x = momentum(s, i)
+            if (x.isNaN()) continue
+            val sma200 = Ind.sma(s.c, i, 200)
+            if (sma200.isNaN() || !(s.c[i] > sma200)) continue
+            scratch[m++] = x
+        }
+        if (m >= Params.MIN_UNIVERSE_FOR_RANK) {
+            java.util.Arrays.sort(scratch, 0, m)
+            var take = Math.floor(m * Params.LD_TOP_FRACTION).toInt()
+            if (take < 1) take = 1
+            ctx.dipCutoff = scratch[m - take]
+        } else ctx.dipCutoff = Double.NaN
         // weekly leaders: top N by blended return among stocks above their 200DMA
         m = 0
         for (k in universe.indices) {
@@ -392,6 +414,38 @@ object DipUptrend : Strategy {
         reasons.add("Closing near the day's low — such dips in uptrends often bounce within days")
         reasons.add("Quick trade: first target only " + Fmt.p1((t1 / entry - 1) * 100) + "% away")
         return Setup(id, s.sym, s.d[i], entry, sl, t1, t2, Params.DIP_RSI_MAX - rsi + (Params.DIP_IBS_MAX - ibs), reasons)
+    }
+}
+
+// ============================================================================ LEADER_DIP
+object LeaderDip : Strategy {
+    override val id = "LEADER_DIP"
+    override val label = "Dip in a leader"
+    override val desc = "A 2–3 day dip in one of the market's strongest stocks while it is still above a rising 50-day average. Sold on the first close back above the 5-day average, or after 6 days."
+    override fun enabled() = Params.LD_ENABLED
+    override val exitAboveSma: Int get() = Params.LD_EXIT_SMA
+    override fun research(): StratStats? = Params.LD_RESEARCH
+    override fun params(): Map<String, Double> = linkedMapOf(
+        "rsiMax" to Params.LD_RSI_MAX, "topFraction" to Params.LD_TOP_FRACTION, "stopAtr" to Params.LD_STOP_ATR,
+        "stopCapPct" to Params.LD_STOP_CAP_PCT, "slopeBars" to Params.LD_SLOPE_BARS.toDouble(), "exitSma" to Params.LD_EXIT_SMA.toDouble())
+
+    override fun evaluate(s: Series, i: Int, f: Feat, ctx: Ctx): Setup? {
+        if (ctx.dipCutoff.isNaN()) return null
+        if (!(f.c > f.sma50 && f.sma50 > f.sma200)) return null
+        val prev50 = Ind.sma(s.c, i - Params.LD_SLOPE_BARS, 50)
+        if (prev50.isNaN() || !(f.sma50 > prev50)) return null
+        val mom = Strategies.momentum(s, i)
+        if (mom.isNaN() || mom < ctx.dipCutoff) return null
+        val rsi = Ind.rsi(s.c, i, 2)
+        if (rsi.isNaN() || !(rsi < Params.LD_RSI_MAX)) return null
+        val entry = f.c
+        val sl = Strategies.atrStop(entry, f.atr, Params.LD_STOP_ATR, Params.LD_STOP_CAP_PCT)
+        val reasons = ArrayList<String>(4)
+        reasons.add("Among the strongest stocks: up " + Fmt.p1(mom * 100) + "% over the last 6 months")
+        reasons.add("Trend intact: price above a rising 50-day average (" + Fmt.rs(f.sma50) + "), which is above the 200-day (" + Fmt.rs(f.sma200) + ")")
+        reasons.add("Short, sharp dip: 2-day RSI at " + Fmt.p1(rsi))
+        reasons.add("Plan: sell on the first close back above the 5-day average, or at the close of day " + holdDays)
+        return Setup(id, s.sym, s.d[i], entry, sl, 0.0, 0.0, mom, reasons)
     }
 }
 

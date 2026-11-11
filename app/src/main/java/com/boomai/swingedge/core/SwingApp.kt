@@ -501,37 +501,40 @@ class SwingApp(private val p: Platform) {
     /** Shares to buy so that the loss at the stop INCLUDING charges stays within riskPct of capital; 0 if not affordable. */
     private fun sizeFor(entry: Double, sl: Double): Int = positionSize(st.settings.capital, st.settings.riskPct, st.settings.costPct, entry, sl)
 
-    /** EMA 10/20 watchlist: liquid stocks above their 200-day average whose 10-day EMA is closing in on, or has just crossed above, the 20-day EMA. A chart-reading list, not buy calls. */
+    /**
+     * EMA watchlist: liquid stocks whose 10-day EMA is above the 50- and 200-day EMAs and is converging on the 20-day EMA
+     * (within WATCH_EMA_GAP_MAX either side and closer than 2 days ago), or has just crossed above it. A tight
+     * consolidation in an uptrend, listed for chart reading — not buy calls.
+     */
     private fun computeWatch() {
         val out = ArrayList<Pair<Double, Map<String, Any?>>>()
-        val k10 = 2.0 / 11.0; val k20 = 2.0 / 21.0
+        val k10 = 2.0 / 11.0; val k20 = 2.0 / 21.0; val k50 = 2.0 / 51.0; val k200 = 2.0 / 201.0
         for (sym in universe) {
             val s = live[sym] ?: continue
             val n = s.n
-            if (n < 210) continue
+            if (n < 260) continue
             val c = s.c[n - 1]
             if (!(c >= Params.MIN_PRICE)) continue
             var tv = 0.0
             for (j in n - 21 until n - 1) tv += s.c[j] * s.v[j]
             if (tv / 20.0 < Params.MIN_AVG_TURNOVER_RS) continue
-            val sma200 = Ind.sma(s.c, n - 1, 200)
-            if (sma200.isNaN() || !(c > sma200)) continue
-            // EMAs over the last 120 bars; keep the last 3 gaps (as a fraction of EMA20)
-            val from = n - 120
-            var e10 = s.c[from]; var e20 = s.c[from]
-            var g0 = 0.0; var g1 = 0.0; var g2 = 0.0
-            for (j in from + 1 until n) {
-                e10 += k10 * (s.c[j] - e10); e20 += k20 * (s.c[j] - e20)
-                g2 = g1; g1 = g0; g0 = (e20 - e10) / e20
+            var e10 = s.c[0]; var e20 = e10; var e50 = e10; var e200 = e10
+            var g0 = 0.0; var g1 = 0.0; var g2 = 0.0   // signed (EMA10 - EMA20) / EMA20, today / 1 / 2 days ago
+            for (j in 1 until n) {
+                val x = s.c[j]
+                e10 += k10 * (x - e10); e20 += k20 * (x - e20); e50 += k50 * (x - e50); e200 += k200 * (x - e200)
+                g2 = g1; g1 = g0; g0 = (e10 - e20) / e20
             }
-            val near = g0 > 0 && g0 < Params.WATCH_EMA_GAP_MAX && g0 < g1 && g1 < g2 && c > e20
-            val crossed = g0 <= 0 && g1 > 0
-            if (!near && !crossed) continue
+            if (!(e10 > e50 && e10 > e200)) continue
+            val crossed = g0 > 0 && g1 <= 0
+            val converging = Math.abs(g0) < Params.WATCH_EMA_GAP_MAX && Math.abs(g0) < Math.abs(g2)
+            if (!crossed && !converging) continue
             val prev = s.c[n - 2]
             val m = linkedMapOf<String, Any?>("sym" to sym, "name" to nameOf(sym), "ltp" to Fmt.r2(c),
                 "dayChgPct" to Fmt.r2(if (prev > 0) (c / prev - 1) * 100.0 else 0.0), "ema10" to Fmt.r2(e10), "ema20" to Fmt.r2(e20),
-                "gapPct" to Fmt.r2(g0 * 100.0), "status" to (if (crossed) "CROSSED" else "NEAR"))
-            out.add(Pair(if (crossed) -1.0 else g0, m))
+                "ema50" to Fmt.r2(e50), "ema200" to Fmt.r2(e200), "gapPct" to Fmt.r2(g0 * 100.0),
+                "status" to (if (crossed) "CROSSED" else if (g0 >= 0) "ABOVE" else "BELOW"))
+            out.add(Pair(if (crossed) -1.0 else Math.abs(g0), m))
         }
         out.sortBy { it.first }
         watchItems = out.take(Params.WATCH_MAX).map { it.second }
@@ -963,12 +966,13 @@ class SwingApp(private val p: Platform) {
                 val from = maxOf(0, x.n - Params.CHART_BARS)
                 val d = ArrayList<Any?>(); val o = ArrayList<Any?>(); val h = ArrayList<Any?>(); val l = ArrayList<Any?>(); val c = ArrayList<Any?>()
                 val m50 = ArrayList<Any?>(); val m200 = ArrayList<Any?>()
-                val x10 = ArrayList<Any?>(); val x20 = ArrayList<Any?>()
-                var e10 = x.c[maxOf(0, from - 100)]; var e20 = e10
-                for (i in maxOf(0, from - 100) + 1 until from) { e10 += (2.0 / 11.0) * (x.c[i] - e10); e20 += (2.0 / 21.0) * (x.c[i] - e20) }
+                val x10 = ArrayList<Any?>(); val x20 = ArrayList<Any?>(); val x50 = ArrayList<Any?>(); val x200 = ArrayList<Any?>()
+                var e10 = x.c[0]; var e20 = e10; var e50 = e10; var e200 = e10
+                for (i in 1 until from) { val v = x.c[i]; e10 += (2.0 / 11.0) * (v - e10); e20 += (2.0 / 21.0) * (v - e20); e50 += (2.0 / 51.0) * (v - e50); e200 += (2.0 / 201.0) * (v - e200) }
                 for (i in from until x.n) {
                     d.add(x.d[i].toLong() * Clock.DAY_MS); o.add(Fmt.r2(x.o[i])); h.add(Fmt.r2(x.h[i])); l.add(Fmt.r2(x.l[i])); c.add(Fmt.r2(x.c[i]))
-                    e10 += (2.0 / 11.0) * (x.c[i] - e10); e20 += (2.0 / 21.0) * (x.c[i] - e20); x10.add(Fmt.r2(e10)); x20.add(Fmt.r2(e20))
+                    if (i > 0) { val v = x.c[i]; e10 += (2.0 / 11.0) * (v - e10); e20 += (2.0 / 21.0) * (v - e20); e50 += (2.0 / 51.0) * (v - e50); e200 += (2.0 / 201.0) * (v - e200) }
+                    x10.add(Fmt.r2(e10)); x20.add(Fmt.r2(e20)); x50.add(if (i >= 100) Fmt.r2(e50) else 0.0); x200.add(if (i >= 250) Fmt.r2(e200) else 0.0)
                     val a50 = Ind.sma(x.c, i, 50); val a200 = Ind.sma(x.c, i, 200)
                     m50.add(if (a50.isNaN()) 0.0 else Fmt.r2(a50)); m200.add(if (a200.isNaN()) 0.0 else Fmt.r2(a200))
                 }
@@ -984,7 +988,7 @@ class SwingApp(private val p: Platform) {
                 val a50 = Ind.sma(x.c, last, 50); val a200 = Ind.sma(x.c, last, 200); val rsi = Ind.rsi(x.c, last, 14)
                 val hi = Ind.highest(x.h, last, minOf(250, x.n)); val lo = Ind.lowest(x.l, last, minOf(250, x.n))
                 fun rt(n: Int): Double { val r = Ind.ret(x.c, last, n); return if (r.isNaN()) 0.0 else Fmt.r2(r * 100.0) }
-                return ok("sym" to sym, "name" to nameOf(sym), "d" to d, "o" to o, "h" to h, "l" to l, "c" to c, "sma50" to m50, "sma200" to m200, "ema10" to x10, "ema20" to x20, "levels" to levels,
+                return ok("sym" to sym, "name" to nameOf(sym), "d" to d, "o" to o, "h" to h, "l" to l, "c" to c, "sma50" to m50, "sma200" to m200, "ema10" to x10, "ema20" to x20, "ema50" to x50, "ema200" to x200, "levels" to levels,
                     "stats" to linkedMapOf<String, Any?>("ltp" to Fmt.r2(x.c[last]), "sma50" to (if (a50.isNaN()) 0.0 else Fmt.r2(a50)), "sma200" to (if (a200.isNaN()) 0.0 else Fmt.r2(a200)),
                         "rsi14" to (if (rsi.isNaN()) 0.0 else Fmt.r1(rsi)), "high52" to (if (hi.isNaN()) 0.0 else Fmt.r2(hi)), "low52" to (if (lo.isNaN()) 0.0 else Fmt.r2(lo)),
                         "ret5" to rt(5), "ret21" to rt(21), "ret63" to rt(63), "ret126" to rt(126), "bars" to x.n))

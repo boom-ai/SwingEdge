@@ -166,9 +166,9 @@ object Params {
     /** Up to this many stocks, every scan fetches a live quote for all of them; above it, only when buys are possible. */
     var FULL_QUOTE_MAX_UNIVERSE = 250
     /** When no strategy is LIVE, still show (clearly labelled, paper-tracked) setups from enabled strategies that failed the test. */
-    /** EMA 10/20 watchlist: 10-day EMA within this fraction below the 20-day EMA and closing for 2 days. */
+    /** EMA watchlist: 10-day EMA within this fraction of the 20-day EMA (either side) and converging. */
     var WATCH_EMA_GAP_MAX = 0.005
-    var WATCH_MAX = 15
+    var WATCH_MAX = 20
     var EXPERIMENTAL_ENABLED = true
     var EXPERIMENTAL_MAX_PER_DAY = 3
     /** A strategy judged on its long research test is paused if the phone's own recent test has at least this many trades and lost money. */

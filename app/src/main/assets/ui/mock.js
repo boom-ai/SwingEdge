@@ -257,7 +257,7 @@
           null
         ],
         scorecard: { n: null, winPct: 'NaN', netRs: -1e15, recent: [{ sym: null, closedAt: -5, pnlRs: 'x', paper: 'maybe' }, null, { sym: 'OK', closedAt: 8.7e15, result: LONG, pnlRs: 1e14, pnlPct: 1e6, paper: true }] },
-        watch: [{ sym: 'POLYCAB', name: 'Polycab India', ltp: 7421.5, dayChgPct: 0.84, ema10: 7350.2, ema20: 7361.9, gapPct: 0.16, status: 'NEAR' }, { sym: 'CUMMINSIND', name: 'Cummins India', ltp: 3980.1, dayChgPct: 1.92, ema10: 3921.4, ema20: 3915.0, gapPct: -0.16, status: 'CROSSED' }, { sym: 'FEDERALBNK', name: 'Federal Bank', ltp: 212.4, dayChgPct: -0.21, ema10: 210.3, ema20: 211.1, gapPct: 0.38, status: 'NEAR' }],
+        watch: [{ sym: 'POLYCAB', name: 'Polycab India', ltp: 7421.5, dayChgPct: 0.84, ema10: 7350.2, ema20: 7361.9, gapPct: 0.16, status: 'ABOVE' }, { sym: 'CUMMINSIND', name: 'Cummins India', ltp: 3980.1, dayChgPct: 1.92, ema10: 3921.4, ema20: 3915.0, gapPct: -0.16, status: 'CROSSED' }, { sym: 'FEDERALBNK', name: 'Federal Bank', ltp: 212.4, dayChgPct: -0.21, ema10: 210.3, ema20: 211.1, gapPct: -0.38, status: 'BELOW' }],
         feed: [
           { ts: T0 - MIN, kind: 'explode', title: LONG, body: LONG + ' ' + LONG },
           { ts: 'NaN', kind: null, title: null, body: null },

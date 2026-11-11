@@ -31,7 +31,7 @@ object SimTests {
      "scorecard": {"n":0,"winPct":0,"netRs":0,"avgPct":0,"paperN":0,"paperWinPct":0,"paperAvgPct":0,
        "recent":[{"sym":"","closedAt":0,"result":"","pnlRs":0,"pnlPct":0,"paper":false}]},
      "feed": [{"ts":0,"kind":"buy","title":"","body":""}],
-     "watch": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"ema10":0,"ema20":0,"gapPct":0,"status":""}]
+     "watch": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"ema10":0,"ema20":0,"ema50":0,"ema200":0,"gapPct":0,"status":""}]
     }""").asObj()
 
     private val ENUMS = mapOf(

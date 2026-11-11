@@ -258,6 +258,8 @@ class AppState {
     var seq = 0L
     var noLiveWarnDay = 0
     var offlineWarnDay = 0
+    /** Personal watchlist (NSE symbols, in the order added). */
+    val watch = ArrayList<String>()
 
     fun strat(id: String): StratState = strategies.getOrPut(id) { StratState() }
 
@@ -269,7 +271,8 @@ class AppState {
         "lastBriefDay" to lastBriefDay, "lastEodDay" to lastEodDay, "holidayDay" to holidayDay, "lastBacktestAt" to lastBacktestAt,
         "lastTradingDay" to lastTradingDay,
         "regime" to linkedMapOf("label" to regimeLabel, "niftyLtp" to niftyLtp, "niftyChgPct" to niftyChgPct, "note" to regimeNote),
-        "seq" to seq, "noLiveWarnDay" to noLiveWarnDay, "offlineWarnDay" to offlineWarnDay
+        "seq" to seq, "noLiveWarnDay" to noLiveWarnDay, "offlineWarnDay" to offlineWarnDay,
+        "watchlist" to watch.toList()
     )
 
     companion object {
@@ -277,6 +280,8 @@ class AppState {
         const val MAX_FEED = 100
         const val MAX_SIGNALS = 80
         const val MAX_CLOSED = 400
+        const val MAX_WATCH = 50
+        private val WATCH_SYM = Regex("^[A-Z0-9&][A-Z0-9&\\-]*$")
 
         /** Builds state from file text; any missing/corrupt part falls back to defaults. Never throws. */
         fun load(text: String?): AppState {
@@ -302,6 +307,12 @@ class AppState {
                 st.regimeLabel = r.str("label", "NEUTRAL").let { if (it in setOf("BULL", "NEUTRAL", "BEAR")) it else "NEUTRAL" }
                 st.niftyLtp = r.num("niftyLtp"); st.niftyChgPct = r.num("niftyChgPct"); st.regimeNote = r.str("note", st.regimeNote)
                 st.seq = m.long("seq"); st.noLiveWarnDay = m.int("noLiveWarnDay"); st.offlineWarnDay = m.int("offlineWarnDay")
+                // added in v2: older files have no watchlist; junk entries are dropped
+                for (x in m.strList("watchlist")) {
+                    val sym = x.trim().uppercase()
+                    if (sym.isEmpty() || sym.length > 25 || !WATCH_SYM.matches(sym) || st.watch.contains(sym) || st.watch.size >= MAX_WATCH) continue
+                    st.watch.add(sym)
+                }
             } catch (t: Throwable) {
                 // keep whatever loaded
             }

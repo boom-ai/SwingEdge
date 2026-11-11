@@ -213,7 +213,9 @@ class MainActivity : Activity() {
 
     private fun runAction(name: String, argsJson: String) {
         try {
-            actionExec.execute {
+            // look-ups must not queue behind a scan/backtest or behind each other's network waits
+            val exec = if (name == "search") searchExec else if (name == "stockInfo" || name == "getChart") readExec else actionExec
+            exec.execute {
                 val result = try {
                     App.from(this).swing.action(name, argsJson)
                 } catch (t: Throwable) {
@@ -564,6 +566,12 @@ class MainActivity : Activity() {
         /** One action at a time, in the order the page asked for them. Outlives activity recreation. */
         private val actionExec: ExecutorService = Executors.newSingleThreadExecutor { r ->
             Thread(r, "swingedge-action").apply { isDaemon = true }
+        }
+        private val searchExec: ExecutorService = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "swingedge-search").apply { isDaemon = true }
+        }
+        private val readExec: ExecutorService = Executors.newFixedThreadPool(3) { r ->
+            Thread(r, "swingedge-read").apply { isDaemon = true }
         }
 
         @Volatile

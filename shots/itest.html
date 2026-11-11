@@ -10,7 +10,7 @@ document.getElementById('f').onload=async()=>{
   const click=s=>{const e=typeof s==='string'?q(s):s;if(!e)throw new Error('missing '+s);e.click();};
   const type=(n,v)=>{const i=q('#sheet-root [name="'+n+'"]');i.value=v;i.dispatchEvent(new w.Event('input',{bubbles:true}));};
   const st=()=>JSON.parse(w.Android.getState());
-  const calls=[];const orig=w.Android.action;w.Android.action=function(n,a){calls.push(n);return orig.call(this,n,a);};
+  const calls=[],log=[];const orig=w.Android.action;w.Android.action=function(n,a){calls.push(n);try{log.push({n:n,a:JSON.parse(a||'{}')});}catch(e){}return orig.call(this,n,a);};
   const toasts=()=>qa('.toast').map(t=>t.textContent).join(' | ');
   await sleep(100);
   ok(qa('#view .card.k-buy').length===3,'3 buy cards');
@@ -65,6 +65,96 @@ document.getElementById('f').onload=async()=>{
   // alerts: backtest
   click('[data-c="tab"][data-id="alerts"]');click('[data-c="backtest"]');click('[data-c="backtest"]');ok(calls.filter(c=>c==='runBacktest').length===1,'backtest once');await sleep(1000);ok(q('[data-c="backtest"]').disabled&&!!q('.busyline'),'backtest busy');
   click('[data-c="tab"][data-id="today"]');ok(q('[data-c="scan"]').disabled,'scan blocked during backtest');await sleep(9000);ok(!q('[data-c="scan"]').disabled&&!q('.busyline'),'idle after backtest');
+  // ===== search, stock page, watchlist (SPEC2) =====
+  const inp=()=>q('#sheet-root input[name="q"]');
+  const typeQ=v=>{const i=inp();i.value=v;i.dispatchEvent(new w.Event('input',{bubbles:true}));};
+  const enter=()=>inp().dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+  const stockOpen=()=>!!q('#sheet-root .sheet.stk');
+  const hist=()=>w.history.back();
+  click('[data-c="tab"][data-id="today"]');
+  click('.topbar [data-c="search"]');
+  ok(!q('#sheet-root').hidden&&!!inp(),'search opens from the header button');
+  ok(d.activeElement===inp(),'search input is auto-focused');
+  ok(qa('#sheet-root .qchip').length>=3,'empty query shows holdings/watchlist chips: '+qa('#sheet-root .qchip').length);
+  typeQ('ta');typeQ('tat');typeQ('tata');await sleep(500);
+  ok(log.filter(c=>c.n==='search').every(c=>c.a.q==='tata')&&log.filter(c=>c.n==='search').length>=1,'typing is debounced: only the final query was sent: '+JSON.stringify(log.filter(c=>c.n==='search').map(c=>c.a.q)));
+  ok(qa('#sheet-root .srr').length>=4&&!!q('#sheet-root .srr[data-id="TATAMOTORS"]'),'results appear as you type: '+qa('#sheet-root .srr').length);
+  ok(qa('#sheet-root .trk').length>0&&/Tata Motors Ltd/.test(q('#sr-body').textContent),'rows show company name and the tracked tag');
+  typeQ('reli');await sleep(500);ok(!!q('#sheet-root .srr[data-id="RELIANCE"]'),'second query result shown');
+  w.onActionResult('search',JSON.stringify({ok:true,q:'tata',results:[{sym:'STALEXX',name:'Stale Co',tracked:false}]}));
+  ok(!/STALEXX/.test(q('#sr-body').textContent)&&!!q('#sheet-root .srr[data-id="RELIANCE"]'),'a stale reply (older q) is ignored');
+  typeQ('zzqx');await sleep(500);
+  ok(/No NSE stock matches/.test(q('#sr-body').textContent)&&!!q('[data-c="lookup"][data-id="ZZQX"]'),'no-result state offers "Look up ZZQX anyway"');
+  click('[data-c="search-clear"]');ok(inp().value===''&&qa('#sheet-root .qchip').length>=3,'clear button empties the query and restores chips');
+  typeQ('tata');enter();await sleep(1000);
+  ok(stockOpen()&&/TATAMOTORS/.test(q('#st-head').textContent),'Enter opens the first result as a stock page');
+  ok(log.some(c=>c.n==='stockInfo'&&c.a.sym==='TATAMOTORS')&&log.some(c=>c.n==='getChart'&&c.a.sym==='TATAMOTORS'&&c.a.bars===130),'stockInfo + getChart(bars 130) requested');
+  ok(!!q('#st-body #sk-cross')&&/934/.test(q('#st-price').textContent)&&!!q('#st-chart svg.chart'),'info and chart rendered');
+  ok(!!q('#st-chart svg.chart rect.vu, #st-chart svg.chart rect.vd'),'volume strip drawn');
+  ok(qa('.echip').length===5&&qa('.echip.on').length===4&&!q('.echip.on[data-id="100"]'),'EMA 10/20/50/200 on, 100 off by default');
+  click('.echip[data-id="100"]');ok(!!q('#st-chart polyline.e100')&&qa('.echip.on').length===5,'toggling EMA 100 draws its line');
+  click('.echip[data-id="20"]');ok(!q('#st-chart polyline.e20'),'toggling EMA 20 off removes its line');click('.echip[data-id="20"]');click('.echip[data-id="100"]');
+  ok(!!q('.inhold')&&!q('[data-c="stock-add"]'),'holding shows "In your portfolio" instead of the add button');
+  // watchlist toggle: optimistic, persists in state, survives a poll
+  const wb=()=>q('#st-act .wbtn');
+  ok(/Add to watchlist/.test(wb().textContent),'button starts as "Add to watchlist"');
+  click('#st-act .wbtn');ok(/In watchlist ✓/.test(wb().textContent)&&wb().disabled,'toggle is optimistic and locked while in flight');
+  await sleep(800);ok(st().myWatch.some(x=>x.sym==='TATAMOTORS'),'myWatch now contains TATAMOTORS');ok(!wb().disabled&&/In watchlist ✓/.test(wb().textContent),'button settled as "In watchlist ✓"');
+  const bodyEl=q('#st-body');bodyEl.__mark=1;q('#st-scroll').scrollTop=600;const sy=q('#st-scroll').scrollTop;
+  w.onStateChanged();await sleep(150);
+  ok(q('#st-body')===bodyEl&&bodyEl.__mark===1,'a state poll does not re-render the open stock page');
+  ok(Math.abs(q('#st-scroll').scrollTop-sy)<3&&sy>300,'scroll position kept across the poll: '+q('#st-scroll').scrollTop);
+  ok(/In watchlist ✓/.test(wb().textContent)&&st().myWatch.some(x=>x.sym==='TATAMOTORS'),'toggle state survives the poll');
+  // range chips
+  q('#st-scroll').scrollTop=0;const nb0=qa('#st-chart svg.chart rect.bu, #st-chart svg.chart rect.bd').length;const before=log.length;
+  click('.rchip[data-id="260"]');
+  ok(!!q('#st-chart svg.chart')&&!!q('#st-chart .cwrap.loading'),'old chart stays visible while the new range loads');
+  ok(log.slice(before).some(c=>c.n==='getChart'&&c.a.bars===260&&c.a.sym==='TATAMOTORS'),'range chip re-requests getChart with bars 260');
+  await sleep(700);const nb1=qa('#st-chart svg.chart rect.bu, #st-chart svg.chart rect.bd').length;
+  ok(nb1>nb0&&!q('#st-chart .cwrap.loading')&&/1Y/.test(q('.rchip.on').textContent),'1Y chart drawn with more candles ('+nb0+' -> '+nb1+')');
+  click('.rchip[data-id="500"]');await sleep(700);ok(log.some(c=>c.n==='getChart'&&c.a.bars===500)&&!!q('#st-chart svg.chart polyline.cls'),'2Y re-requested and drawn as a close line');
+  click('.rchip[data-id="130"]');click('.rchip[data-id="260"]');await sleep(900);
+  ok(/1Y/.test(q('.rchip.on').textContent)&&!q('#st-chart .cwrap.loading'),'rapid range taps settle on the last chip');
+  // add holding sheet from the stock page keeps place
+  click('#st-head [data-c="sheet-close"]');await sleep(150);
+  ok(!q('#sheet-root').hidden&&!!inp()&&inp().value==='tata'&&!stockOpen(),'closing the stock page returns to the search (query kept)');
+  // open HAL (not a holding) -> add-holding prefill and scroll restore
+  click('[data-c="search-clear"]');typeQ('hindustan aero');await sleep(500);click('#sheet-root .srr[data-id="HAL"]');await sleep(900);
+  ok(stockOpen()&&!!q('[data-c="stock-add"]'),'HAL stock page offers "Add to holdings"');
+  q('#st-scroll').scrollTop=420;click('[data-c="stock-add"]');
+  ok(q('#sheet-root input[name="sym"]').value==='HAL'&&d.activeElement===q('#sheet-root input[name="qty"]'),'add-holding sheet is prefilled and focuses quantity');
+  hist();await sleep(150);ok(stockOpen()&&Math.abs(q('#st-scroll').scrollTop-420)<3,'Back from the add sheet returns to the stock page at the same scroll: '+q('#st-scroll').scrollTop);
+  hist();await sleep(150);ok(!stockOpen()&&!!inp(),'Back closes the stock page, then...');
+  hist();await sleep(150);ok(q('#sheet-root').hidden,'...Back closes the search');
+  // error + retry, rollback
+  click('.topbar [data-c="search"]');typeQ('ZZTEST');await sleep(450);click('[data-c="lookup"][data-id="ZZTEST"]');await sleep(900);
+  ok(/No price data found for ZZTEST/.test(q('#st-body').textContent)&&!!q('#st-body [data-c="stock-retry"]'),'failure shows the error text and a Retry button');
+  const ni=calls.filter(c=>c==='stockInfo').length;click('[data-c="stock-retry"]');ok(!!q('#st-body .skel')&&calls.filter(c=>c==='stockInfo').length===ni+1,'Retry re-requests and shows a skeleton');await sleep(900);ok(/No price data/.test(q('#st-body').textContent),'still failing -> error again');
+  hist();await sleep(150);hist();await sleep(150);
+  click('.topbar [data-c="search"]');typeQ('FAILWATCH');await sleep(450);click('[data-c="lookup"][data-id="FAILWATCH"]');await sleep(900);
+  click('#st-act .wbtn');ok(/In watchlist ✓/.test(wb().textContent),'optimistic flip for a doomed add');await sleep(800);
+  ok(/Add to watchlist/.test(wb().textContent)&&!st().myWatch.some(x=>x.sym==='FAILWATCH')&&/full/.test(toasts()),'failed add rolls back the toggle and shows the error: '+toasts().slice(0,80));
+  click('#st-head [data-c="sheet-close"]');await sleep(150);hist();await sleep(150);ok(q('#sheet-root').hidden,'sheets all closed');
+  // every symbol tap opens the stock page
+  const tapOpen=async(sel,sym,what)=>{const e=q(sel);if(!e){ok(false,what+': '+sel+' missing');return;}e.click();await sleep(150);ok(stockOpen()&&q('#st-head').textContent.indexOf(sym)>=0,what+' opens the stock page for '+sym);hist();await sleep(150);};
+  click('[data-c="tab"][data-id="today"]');await sleep(50);
+  await tapOpen('#view .card .symbtn',q('#view .card .symbtn b').textContent,'Today card symbol');
+  const mv=q('#view .mvr');if(mv)await tapOpen('#view .mvr',mv.getAttribute('data-id'),'holdings-today row');
+  click('[data-c="tab"][data-id="trades"]');await tapOpen('#view .card .symbtn',q('#view .card .symbtn b').textContent,'Trade card symbol');
+  click('[data-c="tab"][data-id="portfolio"]');await tapOpen('#view .card .symbtn',q('#view .card .symbtn b').textContent,'Holding card symbol');
+  const wl=q('#view .wl');if(wl)await tapOpen('#view .wl',wl.getAttribute('data-id'),'best/worst row');
+  click('[data-c="tab"][data-id="setups"]');ok(!!q('#view .wsec')&&qa('#view .wmain').length===5,'My watchlist section shows its rows: 3 defaults + no-data row + the stock added above ('+qa('#view .wmain').length+')');
+  await tapOpen('#view .srow:not(.wmain)',q('#view .srow:not(.wmain)').getAttribute('data-id'),'EMA-cross row');
+  await tapOpen('#view .wmain','DIXON','watchlist row');
+  ok(/no data yet/i.test(qa('#view .wrow').filter(r=>/NEWLISTCO/.test(r.textContent))[0].textContent),'dataOk:false watchlist row says "no data yet"');
+  ok(qa('#view .srow:not(.wmain) .s2.g5 > span').length===5*qa('#view .srow:not(.wmain)').length,'EMA values laid out as a five-column grid');
+  // edit mode removes
+  click('[data-c="watch-edit"]');ok(qa('#view .wrm').length===5,'Edit shows a remove button per row');
+  click('#view .wrm[data-id="DIXON"]');ok(q('#view .wrm[data-id="DIXON"]').disabled,'remove locks its row while in flight');await sleep(800);
+  ok(!st().myWatch.some(x=>x.sym==='DIXON')&&!q('#view .wrm[data-id="DIXON"]'),'removed from state and from the list');
+  click('[data-c="watch-edit"]');ok(qa('#view .wrm').length===0,'Done leaves edit mode');
+  click('#view .wsec [data-c="search"]');ok(!!inp(),'"Add stock" opens the search');hist();await sleep(150);
+  w.Android.action=orig;
   // malformed pushes must not throw
   w.onActionResult('whatever','not json');w.onActionResult('importHoldings','{"ok":false}');w.onActionResult(null,null);ok(true,'bad action results tolerated');
   // stuck-button safety: bridge that never answers

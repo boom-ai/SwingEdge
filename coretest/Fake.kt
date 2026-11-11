@@ -136,6 +136,8 @@ class FakeYahoo {
         return sb.toString()
     }
 
+    /** Thread-safe: several threads (a scan and a stock-page lookup) may call it at once. */
+    @Synchronized
     fun respond(url: String, nowMs: Long): String? {
         val host2 = url.contains("query2.")
         val m = Regex("/v8/finance/chart/([^?]+)\\?range=(\\w+)&interval=(\\w+)").find(url) ?: return null
@@ -212,9 +214,11 @@ class FakePlatform : Platform {
 
     override fun now(): Long = nowMs
     override fun httpGetAll(urls: List<String>): List<String?> {
-        httpCalls++
-        urlCount += urls.size
-        if (keepUrls) this.urls.addAll(urls)
+        synchronized(this) {
+            httpCalls++
+            urlCount += urls.size
+            if (keepUrls) this.urls.addAll(urls)
+        }
         if (httpDelayMs > 0) Thread.sleep(httpDelayMs)
         if (offline) return urls.map { null }
         return urls.map { try { yahoo.respond(it, nowMs) } catch (t: Throwable) { null } }

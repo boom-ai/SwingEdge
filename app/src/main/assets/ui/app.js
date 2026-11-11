@@ -15,10 +15,13 @@
 
   var TABS = { today: 1, setups: 1, trades: 1, portfolio: 1, alerts: 1 };
   var S = {}, lastJson = null, lastDevJson = null;
-  var ui = { tab: TABS[qs.tab] ? qs.tab : 'today', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now() };
+  var ui = { tab: TABS[qs.tab] ? qs.tab : 'today', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now(),
+    recent: loadRecent(), search: { q: '', sent: null, shown: '', results: null, loading: false, err: '' }, emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, watchEdit: false, stock: null };
   var cache = { top: null, view: null, tabs: null };
   var scrollPos = {};
-  var sheet = null;            // {kind, data, pushed, waiting}
+  var stack = [];              // open sheets, top last: {kind, data, pushed, waiting, scroll}
+  var sheet = null;            // the top of the stack
+  var selfPop = 0;             // popstate events caused by our own history.back()
   var pollTimer = null, touching = false, dirty = false;
 
   function bridge() { return window.Android; }
@@ -85,6 +88,7 @@
     if (!ok && lastJson === null) showErr('Could not read app data yet. Retrying.');
     else if (ok && !renderFailed) elErr.hidden = true;
     readDevice();
+    syncStock();
     // a long action is visibly running once busy is set: hand the button over to `busy`
     if (SE.isBusy(S)) { clearPending('scanNow', true); clearPending('runBacktest', true); }
     render();
@@ -144,9 +148,13 @@
       var res = null;
       try { res = typeof json === 'string' ? JSON.parse(json) : json; } catch (e) { res = null; }
       if (!res || typeof res !== 'object') res = { ok: false, error: 'Unreadable reply from the app' };
-      clearPending(name, true);
       var ok = res.ok === true;
       var err = typeof res.error === 'string' && res.error.trim() ? res.error.trim() : 'Something went wrong';
+      if (name === 'search') { onSearchResult(res, ok, err); return; }
+      if (name === 'stockInfo') { onInfoResult(res, ok, err); return; }
+      if (name === 'addWatch' || name === 'removeWatch') { onWatchResult(name, ok, err); return; }
+      if (name === 'getChart' && onStockChart(res, ok, err)) return;
+      clearPending(name, true);
       if (name === 'getChart') {
         if (ui.chart && (!res.sym || String(res.sym) === ui.chart.sym)) {
           if (chartTimer) { clearTimeout(chartTimer); chartTimer = null; }
@@ -183,35 +191,50 @@
     } catch (e) { /* ignore */ }
   }
 
-  /* ---------- sheets ---------- */
+  /* ---------- sheets (a stack: search -> stock page -> add holding ...) ---------- */
+  function topSync() { sheet = stack.length ? stack[stack.length - 1] : null; }
+  function scrollEl() { return elSheet.querySelector('.sb'); }
+  function paintSheet(noFocus) {
+    elSheet.innerHTML = SE.sheet(sheet.kind, S, ui, sheet.data);
+    elSheet.hidden = false;
+    if (noFocus) return;
+    var f = null;
+    if (sheet.kind === 'add' || sheet.kind === 'paste') f = elSheet.querySelector(sheet.kind === 'add' && SE.T(sheet.data.sym) ? 'input[name="qty"]' : 'input,textarea');
+    else if (sheet.kind === 'search') f = elSheet.querySelector('input[name="q"]');
+    if (f) { try { f.focus(); } catch (e) { /* ignore */ } setTimeout(function () { try { if (sheet && elSheet.contains(f)) f.focus(); } catch (e) { /* ignore */ } }, 80); }
+  }
   function openSheet(kind, data, noFocus) {
     try {
-      if (sheet) { sheet.kind = kind; sheet.data = data || {}; sheet.waiting = null; }
-      else {
-        sheet = { kind: kind, data: data || {}, pushed: false, waiting: null };
-        try { history.pushState({ seSheet: 1 }, ''); sheet.pushed = true; } catch (e) { sheet.pushed = false; }
-      }
-      elSheet.innerHTML = SE.sheet(kind, S, ui, sheet.data);
-      elSheet.hidden = false;
-      if (!noFocus && (kind === 'add' || kind === 'paste')) {
-        var f = elSheet.querySelector('input,textarea');
-        if (f) setTimeout(function () { try { f.focus(); } catch (e) { /* ignore */ } }, 80);
-      }
+      if (sheet) { var sb = scrollEl(); sheet.scroll = sb ? sb.scrollTop : 0; }
+      var e = { kind: kind, data: data || {}, pushed: false, waiting: null, scroll: 0 };
+      try { history.pushState({ seSheet: stack.length + 1 }, ''); e.pushed = true; } catch (x) { e.pushed = false; }
+      stack.push(e); topSync();
+      paintSheet(noFocus);
     } catch (e) {
-      sheet = null; elSheet.hidden = true; elSheet.innerHTML = '';
+      stack = []; sheet = null; elSheet.hidden = true; elSheet.innerHTML = '';
       toast('Could not open that screen', 'err');
     }
   }
+  function selfBack() {
+    selfPop++;
+    var t = setTimeout(function () { if (selfPop > 0) selfPop--; }, 700);
+    try { history.back(); } catch (e) { selfPop--; clearTimeout(t); }
+  }
   function closeSheet(fromPop) {
     if (!sheet) return;
-    var pushed = sheet.pushed;
-    sheet = null;
+    var gone = stack.pop();
+    topSync();
     try { if (document.activeElement && elSheet.contains(document.activeElement)) document.activeElement.blur(); } catch (e) { /* ignore */ }
-    elSheet.hidden = true; elSheet.innerHTML = '';
-    if (!fromPop && pushed) { try { history.back(); } catch (e) { /* ignore */ } }
+    if (!fromPop && gone.pushed) selfBack();
+    if (sheet) {
+      try { paintSheet(true); var sb = scrollEl(); if (sb) sb.scrollTop = sheet.scroll || 0; } catch (e) { elSheet.hidden = true; elSheet.innerHTML = ''; stack = []; sheet = null; }
+    } else { elSheet.hidden = true; elSheet.innerHTML = ''; }
     render();
   }
-  window.addEventListener('popstate', function () { if (sheet) closeSheet(true); });
+  window.addEventListener('popstate', function () {
+    if (selfPop > 0) { selfPop--; return; }
+    if (sheet) closeSheet(true);
+  });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && sheet) closeSheet(); });
 
   function sheetBusy(name) {
@@ -256,6 +279,7 @@
   function submitSheet() {
     if (!sheet || sheet.waiting) return;
     var k = sheet.kind, id = SE.T(sheet.data.id), a;
+    if (k === 'search') { searchEnter(); return; }
     if (k === 'take') {
       var p = num('price'), q = num('qty');
       if (!check([['price', p !== null && p > 0 && p < 1e7, 'Enter the price you paid'], ['qty', q !== null && q >= 1 && Math.round(q) === q && q < 1e8, 'Whole number of shares']])) return;
@@ -307,6 +331,7 @@
   }
   elSheet.addEventListener('input', function (e) {
     var t = e.target; if (!t || !t.name) return;
+    if (t.name === 'q') { onSearchInput(t.value); return; }
     if (t.name === 'sym') {
       var up = t.value.toUpperCase().replace(/[^A-Z0-9&\-]/g, '');
       if (up !== t.value) { var pos = t.selectionStart; t.value = up; try { t.setSelectionRange(pos, pos); } catch (e2) { /* ignore */ } }
@@ -348,6 +373,204 @@
     try { bridge().action('getChart', JSON.stringify({ sym: sym })); }
     catch (e) { ui.chart.err = 'Could not load the chart.'; showChart(); }
   }
+  /* ---------- recent symbols ---------- */
+  function loadRecent() {
+    try {
+      var j = JSON.parse(window.localStorage.getItem('se_recent') || '[]');
+      return Array.isArray(j) ? j.filter(function (x) { return x && typeof x.sym === 'string' && x.sym; }).slice(0, 8).map(function (x) { return { sym: String(x.sym).slice(0, 24), name: String(x.name || '').slice(0, 90) }; }) : [];
+    } catch (e) { return []; }
+  }
+  function noteRecent(sym, name) {
+    var list = (ui.recent || []).filter(function (x) { return x.sym !== sym; });
+    var old = (ui.recent || []).filter(function (x) { return x.sym === sym; })[0];
+    list.unshift({ sym: sym, name: String(name || (old && old.name) || '').slice(0, 90) });
+    ui.recent = list.slice(0, 8);
+    try { window.localStorage.setItem('se_recent', JSON.stringify(ui.recent)); } catch (e) { /* ignore */ }
+  }
+
+  /* ---------- search ---------- */
+  var searchTimer = null, enterPending = false;
+  function searchOpen() { return !!sheet && sheet.kind === 'search'; }
+  function paintSearchBody() { if (!searchOpen()) return; var b = $('sr-body'); if (b) b.innerHTML = SE.searchBody(S, ui); }
+  function sendSearch(q) {
+    var s = ui.search; s.sent = q; s.loading = true;
+    try { bridge().action('search', JSON.stringify({ q: q })); }
+    catch (e) { s.loading = false; s.results = null; s.err = 'Search is not available. Try again.'; }
+  }
+  function onSearchInput(val) {
+    var s = ui.search, q = String(val || '').trim();
+    s.q = String(val || '');
+    var clr = elSheet.querySelector('.sclr'); if (clr) clr.hidden = !s.q;
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
+    enterPending = false;
+    if (q.length < 2) { s.sent = null; s.shown = ''; s.results = null; s.err = ''; s.loading = false; paintSearchBody(); return; }
+    s.err = '';
+    searchTimer = setTimeout(function () { searchTimer = null; sendSearch(q); paintSearchBody(); }, 150);
+  }
+  function onSearchResult(res, ok, err) {
+    var s = ui.search;
+    if (!s || s.sent === null) return;
+    if (typeof res.q === 'string' && res.q !== s.sent) return;       // stale reply for an older query
+    s.loading = false; s.shown = s.sent;
+    if (ok && Array.isArray(res.results)) { s.results = res.results; s.err = ''; }
+    else { s.results = null; s.err = err; }
+    paintSearchBody();
+    if (enterPending) { enterPending = false; searchEnter(); }
+  }
+  function searchEnter() {
+    var s = ui.search, q = String(s.q || '').trim();
+    if (q.length < 2) return;
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; sendSearch(q); enterPending = true; paintSearchBody(); return; }
+    if (s.sent !== q || s.shown !== q) { enterPending = true; if (s.sent !== q) { sendSearch(q); paintSearchBody(); } return; }
+    var first = SE.A(s.results)[0];
+    if (first && SE.T(first.sym).trim()) { openStock(SE.T(first.sym).trim(), SE.T(first.name).trim()); return; }
+    var look = q.replace(/\s+/g, '').toUpperCase();
+    if (/^[A-Z0-9&\-]{1,20}$/.test(look)) openStock(look, '');
+  }
+  function openSearch(noFocus) {
+    if (sheet && sheet.kind === 'search') return;
+    ui.search = { q: '', sent: null, shown: '', results: null, loading: false, err: '' };
+    enterPending = false;
+    openSheet('search', {}, noFocus);
+  }
+
+  /* ---------- stock page ---------- */
+  var PARTS = { head: 'st-head', price: 'st-price', act: 'st-act', chart: 'st-chart', body: 'st-body' };
+  var bootScroll = null;
+  function stockOpen() { return !!sheet && sheet.kind === 'stock' && !!ui.stock; }
+  function paintStock(parts) {
+    if (!stockOpen()) return;
+    parts.forEach(function (p) { var el = $(PARTS[p]); if (el) { var h = SE.stockPart(p, S, ui, sheet.data); el.innerHTML = h; el._h = h; } });
+    if (bootScroll && ui.stock && (ui.stock.info || ui.stock.err) && (ui.stock.chart || ui.stock.chartErr || ui.stock.err)) applyBootScroll();
+  }
+  function applyBootScroll() {
+    var b = bootScroll; bootScroll = null;
+    var sb = scrollEl(); if (!sb || !b) return;
+    if (b.at) { var el = $(b.at); if (el) sb.scrollTop = Math.max(0, el.getBoundingClientRect().top - sb.getBoundingClientRect().top + sb.scrollTop - 4); }
+    else sb.scrollTop = b.y;
+  }
+  function watchPending(sym) { return !!(ui.pending['addWatch:' + sym] || ui.pending['removeWatch:' + sym]); }
+  function syncStock() {
+    try {
+      var st = ui.stock;
+      if (!stockOpen() || !st.info || typeof st.info !== 'object') return;
+      if (Array.isArray(S.myWatch) && !watchPending(st.sym)) {
+        var inW = S.myWatch.some(function (x) { return x && typeof x.sym === 'string' && x.sym.toUpperCase() === st.sym; });
+        if (inW !== (st.info.inWatch === true)) st.info.inWatch = inW;
+      }
+      var el = $('st-act'), h = SE.stockPart('act', S, ui, sheet.data);
+      if (el && el._h !== h) { el.innerHTML = h; el._h = h; }     // only the two buttons; the rest of the page is left alone
+    } catch (e) { /* ignore */ }
+  }
+  function requestInfo() {
+    var st = ui.stock; if (!st) return;
+    var tok = st.itok = (st.itok || 0) + 1;
+    st.err = ''; st.info = null;
+    if (st.itimer) clearTimeout(st.itimer);
+    st.itimer = setTimeout(function () {
+      if (ui.stock === st && st.itok === tok && !st.info && !st.err) { st.err = 'No reply after 20 seconds. Check your connection and try again.'; paintStock(['head', 'price', 'act', 'chart', 'body']); }
+    }, 20000);
+    try { bridge().action('stockInfo', JSON.stringify({ sym: st.sym })); }
+    catch (e) { st.err = 'Could not reach the app. Try again.'; }
+  }
+  function requestChart(bars) {
+    var st = ui.stock; if (!st) return;
+    var tok = st.ctok = (st.ctok || 0) + 1;
+    st.inflight = bars; st.chartErr = '';
+    if (st.ctimer) clearTimeout(st.ctimer);
+    st.ctimer = setTimeout(function () {
+      if (ui.stock === st && st.ctok === tok && st.inflight) {
+        st.inflight = 0;
+        if (st.chart) { st.want = st.range || 130; toast('The chart is taking too long. Try again.', 'err'); } else st.chartErr = 'The chart did not load in time.';
+        paintStock(['chart']);
+      }
+    }, 20000);
+    try { bridge().action('getChart', JSON.stringify({ sym: st.sym, bars: bars })); }
+    catch (e) { st.inflight = 0; st.chartErr = 'Could not reach the app.'; }
+  }
+  function openStock(sym, name) {
+    sym = String(sym || '').trim().toUpperCase();
+    if (!sym) return;
+    name = String(name || '').trim();
+    if (!name) { var r = (ui.recent || []).filter(function (x) { return x.sym === sym; })[0]; name = r ? r.name : ''; }
+    if (!name) { var h = SE.A(S.holdings).concat(SE.A(S.myWatch), SE.A(S.watch)).filter(function (x) { return SE.T(x.sym).toUpperCase() === sym; })[0]; name = h ? SE.T(h.name) : ''; }
+    ui.stock = { sym: sym, name: name, info: null, err: '', chart: null, chartErr: '', range: 0, want: 130, inflight: 0 };
+    noteRecent(sym, name);
+    if (sheet && sheet.kind === 'stock') { sheet.data = { id: sym }; paintSheet(true); }
+    else openSheet('stock', { id: sym }, true);
+    try { var sb = scrollEl(); if (sb) sb.scrollTop = 0; } catch (e) { /* ignore */ }
+    requestInfo(); requestChart(130);
+  }
+  function onInfoResult(res, ok, err) {
+    var st = ui.stock;
+    if (!st || st.info) return;
+    if (res.sym && String(res.sym).toUpperCase() !== st.sym) return;  // reply for another symbol
+    if (st.itimer) { clearTimeout(st.itimer); st.itimer = null; }
+    if (ok) { st.info = res; st.err = ''; if (!st.name && typeof res.name === 'string') st.name = res.name; if (res.name) noteRecent(st.sym, String(res.name)); }
+    else { st.info = null; st.err = err; }
+    paintStock(['head', 'price', 'act', 'chart', 'body']);
+  }
+  function onStockChart(res, ok, err) {
+    var st = ui.stock;
+    if (!st || !(st.inflight > 0)) return false;
+    if (res.sym && String(res.sym).toUpperCase() !== st.sym) return false;
+    if (st.ctimer) { clearTimeout(st.ctimer); st.ctimer = null; }
+    var bars = st.inflight; st.inflight = 0;
+    if (ok && Array.isArray(res.c)) { st.chart = res; st.range = bars; st.chartErr = ''; }
+    else if (st.chart) { st.want = st.range || 130; toast('Chart: ' + err, 'err'); }
+    else st.chartErr = err;
+    if (ok && st.want !== bars) requestChart(st.want);
+    paintStock(['chart']);
+    return true;
+  }
+  function retryStock() {
+    var st = ui.stock; if (!st) return;
+    requestInfo();
+    if (!st.chart && !st.inflight) requestChart(st.want || 130);
+    paintStock(['head', 'price', 'act', 'chart', 'body']);
+  }
+
+  /* ---------- watchlist ---------- */
+  var watchQ = [];
+  function watchCall(name, sym, onFail) {
+    var key = name + ':' + sym;
+    if (ui.pending[key]) return false;
+    var rec = { name: name, sym: sym, onFail: onFail, key: key };
+    ui.pending[key] = setTimeout(function () {
+      delete ui.pending[key];
+      var i = watchQ.indexOf(rec); if (i >= 0) watchQ.splice(i, 1);
+      if (onFail) onFail();
+      toast('Watchlist: no reply yet. Try again.', 'err');
+      render(true); paintStock(['act']);
+    }, 20000);
+    watchQ.push(rec);
+    try { bridge().action(name, JSON.stringify({ sym: sym })); }
+    catch (e) {
+      clearTimeout(ui.pending[key]); delete ui.pending[key];
+      var j = watchQ.indexOf(rec); if (j >= 0) watchQ.splice(j, 1);
+      if (onFail) onFail();
+      toast('Watchlist change could not start', 'err'); render(true); paintStock(['act']);
+      return false;
+    }
+    render(true);
+    return true;
+  }
+  function onWatchResult(name, ok, err) {
+    var rec = null;
+    for (var i = 0; i < watchQ.length; i++) if (watchQ[i].name === name) { rec = watchQ.splice(i, 1)[0]; break; }
+    if (rec) { clearTimeout(ui.pending[rec.key]); delete ui.pending[rec.key]; }
+    if (ok) toast(name === 'addWatch' ? 'Added to your watchlist' : 'Removed from your watchlist', 'ok');
+    else { if (rec && rec.onFail) rec.onFail(); toast('Watchlist: ' + err, 'err'); }
+    render(true); paintStock(['act']);
+  }
+  function toggleWatch() {
+    var st = ui.stock; if (!stockOpen() || !st.info || watchPending(st.sym)) return;
+    var want = !(st.info.inWatch === true), name = want ? 'addWatch' : 'removeWatch';
+    st.info.inWatch = want;                                   // optimistic; rolled back on failure
+    if (!watchCall(name, st.sym, function () { if (st.info) st.info.inWatch = !want; })) st.info.inWatch = !want;
+    paintStock(['act']);
+  }
+
   function command(c, id, el) {
     switch (c) {
       case 'tab': setTab(id); break;
@@ -375,7 +598,32 @@
       case 'dev-alarm': device('openExactAlarmSettings'); break;
       case 'sheet-close': closeSheet(); break;
       case 'sort': ui.sort = id; render(true); break;
-      case 'chart': openChart(id); break;
+      case 'chart': openStock(id, el && el.getAttribute('data-name')); break;
+      case 'stock': openStock(id, el && el.getAttribute('data-name')); break;
+      case 'lookup': openStock(id, ''); break;
+      case 'search': openSearch(); break;
+      case 'search-clear': {
+        var qi = elSheet.querySelector('input[name="q"]');
+        if (qi) { qi.value = ''; onSearchInput(''); try { qi.focus(); } catch (e) { /* ignore */ } }
+        break;
+      }
+      case 'recent-clear': ui.recent = []; try { window.localStorage.removeItem('se_recent'); } catch (e) { /* ignore */ } paintSearchBody(); break;
+      case 'watch': toggleWatch(); break;
+      case 'watch-edit': ui.watchEdit = !ui.watchEdit; render(true); break;
+      case 'watch-remove': watchCall('removeWatch', id, null); break;
+      case 'stock-add': openSheet('add', { sym: id }); break;
+      case 'range': {
+        var st = ui.stock, bars = Number(id);
+        if (!st || !bars) break;
+        if (st.want === bars && (st.range === bars || st.inflight)) break;
+        st.want = bars;
+        if (!st.inflight) requestChart(bars);
+        paintStock(['chart']);
+        break;
+      }
+      case 'ema': if (SE.N(id) !== null) { ui.emaOn[id] = !ui.emaOn[id]; paintStock(['chart']); } break;
+      case 'stock-retry': retryStock(); break;
+      case 'chart-retry': if (ui.stock) { requestChart(ui.stock.want || 130); paintStock(['chart']); } break;
       case 'submit': submitSheet(); break;
       case 'tog':
         if (el) {
@@ -422,9 +670,18 @@
       if (qs.sheet === 'take') { first = SE.A(S.signals).filter(function (g) { return g.status === 'NEW'; })[0]; openSheet('take', { id: first ? SE.T(first.id) : '' }, true); }
       else if (qs.sheet === 'close') { first = SE.A(S.trades).filter(function (t) { return t.status === 'OPEN'; })[0]; openSheet('close', { id: first ? SE.T(first.id) : '' }, true); }
       else if (qs.sheet === 'remove' || qs.sheet === 'sold') { first = SE.A(S.holdings)[0]; openSheet(qs.sheet, { id: first ? SE.T(first.sym) : '' }, true); }
-      else if ({ settings: 1, add: 1, paste: 1, clearfeed: 1 }[qs.sheet]) openSheet(qs.sheet, {}, true);
+      else if (qs.sheet === 'search') {
+        openSearch(true);
+        if (qs.q) { var qi2 = elSheet.querySelector('input[name="q"]'); if (qi2) { qi2.value = qs.q; onSearchInput(qs.q); } }
+      }
+      else if (qs.sheet === 'stock') {
+        first = SE.A(S.holdings)[0];
+        if (qs.sheetscroll || qs.sheetat) bootScroll = { y: Number(qs.sheetscroll) || 0, at: qs.sheetat || '' };
+        openStock(qs.sym || (first ? SE.T(first.sym) : 'RELIANCE'), '');
+      }
+      else if ({ settings: 1, add: 1, paste: 1, clearfeed: 1 }[qs.sheet]) openSheet(qs.sheet, qs.sheet === 'add' && qs.sym ? { sym: qs.sym } : {}, true);
       else if (qs.sheet === 'chart') { first = SE.A(S.holdings)[0]; openChart(qs.sym || (first ? SE.T(first.sym) : 'RELIANCE')); }
-      if (qs.sheetscroll) { var sb = elSheet.querySelector('.sb'); if (sb) sb.scrollTop = Number(qs.sheetscroll) || 0; }
+      if (qs.sheetscroll && qs.sheet !== 'stock') { var sb = elSheet.querySelector('.sb'); if (sb) sb.scrollTop = Number(qs.sheetscroll) || 0; }
     }
   } catch (e) { /* ignore */ }
 })();

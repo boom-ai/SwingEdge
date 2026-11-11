@@ -142,6 +142,8 @@
     sun: '<circle cx="12" cy="12" r="3.6"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>',
     refresh: '<path d="M19.5 12a7.5 7.5 0 1 1-2.4-5.5M19.5 4.5v4h-4"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.500 5.500"/>',
+    star: '<path d="M12 3.800l2.600 5.300 5.800.8-4.200 4.100 1 5.800-5.200-2.700-5.200 2.700 1-5.800-4.200-4.100 5.800-.8z"/>',
     file: '<path d="M7 3.5h7l4 4V20.500H7zM14 3.500V8h4"/><path d="M12 11.500v5M9.8 14.500l2.2 2.2 2.2-2.2"/>',
     paste: '<rect x="5.5" y="5" width="13" height="15.5" rx="2"/><path d="M9 5V3.500h6V5M9 11h6M9 15h4"/>',
     trash: '<path d="M5 7h14M9.5 7V4.500h5V7M7 7l.8 12.500h8.400L17 7"/>',
@@ -159,10 +161,10 @@
   function tag(kind, label, icon) {
     return '<span class="tag ' + kind + (icon ? '' : ' plain') + '">' + (icon ? ic(icon) : '') + esc(label) + '</span>';
   }
-  function symBtn(sym) {
+  function symBtn(sym, name) {
     var x = T(sym).trim();
     if (!x) return '<b>' + DASH + '</b>';
-    return '<button type="button" class="symbtn" data-c="chart" data-id="' + esc(x) + '" aria-label="Chart for ' + esc(x) + '"><b>' + esc(x) + '</b>' + ic('chart') + '</button>';
+    return '<button type="button" class="symbtn" data-c="stock" data-id="' + esc(x) + '"' + (T(name).trim() ? ' data-name="' + esc(T(name).trim()) + '"' : '') + ' aria-label="Open ' + esc(x) + '"><b>' + esc(x) + '</b>' + ic('chart') + '</button>';
   }
   function btn(cmd, id, label, cls, o) {
     o = o || {};
@@ -284,6 +286,7 @@
     var issues = deviceIssues(ui.device).length;
     var h = '<div class="topbar"><div class="brand">' + ic('logo') + 'SwingEdge</div>' +
       '<div class="mkt ' + (open ? 'open' : closed ? 'closed' : '') + '"><i class="dot"></i><span class="clip">' + esc(note) + '</span></div>' +
+      '<button type="button" class="iconbtn" data-c="search" aria-label="Search stocks">' + ic('search') + '</button>' +
       '<button type="button" class="iconbtn" data-c="settings" aria-label="Settings' + (issues ? ', phone setup needs attention' : '') + '">' + ic('gear') + (issues ? '<i class="pip"></i>' : '') + '</button></div>';
     if (isBusy(S)) {
       var p = N(S.busy.pct);
@@ -375,7 +378,7 @@
     if (vt !== null) facts += vt > now ? '<span>Valid till <b>' + hm(vt) + '</b></span>' : '<span class="mut">Validity passed ' + esc(rel(vt, now)) + '</span>';
     var exp = /^EXPERIMENTAL/i.test(T(g.strategyLabel)); /* strategy failed its test: shown as a paper idea, not a buy call */
     return '<article class="card rail ' + (exp ? 'k-trim' : 'k-buy') + '"><div class="cb">' +
-      '<div class="hd"><div class="who"><div class="sym">' + (exp ? tag('trim', 'TEST IDEA') : tag('buy', 'BUY', 'up')) + symBtn(g.sym) + '</div>' +
+      '<div class="hd"><div class="who"><div class="sym">' + (exp ? tag('trim', 'TEST IDEA') : tag('buy', 'BUY', 'up')) + symBtn(g.sym, g.name) + '</div>' +
       '<div class="sub">' + tx(g.name, '') + (T(g.name).trim() && T(g.strategyLabel).trim() ? ' · ' : '') + tx(g.strategyLabel, '') + '</div></div>' +
       '<div class="px"><div class="ltp">' + px(g.ltp) + '</div><div class="ltpl">last price</div></div></div>' +
       '<div class="zone"><span class="k">Buy between</span><span class="v">' + zone + '</span></div>' +
@@ -393,7 +396,7 @@
     var a = TACT[t.action] || TACT.HOLD, id = T(t.id);
     var exit = t.action === 'EXIT' || t.action === 'TIME_EXIT';
     return '<article class="card rail k-' + (a.cls === 'sell' ? 'sell' : 'trim') + '"><div class="cb">' +
-      '<div class="hd"><div class="who"><div class="sym">' + tag(a.cls, a.label, a.icon) + symBtn(t.sym) + '</div>' +
+      '<div class="hd"><div class="who"><div class="sym">' + tag(a.cls, a.label, a.icon) + symBtn(t.sym, t.name) + '</div>' +
       '<div class="sub">Your trade · ' + qtyStr(t.qty) + ' shares at ' + px(t.entry) + '</div></div>' +
       '<div class="px"><div class="ltp">' + px(t.ltp) + '</div><div class="ltpl num ' + tone(t.pnlRs) + '">' + rs(t.pnlRs, true) + ' (' + pc(t.pnlPct, true) + ')</div></div></div>' +
       '<div class="note">' + tx(t.actionNote, exit ? 'Sell this position now.' : 'Target 1 reached. Sell half and hold the rest.') + '</div>' +
@@ -408,7 +411,7 @@
     if (N(h.bookAt) > 0) facts += '<span>Book near <b>' + px(h.bookAt) + '</b></span>';
     if (N(h.stop) > 0) facts += '<span>Stop <b>' + px(h.stop) + '</b></span>';
     return '<article class="card rail k-' + v.cls + '"><div class="cb">' +
-      '<div class="hd"><div class="who"><div class="sym">' + tag(v.cls, v.label, v.icon) + symBtn(h.sym) + '</div>' +
+      '<div class="hd"><div class="who"><div class="sym">' + tag(v.cls, v.label, v.icon) + symBtn(h.sym, h.name) + '</div>' +
       '<div class="sub">Your holding' + (T(h.name).trim() ? ' · ' + esc(T(h.name).trim()) : '') + '</div></div>' +
       '<div class="px"><div class="ltp">' + px(h.ltp) + '</div><div class="ltpl num ' + tone(h.pnlRs) + '">' + rs(h.pnlRs, true) + ' (' + pc(h.pnlPct, true) + ')</div></div></div>' +
       '<div class="note">' + tx(h.headline, sell ? 'The checks say sell this holding.' : 'The checks say reduce this holding.') + '</div>' +
@@ -448,7 +451,7 @@
     hs = hs.slice().sort(function (a, b) { return N(b.dayChgPct) - N(a.dayChgPct); });
     var pick = hs.length <= 6 ? hs : hs.slice(0, 3).concat(hs.slice(-3));
     return '<div class="sec"><h2>Your holdings today</h2></div><div class="card mv">' + pick.map(function (x) {
-      return '<button type="button" class="mvr" data-c="chart" data-id="' + esc(T(x.sym)) + '"><b>' + tx(x.sym) + '</b><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + pc(x.dayChgPct, true, true) + '</span></button>';
+      return '<button type="button" class="mvr" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '"><b>' + tx(x.sym) + '</b><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + pc(x.dayChgPct, true, true) + '</span></button>';
     }).join('') + '</div>';
   }
   function watchItems(S) { return A(S.watch).filter(function (x) { return T(x.sym).trim() && N(x.ltp) > 0; }); }
@@ -472,16 +475,54 @@
     return '<button type="button" class="card golink" data-c="tab" data-id="setups">' + ic('setups') +
       '<span class="gt"><b>EMA setups</b><span>' + (ws.length ? (n0 ? n0 + ' crossed on the latest bar' : 'None on the latest bar') + (ws.length > n0 ? ' · ' + (ws.length - n0) + ' in the 2 days before' : '') : 'No fresh 10/20 EMA cross right now') + '</span></span>' + ic('chev') + '</button>';
   }
+  function emaNum(v) { /* compact EMA value for tight grids: no rupee sign, no decimals above 1,000 */
+    var n = N(v); if (n === null || n <= 0) return DASH;
+    if (n >= 1e7) return big(n);
+    return n >= 1000 ? grp(String(Math.round(n))) : pxNum(n);
+  }
+  var STACKTAG = { BULLISH: ['hold', 'BULLISH'], MIXED: ['trim', 'MIXED'], BEARISH: ['sell', 'BEARISH'] };
+  function stackTag(label, icon) {
+    var k = T(label).trim().toUpperCase(), m = STACKTAG[k];
+    return m ? tag(m[0], m[1], icon) : (k ? tag('neutral', k.slice(0, 10)) : '');
+  }
   function setupRow(x) {
     var sv = (Array.isArray(x.spark) ? x.spark : []).map(N), up = sv.length > 1 && sv[sv.length - 1] !== null && sv[0] !== null ? sv[sv.length - 1] >= sv[0] : true;
     var nm = T(x.name).trim(), sym = T(x.sym).trim();
-    return '<button type="button" class="srow" data-c="chart" data-id="' + esc(sym) + '">' +
+    var ema = [['10', x.ema10], ['20', x.ema20], ['50', x.ema50], ['100', x.ema100], ['200', x.ema200]];
+    return '<button type="button" class="srow" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' +
       '<span class="s1"><span class="wn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '10 EMA ' + (N(x.gapPct) === null ? '' : Math.abs(N(x.gapPct)).toFixed(2) + '% ') + 'above 20 EMA') + '</span></span>' +
       spark(x.spark, up) + '<span class="sp"><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + pc(x.dayChgPct, true, true) + '</span></span></span>' +
-      '<span class="s2"><span>EMA 10 <b>' + px(x.ema10) + '</b></span><span>20 <b>' + px(x.ema20) + '</b></span><span>50 <b>' + px(x.ema50) + '</b></span><span>100 <b>' + px(x.ema100) + '</b></span><span>200 <b>' + px(x.ema200) + '</b></span></span></button>';
+      '<span class="s2 g5">' + ema.map(function (e) { return '<span><i>' + e[0] + ' EMA</i><b class="num">' + emaNum(e[1]) + '</b></span>'; }).join('') + '</span></button>';
+  }
+
+  /* ---------- My watchlist (top of the Setups tab) ---------- */
+  function wrow(x, edit, ui) {
+    var sym = T(x.sym).trim(); if (!sym) return '';
+    var nm = T(x.name).trim(), ok = x.dataOk !== false;
+    var sv = (Array.isArray(x.spark) ? x.spark : []).map(N), up = sv.length > 1 && sv[sv.length - 1] !== null && sv[0] !== null ? sv[sv.length - 1] >= sv[0] : true;
+    var l2 = ok ? (T(x.crossText).trim() ? esc(T(x.crossText).trim()) : '<span class="mut">No 10/20 EMA reading yet</span>') : '<span class="mut">No data yet. It fills in after the next scan.</span>';
+    var main = '<button type="button" class="srow wmain" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' +
+      '<span class="s1"><span class="wn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
+      (ok ? spark(x.spark, up) : '<span class="spk"></span>') +
+      '<span class="sp"><span class="num">' + (ok ? px(x.ltp) : DASH) + '</span><span class="num ' + (ok ? tone(x.dayChgPct) : 'flat') + '">' + (ok ? pc(x.dayChgPct, true, true) : '') + '</span></span></span>' +
+      '<span class="s2 wl2"><span class="wx clip">' + l2 + '</span>' + (ok ? stackTag(x.stack) : '') + '</span></button>';
+    var rm = edit ? '<button type="button" class="wrm" data-c="watch-remove" data-id="' + esc(sym) + '" aria-label="Remove ' + esc(sym) + ' from watchlist"' + (pend(ui, 'removeWatch:' + sym) ? ' disabled' : '') + '>' + ic('trash') + '</button>' : '';
+    return '<div class="wrow' + (edit ? ' ed' : '') + '">' + main + rm + '</div>';
+  }
+  function myWatchSection(S, ui) {
+    var rows = A(S.myWatch).filter(function (x) { return T(x.sym).trim(); }), edit = ui.watchEdit === true && rows.length > 0;
+    var h = '<div class="sec wsec"><h2>My watchlist</h2>' + (rows.length ? '<span class="cnt">' + rows.length + '</span>' : '') + '<span class="sp"></span>' +
+      (rows.length ? '<button type="button" class="linkbtn" data-c="watch-edit">' + (edit ? 'Done' : 'Edit') + '</button>' : '') +
+      (rows.length ? btn('search', null, 'Add stock', 'sm', { icon: 'plus' }) : '') + '</div>';
+    if (!rows.length) {
+      return h + '<div class="empty"><div class="ei">' + ic('star') + '</div><h3>Your watchlist is empty</h3>' +
+        '<p>Search any NSE stock, open it and tap “Add to watchlist”. Stocks you add get a fresh price on every scan and their 10/20 EMA status shows here.</p>' +
+        '<div class="btns">' + btn('search', null, 'Find a stock', 'sm', { icon: 'search' }) + '</div></div>';
+    }
+    return h + '<div class="card mv">' + rows.map(function (x) { return wrow(x, edit, ui); }).join('') + '</div>';
   }
   function setups(S, ui) {
-    var ws = watchItems(S), asof = '', h = '';
+    var ws = watchItems(S), asof = '', h = myWatchSection(S, ui);
     ws.forEach(function (x) { if (!asof) asof = barDayText(x.barDay); });
     h += '<div class="card setuphd"><h2>Fresh EMA crossovers</h2>' +
       '<div class="crit"><span>' + ic('check') + '10 EMA crossed above 20 EMA</span><span>' + ic('check') + '10 EMA above the 50, 100 and 200 EMA</span><span>' + ic('check') + 'Traded ₹25 crore+ a day</span></div>' +
@@ -567,7 +608,7 @@
     var unknown = !a; if (!a) a = { cls: 'neutral', icon: 'info', label: T(t.action).trim().toUpperCase().slice(0, 14) || 'NO CALL' };
     var rail = a.cls === 'sell' ? 'k-sell' : a.cls === 'trim' ? 'k-trim' : '';
     return '<article class="card rail ' + rail + '"><div class="cb">' +
-      '<div class="hd"><div class="who"><div class="sym"><b>' + tx(t.sym) + '</b></div>' +
+      '<div class="hd"><div class="who"><div class="sym">' + symBtn(t.sym, t.name) + '</div>' +
       '<div class="sub">' + qtyStr(t.qty) + ' shares at ' + px(t.entry) + (T(t.strategyLabel).trim() ? ' · ' + esc(T(t.strategyLabel).trim()) : '') + '</div></div>' +
       '<div class="px pnl"><div class="a ' + tone(t.pnlRs) + '">' + rs(t.pnlRs, true) + '</div><div class="p ' + tone(t.pnlPct) + '">' + pc(t.pnlPct, true, true) + '</div></div></div>' +
       track(t) +
@@ -634,7 +675,7 @@
     var vt = nodata ? tag('neutral', 'NO DATA', 'clock') : v ? tag(v.cls, v.label, v.icon) : tag('neutral', T(h.verdict).trim().toUpperCase().slice(0, 12) || 'NO CALL', 'info');
     var rail = nodata || !v ? '' : v.cls === 'sell' ? 'k-sell' : v.cls === 'trim' ? 'k-trim' : v.cls === 'watch' ? 'k-info' : '';
     var out = '<article class="card rail hold ' + rail + (nodata ? ' nodata' : '') + '"><div class="cb">' +
-      '<div class="hd"><div class="who"><div class="sym">' + vt + symBtn(h.sym) + '</div>' +
+      '<div class="hd"><div class="who"><div class="sym">' + vt + symBtn(h.sym, h.name) + '</div>' +
       '<div class="sub">' + qtyStr(h.qty) + ' shares · avg ' + px(h.avg) + (T(h.name).trim() && T(h.name).trim() !== sym ? ' · ' + esc(T(h.name).trim()) : '') + '</div>' +
       (!nodata && N(h.strength) > 0 ? '<div class="str"><span>Trend strength</span><i><b style="width:' + Math.min(100, Math.round(N(h.strength))) + '%" class="' + (N(h.strength) >= 65 ? 'g' : N(h.strength) >= 40 ? 'a' : 'r') + '"></b></i><span class="num">' + Math.round(N(h.strength)) + '</span></div>' : '') + '</div>';
     if (nodata) {
@@ -668,7 +709,7 @@
     var warn = w1 > 20 ? segs[0].n + ' alone is ' + Math.round(w1) + '% of your portfolio. One bad result there moves everything.'
       : w3 > 50 ? 'Your top 3 holdings are ' + Math.round(w3) + '% of the portfolio.' : '';
     var ranked = hs.filter(function (x) { return x.dataOk !== false && N(x.avg) > 0 && N(x.pnlPct) !== null; }).sort(function (a, b) { return N(b.pnlPct) - N(a.pnlPct); });
-    var row = function (x) { return '<button type="button" class="wl" data-c="chart" data-id="' + esc(T(x.sym)) + '"><b>' + tx(x.sym) + '</b><span class="num ' + tone(x.pnlPct) + '">' + pc(x.pnlPct, true) + '</span><span class="num mut">' + rs(x.pnlRs, true) + '</span></button>'; };
+    var row = function (x) { return '<button type="button" class="wl" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '"><b>' + tx(x.sym) + '</b><span class="num ' + tone(x.pnlPct) + '">' + pc(x.pnlPct, true) + '</span><span class="num mut">' + rs(x.pnlRs, true) + '</span></button>'; };
     var wl = '';
     if (ranked.length >= 4) {
       var k = Math.min(3, Math.floor(ranked.length / 2));
@@ -827,51 +868,97 @@
       '<span class="t"><b>' + title + '</b><span>' + sub + '</span></span><span class="st">' + (on ? 'On' : 'Off') + '</span><span class="sw"></span></button>';
   }
   function nums(v) { return Array.isArray(v) ? v.map(function (x) { var n = N(x); return n === null ? 0 : n; }) : []; }
-  function chartSvg(res) {
-    var c = nums(res.c), o = nums(res.o), hi = nums(res.h), lo = nums(res.l), d = nums(res.d), m50 = nums(res.sma50), m200 = nums(res.sma200);
-    var n = Math.min(c.length, o.length, hi.length, lo.length);
+  function volTxt(v) {
+    var n = N(v); if (n === null || n <= 0) return DASH;
+    if (n >= 1e7) return (n / 1e7).toFixed(2) + ' Cr';
+    if (n >= 1e5) return (n / 1e5).toFixed(2) + ' L';
+    return grp(String(Math.round(n)));
+  }
+  /* o (optional) = {emas:{10:true,..}, vol:true, levels:[{k:'sup'|'res'|'stop', t, v}]}. Without o this is the original chart. */
+  function chartSvg(res, o) {
+    var c = nums(res.c), op = nums(res.o), hi = nums(res.h), lo = nums(res.l), d = nums(res.d), m50 = nums(res.sma50), m200 = nums(res.sma200), vv = nums(res.v);
+    var n = Math.min(c.length, op.length, hi.length, lo.length);
     if (n < 5) return '<p class="lead">Not enough price history to draw a chart.</p>';
-    var Wd = 360, Ht = 230, L = 6, R = 52, Tp = 8, B = 20, pw = Wd - L - R, ph = Ht - Tp - B;
-    var mn = Infinity, mx = -Infinity, i;
+    var useVol = !!(o && o.vol) && vv.length >= n && vv.slice(0, n).some(function (x) { return x > 0; });
+    var Wd = 360, L = 6, R = o ? 50 : 52, Tp = 8, pw = Wd - L - R, i;
+    var ph = o ? 190 : 202, vTop = Tp + ph + 6, vh = useVol ? 44 : 0;
+    var Ht = o ? (useVol ? vTop + vh + 18 : Tp + ph + 22) : 230, labY = Ht - 5;
+    var mn = Infinity, mx = -Infinity;
     for (i = 0; i < n; i++) { if (lo[i] > 0 && lo[i] < mn) mn = lo[i]; if (hi[i] > mx) mx = hi[i]; }
     if (!(mx > mn)) { mx = mn * 1.01 + 1; }
-    var lv = A(res.levels).map(function (x) { return { k: T(x.kind), t: T(x.label), v: N(x.v) }; }).filter(function (x) { return x.v > 0; });
+    var lv = (o ? A(o.levels) : A(res.levels)).map(function (x) { return { k: T(x.k || x.kind), t: T(x.t || x.label), v: N(x.v) }; }).filter(function (x) { return x.v > 0; });
     var span = mx - mn;
     lv = lv.filter(function (x) { return x.v > mn - span * 0.6 && x.v < mx + span * 0.6; });
     lv.forEach(function (x) { if (x.v < mn) mn = x.v; if (x.v > mx) mx = x.v; });
+    var emaKeys = [200, 100, 50, 20, 10].filter(function (k) { return o && O(o.emas)[k]; });
+    var span2 = mx - mn;
+    emaKeys.forEach(function (k) { var a = nums(res['ema' + k]), lastv = a.length ? a[Math.min(a.length, n) - 1] : 0; if (lastv > 0 && lastv > mn - span2 * 0.25 && lastv < mx + span2 * 0.25) { if (lastv < mn) mn = lastv; if (lastv > mx) mx = lastv; } });
     var pad = (mx - mn) * 0.06; mn -= pad; mx += pad;
     var X = function (k) { return L + (k + 0.5) * pw / n; }, Y = function (v) { return Tp + (mx - v) / (mx - mn) * ph; };
-    var bw = Math.max(1, Math.min(5, pw / n * 0.62));
-    var g = '';
+    var lineMode = !!o && n > 300;
+    var bw = Math.max(o ? 0.7 : 1, Math.min(5, pw / n * 0.62));
+    var g = '<defs><clipPath id="cclip"><rect x="' + L + '" y="' + Tp + '" width="' + pw + '" height="' + ph + '"/></clipPath></defs>';
     for (i = 0; i <= 3; i++) {
       var gv = mn + (mx - mn) * i / 3, gy = Y(gv);
       g += '<line x1="' + L + '" x2="' + (Wd - R) + '" y1="' + gy.toFixed(1) + '" y2="' + gy.toFixed(1) + '" class="grid"/><text x="' + (Wd - R + 4) + '" y="' + (gy + 3.5).toFixed(1) + '" class="ax">' + esc(pxNum(gv)) + '</text>';
     }
-    var lastM = -1;
+    var lastM = -1, lastLX = -99;
     for (i = 0; i < n; i++) {
       var t = ts(d[i]); if (t === null) continue;
       var dt = ist(t), mo = dt.getUTCMonth();
-      if (mo !== lastM) { if (lastM !== -1 && X(i) < Wd - R - 14) g += '<text x="' + X(i).toFixed(1) + '" y="' + (Ht - 5) + '" class="ax">' + MON[mo] + '</text>'; lastM = mo; }
+      if (mo !== lastM) {
+        if (lastM !== -1 && X(i) < Wd - R - 14 && (!o || X(i) - lastLX >= 36)) {
+          g += '<text x="' + X(i).toFixed(1) + '" y="' + labY + '" class="ax">' + MON[mo] + (o && mo === 0 ? ' ’' + String(dt.getUTCFullYear()).slice(2) : '') + '</text>'; lastLX = X(i);
+        }
+        lastM = mo;
+      }
     }
     var line = function (arr, cls) {
       var pts = [], seg = '';
-      for (var k = 0; k < n; k++) { if (arr[k] > 0) pts.push(X(k).toFixed(1) + ',' + Y(arr[k]).toFixed(1)); else if (pts.length) { seg += '<polyline class="' + cls + '" points="' + pts.join(' ') + '"/>'; pts = []; } }
+      for (var k = 0; k < n; k++) { if (arr[k] > 0) pts.push(X(k).toFixed(1) + ',' + Y(arr[k]).toFixed(1)); else if (pts.length) { if (pts.length > 1) seg += '<polyline class="' + cls + '" points="' + pts.join(' ') + '"/>'; pts = []; } }
       if (pts.length > 1) seg += '<polyline class="' + cls + '" points="' + pts.join(' ') + '"/>';
       return seg;
     };
-    var x50 = nums(res.ema50), x200 = nums(res.ema200);
-    g += line(x200.length ? x200 : m200, 'ma200') + line(x50.length ? x50 : m50, 'ma50') + line(nums(res.ema20), 'ema20') + line(nums(res.ema10), 'ema10');
-    for (i = 0; i < n; i++) {
+    var cl = '';
+    if (o) { emaKeys.forEach(function (k) { cl += line(nums(res['ema' + k]), 'e' + k); }); }
+    else {
+      var x50 = nums(res.ema50), x200 = nums(res.ema200);
+      cl += line(x200.length ? x200 : m200, 'ma200') + line(x50.length ? x50 : m50, 'ma50') + line(nums(res.ema20), 'ema20') + line(nums(res.ema10), 'ema10');
+    }
+    var cs = '';
+    if (lineMode) cs += line(c.slice(0, n), 'cls');
+    else for (i = 0; i < n; i++) {
       if (!(c[i] > 0)) continue;
-      var up = c[i] >= o[i], x = X(i), y1 = Y(Math.max(o[i], c[i])), y2 = Y(Math.min(o[i], c[i]));
-      g += '<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + Y(hi[i]).toFixed(1) + '" y2="' + Y(lo[i] > 0 ? lo[i] : c[i]).toFixed(1) + '" class="' + (up ? 'cu' : 'cd') + '"/>' +
+      var up = c[i] >= op[i], x = X(i), y1 = Y(Math.max(op[i], c[i])), y2 = Y(Math.min(op[i], c[i]));
+      cs += '<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + Y(hi[i]).toFixed(1) + '" y2="' + Y(lo[i] > 0 ? lo[i] : c[i]).toFixed(1) + '" class="' + (up ? 'cu' : 'cd') + '"/>' +
         '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0.8, y2 - y1).toFixed(1) + '" class="' + (up ? 'bu' : 'bd') + '"/>';
     }
-    lv.forEach(function (x) {
-      var y = Y(x.v), cls = x.k === 'stop' ? 'lstop' : x.k === 'target' ? 'ltgt' : 'lent';
-      g += '<line x1="' + L + '" x2="' + (Wd - R) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" class="lvl ' + cls + '"/>';
+    var ls = '', lbl = '', prevY = -99;
+    lv.slice().sort(function (a, b) { return b.v - a.v; }).forEach(function (x) {
+      var y = Y(x.v), cls = x.k === 'stop' ? 'lstop' : x.k === 'target' ? 'ltgt' : x.k === 'sup' ? 'lsup' : x.k === 'res' ? 'lres' : x.k === 'trail' ? 'lstop' : 'lent';
+      ls += '<line x1="' + L + '" x2="' + (Wd - R) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" class="lvl ' + cls + '"/>';
+      if (o && x.t) { var ly = Math.max(y - 3, prevY + 10); if (ly > Tp + ph - 2) ly = Tp + ph - 2; prevY = ly; lbl += '<text x="' + (L + 3) + '" y="' + ly.toFixed(1) + '" class="lvt ' + cls + '">' + esc(x.t.slice(0, 18) + ' ' + pxNum(x.v)) + '</text>'; }
     });
-    return '<svg class="chart" viewBox="0 0 ' + Wd + ' ' + Ht + '" role="img" aria-label="Price chart">' + g + '</svg>';
+    g += '<g clip-path="url(#cclip)">' + cl + cs + ls + '</g>' + lbl;
+    if (o) {
+      var lc = c[n - 1];
+      if (lc > 0 && lc >= mn && lc <= mx) {
+        var ly2 = Y(lc);
+        g += '<line x1="' + L + '" x2="' + (Wd - R) + '" y1="' + ly2.toFixed(1) + '" y2="' + ly2.toFixed(1) + '" class="lastl"/><rect x="' + (Wd - R + 1) + '" y="' + (ly2 - 7).toFixed(1) + '" width="' + (R - 2) + '" height="14" rx="3" class="lastb"/><text x="' + (Wd - R + 4) + '" y="' + (ly2 + 3.5).toFixed(1) + '" class="lastt">' + esc(pxNum(lc)) + '</text>';
+      }
+    }
+    if (useVol) {
+      var maxV = 0; for (i = 0; i < n; i++) if (vv[i] > maxV) maxV = vv[i];
+      var vw = Math.max(0.6, Math.min(5, pw / n * 0.7));
+      g += '<line x1="' + L + '" x2="' + (Wd - R) + '" y1="' + (vTop + vh) + '" y2="' + (vTop + vh) + '" class="grid"/>';
+      for (i = 0; i < n; i++) {
+        if (!(vv[i] > 0) || !(maxV > 0)) continue;
+        var bh = Math.max(0.6, vv[i] / maxV * vh);
+        g += '<rect x="' + (X(i) - vw / 2).toFixed(1) + '" y="' + (vTop + vh - bh).toFixed(1) + '" width="' + vw.toFixed(1) + '" height="' + bh.toFixed(1) + '" class="' + (c[i] >= op[i] ? 'vu' : 'vd') + '"/>';
+      }
+      g += '<text x="' + (Wd - R + 4) + '" y="' + (vTop + 8) + '" class="ax">' + esc(volTxt(maxV)) + '</text><text x="' + (Wd - R + 4) + '" y="' + (vTop + vh) + '" class="ax">Volume</text>';
+    }
+    return '<svg class="chart' + (o ? ' big' : '') + '" viewBox="0 0 ' + Wd + ' ' + Ht + '" role="img" aria-label="' + (useVol ? 'Price chart with volume' : 'Price chart') + '">' + g + '</svg>';
   }
   function chartSheet(sym, ch) {
     var res = O(ch.res), title = sym || 'Chart';
@@ -896,10 +983,283 @@
       cell('52-week high', px(st.high52)) + cell('52-week low', px(st.low52)) + cell('From high', N(st.high52) > 0 && N(st.ltp) > 0 ? pc((N(st.ltp) / N(st.high52) - 1) * 100, true) : DASH) + '</div>';
     return shell(title, body, btn('sheet-close', null, 'Close', ''));
   }
+  /* ---------- stock page ---------- */
+  var EMAS = [10, 20, 50, 100, 200];
+  var EMA_COL = { 10: '#F2B441', 20: '#FF8F6B', 50: '#6BB3FF', 100: '#4DD0E1', 200: '#C58BFF' };
+  var RANGES = [[130, '6M'], [260, '1Y'], [500, '2Y']];
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function emaOn(ui) { var o = O(ui.emaOn), r = {}; EMAS.forEach(function (k) { r[k] = (k in o) ? !!o[k] : k !== 100; }); return r; }
+  /* a value the page can trust: null when unknown (missing, or 0 meaning "not enough bars") */
+  function pv(v, need, bars) {
+    var n = N(v); if (n === null) return null;
+    var b = N(bars);
+    if (b !== null && b > 0 && b < need) return null;
+    if (n === 0 && !(b !== null && b >= need)) return null;
+    return n;
+  }
+  function croreTxt(v) {
+    var n = N(v); if (n === null || n <= 0) return DASH;
+    return '₹' + (n >= 1000 ? grp(String(Math.round(n))) : n >= 10 ? n.toFixed(1) : n.toFixed(2)) + ' cr';
+  }
+  function arrow(n) { return n > 0 ? '▲ ' : n < 0 ? '▼ ' : ''; }
+  function skel(cls) { return '<div class="skel ' + (cls || '') + '"></div>'; }
+  function skCard(h, lines) {
+    var b = '';
+    for (var i = 0; i < lines; i++) b += skel('l' + (i % 3));
+    return '<section class="card sk-card"><h3 class="skh">' + esc(h) + '</h3>' + b + '</section>';
+  }
+
+  function stockHead(sym, ui) {
+    var st = O(ui.stock), info = O(st.info), name = T(info.name).trim() || T(st.name).trim();
+    return '<div class="sid"><b class="clip">' + (T(sym).trim() ? esc(T(sym).trim()) : DASH) + '</b><span class="clip">' + (name && name !== T(sym).trim() ? esc(name) : '&nbsp;') + '</span></div>' +
+      '<button type="button" class="iconbtn" data-c="sheet-close" aria-label="Close">' + ic('x') + '</button>';
+  }
+  function stockPrice(ui) {
+    var st = O(ui.stock);
+    if (!isObj(st.info)) {
+      if (T(st.err).trim()) return '';
+      return '<div class="sk-px"><div class="skel pxb"></div><div class="skel pxs"></div></div>';
+    }
+    var d = st.info, ltp = N(d.ltp), prev = N(d.prevClose), pct = N(d.dayChgPct);
+    var chg = ltp !== null && ltp > 0 && prev !== null && prev > 0 ? ltp - prev : null;
+    var cls = tone(pct !== null ? pct : chg);
+    var when;
+    if (d.live === true) when = '<span class="lv-tag"><i></i>live' + (ts(d.asOf) !== null ? ' · ' + hm(d.asOf) : '') + '</span>';
+    else when = '<span class="lc-tag">last close' + (barDayText(d.barDay) ? ' · ' + esc(barDayText(d.barDay)) : '') + '</span>';
+    return '<div class="sk-px"><div class="pxl"><span class="big num">' + px(d.ltp) + '</span>' +
+      '<span class="chg num ' + cls + '">' + (pct !== null || chg !== null ? arrow(pct !== null ? pct : chg) + (chg !== null ? (Math.abs(chg) > 0 ? px(Math.abs(chg)) : '₹0.00') + ' ' : '') + (pct !== null ? '(' + pc(pct, true, true) + ')' : '') : DASH) + '</span></div>' +
+      '<div class="pxm">' + when + (d.liquid === false ? '<span class="nl-tag">' + ic('warn') + 'not liquid</span>' : '') + '</div></div>';
+  }
+  function stockActions(S, ui) {
+    var st = O(ui.stock), sym = T(st.sym).trim();
+    if (!isObj(st.info)) {
+      if (T(st.err).trim()) return '';
+      return '<div class="sk-act"><div class="skel b"></div><div class="skel b"></div></div>';
+    }
+    var inW = st.info.inWatch === true, busy = pend(ui, 'addWatch:' + sym) || pend(ui, 'removeWatch:' + sym);
+    var held = st.info.isHolding === true || A(O(S).holdings).some(function (h) { return T(h.sym).trim().toUpperCase() === sym.toUpperCase(); });
+    return '<div class="sk-act"><button type="button" class="btn grow wbtn' + (inW ? ' on' : '') + '" data-c="watch" aria-pressed="' + (inW ? 'true' : 'false') + '"' + (busy ? ' disabled' : '') + '>' +
+      (inW ? 'In watchlist ✓' : ic('plus') + 'Add to watchlist') + '</button>' +
+      (held ? '<div class="inhold">' + ic('check') + 'In your portfolio</div>' : btn('stock-add', sym, 'Add to holdings', 'grow', { icon: 'portfolio' })) + '</div>';
+  }
+  function stockChartPart(ui) {
+    var st = O(ui.stock), info = O(st.info), on = emaOn(ui), res = isObj(st.chart) ? st.chart : null;
+    var want = N(st.want) || 130, loading = N(st.inflight) > 0;
+    if (!res && T(st.err).trim() && !isObj(st.info)) return '';
+    var chips = '<div class="rng"><span class="rl">Price</span><span class="rc" role="group" aria-label="Chart range">' + RANGES.map(function (r) {
+      return '<button type="button" class="rchip' + (want === r[0] ? ' on' : '') + '" data-c="range" data-id="' + r[0] + '" aria-pressed="' + (want === r[0]) + '"><span>' + r[1] + '</span></button>';
+    }).join('') + '</span></div>';
+    var lvls = [], lv = O(info.levels);
+    if (N(lv.support) > 0) lvls.push({ k: 'sup', t: 'Support', v: lv.support });
+    if (N(lv.resistance) > 0) lvls.push({ k: 'res', t: 'Resistance', v: lv.resistance });
+    if (N(lv.trailStop) > 0) lvls.push({ k: 'stop', t: 'Trail stop', v: lv.trailStop });
+    var body;
+    if (res) body = chartSvg(res, { emas: on, vol: true, levels: lvls });
+    else if (T(st.chartErr).trim()) body = '<div class="cerr">' + ic('warn') + '<span>' + esc(T(st.chartErr).trim()) + '</span>' + btn('chart-retry', null, 'Retry', 'sm') + '</div>';
+    else body = '<div class="skel chartsk"></div>';
+    var ema = EMAS.map(function (k) {
+      var v = N(O(info.ema)['e' + k]);
+      if (!(v > 0) && res) { var a = nums(res['ema' + k]); v = a.length ? a[a.length - 1] : null; }
+      return '<button type="button" class="echip' + (on[k] ? ' on' : '') + '" data-c="ema" data-id="' + k + '" aria-pressed="' + (on[k] ? 'true' : 'false') + '" style="--c:' + EMA_COL[k] + '">' +
+        '<span class="el"><i></i>EMA ' + k + '</span><span class="ev num">' + emaNum(v) + '</span></button>';
+    }).join('');
+    var legend = lvls.length ? '<div class="clg">' + lvls.map(function (x) { return '<span class="' + (x.k === 'stop' ? 'lstop' : x.k === 'sup' ? 'lsup' : 'lres') + '"><i></i>' + esc(x.t) + '</span>'; }).join('') + '</div>' : '';
+    return chips + '<div class="cwrap' + (loading && res ? ' loading' : '') + '">' + body + (loading && res ? '<div class="cov"><span class="spin"></span>Loading</div>' : '') + '</div>' +
+      '<div class="elg" role="group" aria-label="Moving averages">' + ema + '</div>' + legend;
+  }
+
+  function daysAgo(n) { n = N(n); if (n === null) return ''; if (n < 0) return 'over 60 days ago'; if (n === 0) return 'today'; return n === 1 ? '1 day ago' : n + ' days ago'; }
+  function crossCard(d) {
+    var c = O(d.cross), above = c.state === 'ABOVE', below = c.state === 'BELOW';
+    var gap = N(c.gapPct), ds = N(c.daysSince), conv = c.converging === true ? 1 : c.converging === false ? 0 : -1;
+    var stt = above ? tag('hold', '10 above 20', 'up') : below ? tag('sell', '10 below 20', 'down') : tag('neutral', 'Not clear');
+    var big, unit;
+    if (ds === null) { big = DASH; unit = ''; }
+    else if (ds === 0) { big = 'Today'; unit = 'crossed on the latest bar'; }
+    else if (ds < 0) { big = '60+'; unit = 'days, no recent cross'; }
+    else { big = String(Math.round(ds)); unit = ds === 1 ? 'day since the cross' : 'days since the cross'; }
+    var pos = gap === null ? null : 50 + Math.max(-1, Math.min(1, gap / 2)) * 46;
+    var gauge = '<div class="gz"><div class="gt" role="img" aria-label="Gap between the 10 and 20 EMA"><i class="gl"></i><i class="gr"></i><i class="gc"></i>' +
+      (pos !== null ? '<i class="gm ' + tone(gap) + '" style="left:' + pos.toFixed(1) + '%"></i>' : '') + '</div>' +
+      '<div class="gs"><span>10 below 20</span><span>cross</span><span>10 above 20</span></div></div>';
+    var dir = conv === 1 ? '<div class="gdir"><b>→ ←</b> gap narrowing: the two lines are moving together</div>' : conv === 0 ? '<div class="gdir"><b>← →</b> gap widening: the two lines are moving apart</div>' : '';
+    return '<section class="card sk-card" id="sk-cross"><h3 class="skh">10 / 20 EMA</h3>' +
+      '<div class="xt"><div><div class="k">Now</div><div class="xv">' + stt + '</div></div>' +
+      '<div><div class="k">Last cross</div><div class="xv num">' + esc(big) + '</div><div class="xs">' + esc(unit) + '</div></div>' +
+      '<div><div class="k">Gap</div><div class="xv num ' + tone(gap) + '">' + (gap === null ? DASH : arrow(gap) + pc(Math.abs(gap), false, true)) + '</div><div class="xs">' + (conv === 1 ? 'narrowing' : conv === 0 ? 'widening' : '') + '</div></div></div>' +
+      gauge + dir + (T(c.text).trim() ? '<p class="sk-p">' + esc(T(c.text).trim()) + '</p>' : '') + '</section>';
+  }
+  function emaTable(d) {
+    var e = O(d.ema), dist = O(d.emaDist), ltp = N(d.ltp), st = O(d.stack), g = O(d.golden);
+    var rows = EMAS.map(function (k) {
+      var v = N(e['e' + k]), dv = N(dist['e' + k]);
+      if (!(v > 0)) { v = null; dv = null; }
+      else if (dv === null && ltp > 0) dv = (ltp / v - 1) * 100;
+      return '<div class="et"><span class="ek"><i style="background:' + EMA_COL[k] + '"></i>EMA ' + k + '</span><span class="num ev">' + (v === null ? DASH : px(v)) + '</span>' +
+        '<span class="num ed ' + (dv === null ? 'mut' : tone(dv)) + '">' + (dv === null ? DASH : arrow(dv) + pc(Math.abs(dv), false, true)) + '</span></div>';
+    }).join('');
+    var gl = g.state === 'ABOVE' ? tag('hold', '50 above 200', 'up') : g.state === 'BELOW' ? tag('sell', '50 below 200', 'down') : tag('neutral', '50 / 200');
+    return '<section class="card sk-card" id="sk-ema"><h3 class="skh">Moving averages</h3>' +
+      '<div class="et eh"><span>Average</span><span>Value</span><span>Price vs it</span></div>' + rows +
+      '<div class="sr"><div class="srl">' + (stackTag(st.label, T(st.label) === 'BULLISH' ? 'up' : T(st.label) === 'BEARISH' ? 'down' : 'minus') || tag('neutral', 'Stack')) + '<span class="srk">Order of the averages</span></div>' + (T(st.text).trim() ? '<p class="sk-p">' + esc(T(st.text).trim()) + '</p>' : '') + '</div>' +
+      '<div class="sr"><div class="srl">' + gl + '<span class="srk">50 / 200 EMA</span></div>' + (T(g.text).trim() ? '<p class="sk-p">' + esc(T(g.text).trim()) + '</p>' : '') + '</div></section>';
+  }
+  function checksCard(d) {
+    var cs = A(d.checks).slice(0, 14);
+    return '<section class="card sk-card" id="sk-checks"><h3 class="skh">Technical checklist</h3>' + (cs.length ? '<ul class="tks">' + cs.map(function (x) {
+      var ok = x.ok === true;
+      return '<li class="tk ' + (ok ? 'ok' : 'no') + '"><span class="ti">' + ic(ok ? 'check' : 'x') + '</span><div class="tt"><b>' + tx(x.label) + '<em class="sr-only">' + (ok ? ' (passes)' : ' (does not pass)') + '</em></b>' + (T(x.text).trim() ? '<span>' + esc(T(x.text).trim()) + '</span>' : '') + '</div></li>';
+    }).join('') + '</ul>' : '<p class="sk-p mut">No checks available for this stock yet.</p>') + '</section>';
+  }
+  function barRow(label, v, mx, fmt) {
+    if (v === null) return '<div class="mr"><span class="ml">' + label + '</span><span class="mb"><i class="mz"></i></span><span class="mv num mut">' + DASH + '</span></div>';
+    var w = Math.min(50, Math.abs(v) / mx * 50), t = tone(v);
+    return '<div class="mr"><span class="ml">' + label + '</span><span class="mb"><i class="mz"></i><i class="mf ' + t + '" style="left:' + (v >= 0 ? 50 : 50 - w).toFixed(1) + '%;width:' + Math.max(0.8, w).toFixed(1) + '%"></i></span><span class="mv num ' + t + '">' + arrow(v) + fmt(Math.abs(v)) + '</span></div>';
+  }
+  function momentumCard(d) {
+    var r = O(d.ret), vs = O(d.vsNifty), bars = d.bars;
+    var R = [['d5', '1 week', 6], ['d21', '1 month', 22], ['d63', '3 months', 64], ['d126', '6 months', 127], ['d250', '1 year', 251]];
+    var vals = R.map(function (x) { return pv(r[x[0]], x[2], bars); });
+    var mx = Math.max.apply(null, [5].concat(vals.filter(function (x) { return x !== null; }).map(Math.abs)));
+    var V = [['d21', '1 month', 22], ['d63', '3 months', 64], ['d126', '6 months', 127]];
+    var vv = V.map(function (x) { return pv(vs[x[0]], x[2], bars); });
+    var mx2 = Math.max.apply(null, [3].concat(vv.filter(function (x) { return x !== null; }).map(Math.abs)));
+    var pts = function (a) { return a.toFixed(1) + ' pts'; };
+    return '<section class="card sk-card" id="sk-mom"><h3 class="skh">Momentum</h3><div class="mh">Price change over</div>' +
+      R.map(function (x, i) { return barRow(x[1], vals[i], mx, function (a) { return pc(a, false, true); }); }).join('') +
+      '<div class="mh m2">Compared with the Nifty <span>stock return minus Nifty return</span></div>' +
+      V.map(function (x, i) { return barRow(x[1], vv[i], mx2, pts); }).join('') + '</section>';
+  }
+  function tile(k, v, s, cls) { return '<div class="stt"><div class="k">' + k + '</div><div class="v num ' + (cls || '') + '">' + v + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; }
+  function statsCard(d) {
+    var b = d.bars, ltp = N(d.ltp);
+    var rsi14 = pv(d.rsi14, 15, b), rsi2 = pv(d.rsi2, 3, b), atr = N(d.atr), atrp = N(d.atrPct);
+    var vr = N(d.volRatio), hiD = N(d.high52), loD = N(d.low52), fh = N(d.fromHighPct), fl = N(d.fromLowPct);
+    var h20 = N(d.high20), l20 = N(d.low20);
+    var rel = function (lvl) { if (!(lvl > 0) || !(ltp > 0)) return ''; var x = (ltp / lvl - 1) * 100; return Math.abs(x) < 0.05 ? 'price is at this level' : 'price is ' + pc(Math.abs(x), false, true) + (x < 0 ? ' below' : ' above'); };
+    var rng = N(d.dayLow) > 0 && N(d.dayHigh) > 0 ? emaNum(d.dayLow) + ' – ' + emaNum(d.dayHigh) : DASH;
+    var tiles = [
+      tile('RSI (14)', rsi14 === null ? DASH : String(Math.round(rsi14)), rsi14 === null ? '' : rsi14 >= 70 ? 'high, above 70' : rsi14 <= 30 ? 'low, below 30' : 'neutral zone'),
+      tile('RSI (2)', rsi2 === null ? DASH : String(Math.round(rsi2)), rsi2 === null ? '' : rsi2 <= 10 ? 'very short-term low' : rsi2 >= 90 ? 'very short-term high' : 'mid-range'),
+      tile('ATR (14)', atr > 0 ? px(atr) : DASH, atrp > 0 ? pc(atrp, false, true) + ' of price' : ''),
+      tile('Volume vs 20-day avg', vr > 0 ? vr.toFixed(2) + '×' : DASH, vr > 0 ? volTxt(d.volume) + ' vs ' + volTxt(d.avgVol20) : '', vr >= 1.5 ? 'up' : ''),
+      tile('Turnover', croreTxt(d.turnoverCr), d.liquid === false ? 'thin trading' : 'traded value today'),
+      tile('Today’s range (₹)', rng, N(d.open) > 0 ? 'opened at ' + px(d.open) : ''),
+      tile('52-week high', hiD > 0 ? px(hiD) : DASH, fh !== null && hiD > 0 ? (Math.abs(fh) < 0.05 ? 'at the high' : pc(Math.abs(fh), false, true) + ' below the high') : ''),
+      tile('52-week low', loD > 0 ? px(loD) : DASH, fl !== null && loD > 0 ? (Math.abs(fl) < 0.05 ? 'at the low' : pc(Math.abs(fl), false, true) + ' above the low') : ''),
+      tile('20-day high', h20 > 0 ? px(h20) : DASH, rel(h20)),
+      tile('20-day low', l20 > 0 ? px(l20) : DASH, rel(l20))
+    ];
+    return '<section class="card sk-card" id="sk-stats"><h3 class="skh">Key numbers</h3><div class="sg">' + tiles.join('') + '</div></section>';
+  }
+  function levelsCard(d) {
+    var lv = O(d.levels), ltp = N(d.ltp);
+    var R = [['sup', 'Support', 'Recent 20-day low', lv.support], ['res', 'Resistance', 'Recent 20-day high (or 52-week high if close)', lv.resistance], ['stop', 'Trailing stop', 'Highest close of 22 days minus 3 × ATR', lv.trailStop]];
+    return '<section class="card sk-card" id="sk-lv"><h3 class="skh">Levels <span>also dashed on the chart</span></h3>' + R.map(function (x) {
+      var v = N(x[3]), ok = v > 0, df = ok && ltp > 0 ? (v / ltp - 1) * 100 : null;
+      return '<div class="lr"><i class="ls ' + x[0] + '"></i><div class="lt"><b>' + x[1] + '</b><span>' + x[2] + '</span></div><div class="lrv"><b class="num">' + (ok ? px(v) : DASH) + '</b><span class="num ' + (df === null ? 'mut' : tone(df)) + '">' + (df === null ? '' : arrow(df) + pc(Math.abs(df), false, true)) + '</span></div></div>';
+    }).join('') + '</section>';
+  }
+  function heldCard(d) {
+    var v = O(d.verdict), vd = VERDICT[v.label], sg = N(d.strength);
+    return '<section class="card sk-card" id="sk-held"><h3 class="skh">If you held it <span>same check as your portfolio</span></h3>' +
+      '<div class="vh">' + (vd ? tag(vd.cls, vd.label, vd.icon) : tag('neutral', T(v.label).trim().toUpperCase().slice(0, 10) || 'NO CALL', 'info')) + '</div>' +
+      (T(v.headline).trim() ? '<p class="sk-p hl">' + esc(T(v.headline).trim()) + '</p>' : '') +
+      (sg !== null && sg > 0 ? '<div class="str big"><span>Trend strength</span><i><b style="width:' + Math.min(100, Math.round(sg)) + '%" class="' + (sg >= 65 ? 'g' : sg >= 40 ? 'a' : 'r') + '"></b></i><span class="num">' + Math.min(100, Math.round(sg)) + '</span></div>' : '') +
+      '</section>';
+  }
+  function setupsCard(d) {
+    var ss = A(d.setups).slice(0, 12);
+    return '<section class="card sk-card" id="sk-setups"><h3 class="skh">Setups it matches</h3>' + (ss.length ? '<ul class="tks">' + ss.map(function (x) {
+      var m = x.match === true;
+      return '<li class="tk ' + (m ? 'ok' : 'na') + '"><span class="ti">' + ic(m ? 'check' : 'minus') + '</span><div class="tt"><b>' + tx(x.label) + ' ' + (m ? tag('hold', 'MATCH') : tag('neutral', 'NO MATCH')) + '</b>' + (T(x.text).trim() ? '<span>' + esc(T(x.text).trim()) + '</span>' : '') + '</div></li>';
+    }).join('') + '</ul>' : '<p class="sk-p mut">No setups to compare against.</p>') + '</section>';
+  }
+  function stockBody(S, ui) {
+    var st = O(ui.stock);
+    if (!isObj(st.info)) {
+      if (T(st.err).trim()) {
+        return '<div class="empty sk-err" role="alert"><div class="ei">' + ic('warn') + '</div><h3>Could not load ' + tx(st.sym) + '</h3><p>' + esc(T(st.err).trim()) + '</p>' +
+          '<div class="btns">' + btn('stock-retry', null, 'Retry', 'sm', { icon: 'refresh' }) + btn('sheet-close', null, 'Close', 'sm ghost') + '</div></div>';
+      }
+      return skCard('10 / 20 EMA', 4) + skCard('Moving averages', 5) + skCard('Technical checklist', 5) + skCard('Momentum', 4);
+    }
+    var d = st.info;
+    return crossCard(d) + emaTable(d) + checksCard(d) + momentumCard(d) + statsCard(d) + levelsCard(d) + heldCard(d) + setupsCard(d) +
+      '<section class="card sk-card" id="sk-sum"><h3 class="skh">In short</h3>' + (T(d.summary).trim() ? '<p class="sk-p">' + esc(T(d.summary).trim()) + '</p>' : '<p class="sk-p mut">No summary available.</p>') + '</section>' +
+      '<p class="sk-foot">' + ic('info') + '<span>Data comes from the last scan or quote. It describes the chart and is not investment advice. Past patterns do not promise what happens next.</span></p>';
+  }
+  function stockPart(part, S, ui, data) {
+    S = O(S); ui = O(ui); data = O(data);
+    var sym = T(O(ui.stock).sym) || T(data.id);
+    if (part === 'head') return stockHead(sym, ui);
+    if (part === 'price') return stockPrice(ui);
+    if (part === 'act') return stockActions(S, ui);
+    if (part === 'chart') return stockChartPart(ui);
+    return stockBody(S, ui);
+  }
+  function stockSheet(S, ui, data) {
+    var sym = T(O(ui.stock).sym) || T(data.id);
+    return '<div class="scrim"></div><section class="sheet full stk" role="dialog" aria-modal="true" aria-label="' + esc((sym || 'Stock') + ' stock page') + '">' +
+      '<div class="sh stkh" id="st-head">' + stockHead(sym, ui) + '</div>' +
+      '<div class="sb" id="st-scroll"><div id="st-price">' + stockPrice(ui) + '</div><div id="st-act">' + stockActions(S, ui) + '</div><div id="st-chart" class="st-chart">' + stockChartPart(ui) + '</div><div id="st-body">' + stockBody(S, ui) + '</div></div></section>';
+  }
+
+  /* ---------- search sheet ---------- */
+  function lookupSym(q) { var x = T(q).replace(/\s+/g, '').toUpperCase(); return /^[A-Z0-9&\-]{1,20}$/.test(x) ? x : ''; }
+  function srRow(x, icon) {
+    var sym = T(x.sym).trim(); if (!sym) return '';
+    var nm = T(x.name).trim();
+    return '<button type="button" class="srr" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' + (icon ? '<span class="sri">' + ic(icon) + '</span>' : '') +
+      '<span class="ssym"><b class="clip">' + esc(sym) + '</b><span class="clip">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
+      (x.tracked === true ? '<span class="trk" title="Scanned every 15 minutes">tracked</span>' : '') + ic('chev') + '</button>';
+  }
+  function searchBody(S, ui) {
+    S = O(S); ui = O(ui);
+    var ss = O(ui.search), q = T(ss.q).trim();
+    if (!q) {
+      var rec = A(ui.recent).filter(function (x) { return T(x.sym).trim(); }).slice(0, 8);
+      var hs = A(S.holdings).filter(function (x) { return T(x.sym).trim(); }).slice(0, 14), ws = A(S.myWatch).filter(function (x) { return T(x.sym).trim(); }).slice(0, 14);
+      var chip = function (x) { return '<button type="button" class="qchip" data-c="stock" data-id="' + esc(T(x.sym).trim()) + '" data-name="' + esc(T(x.name).trim()) + '">' + esc(T(x.sym).trim()) + '</button>'; };
+      var h = '';
+      if (rec.length) h += '<div class="shd"><h3>Recent</h3><button type="button" class="linkbtn" data-c="recent-clear">Clear</button></div><div class="srl2">' + rec.map(function (x) { return srRow(x, 'clock'); }).join('') + '</div>';
+      if (hs.length) h += '<div class="shd"><h3>Your holdings</h3></div><div class="qchips">' + hs.map(chip).join('') + '</div>';
+      if (ws.length) h += '<div class="shd"><h3>Your watchlist</h3></div><div class="qchips">' + ws.map(chip).join('') + '</div>';
+      if (!h) h = '<div class="sempty">' + ic('search') + '<b>Look up any NSE stock</b><span>Type a symbol or part of a company name, for example “tata mot” or “RELIANCE”.</span></div>';
+      else h += '<p class="shint">Type a symbol or part of a company name to search all NSE stocks.</p>';
+      return h;
+    }
+    if (q.length < 2) return '<p class="shint">Type at least 2 letters of a symbol or company name.</p>';
+    var res = Array.isArray(ss.results) ? A(ss.results).filter(function (x) { return T(x.sym).trim(); }) : null;
+    var look = lookupSym(q);
+    var lookBtn = look ? '<div class="btns">' + btn('lookup', look, 'Look up ' + look + ' anyway', 'sm', { icon: 'search' }) + '</div>' : '';
+    if (res === null) {
+      if (T(ss.err).trim()) return '<div class="sempty">' + ic('warn') + '<b>Search is not available right now</b><span>' + esc(T(ss.err).trim()) + '</span>' + lookBtn + '</div>';
+      return '<div class="srl2">' + skel('srow0') + skel('srow0') + skel('srow0') + '</div>';
+    }
+    if (!res.length) {
+      if (ss.loading === true) return '<div class="srl2 stale"><div class="shint">Searching…</div></div>';
+      return '<div class="sempty">' + ic('search') + '<b>No NSE stock matches “' + esc(q.slice(0, 40)) + '”</b><span>' +
+        (look ? 'Check the spelling, or look it up by this symbol anyway.' : 'Check the spelling, or try the stock’s symbol.') + '</span>' + lookBtn + '</div>';
+    }
+    return '<div class="srl2' + (ss.loading === true && T(ss.shown) !== q ? ' stale' : '') + '">' + res.slice(0, 25).map(function (x) { return srRow(x); }).join('') + '</div>';
+  }
+  function searchSheet(S, ui) {
+    var ss = O(ui.search), q = T(ss.q);
+    return '<div class="scrim"></div><section class="sheet full srchs" role="dialog" aria-modal="true" aria-label="Search stocks">' +
+      '<form class="srch" id="sheetform" role="search" novalidate autocomplete="off"><label class="sinp">' + ic('search') +
+      '<input name="q" type="text" inputmode="search" enterkeyhint="search" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="40" placeholder="Search symbol or company" aria-label="Search NSE stocks" value="' + esc(q) + '">' +
+      '<button type="button" class="sclr" data-c="search-clear" aria-label="Clear search"' + (q ? '' : ' hidden') + '>' + ic('x') + '</button></label>' +
+      '<button type="button" class="sx" data-c="sheet-close">Close</button></form>' +
+      '<div class="sb" id="sr-body">' + searchBody(S, ui) + '</div></section>';
+  }
+
   function sheet(kind, S, ui, data) {
     S = O(S); ui = O(ui); data = O(data);
     var id = T(data.id);
     if (kind === 'chart') return chartSheet(id, O(ui.chart));
+    if (kind === 'stock') return stockSheet(S, ui, data);
+    if (kind === 'search') return searchSheet(S, ui);
     if (kind === 'take') {
       var g = A(S.signals).filter(function (x) { return T(x.id) === id; })[0];
       if (!g) return shell('Buy idea', '<p class="lead">This buy idea is no longer available.</p>', btn('sheet-close', null, 'Close', ''));
@@ -920,7 +1280,7 @@
     }
     if (kind === 'add') {
       return shell('Add holding',
-        field('sym', 'NSE symbol', '', { mode: 'text', caps: true, ph: 'e.g. RELIANCE', max: 24 }) +
+        field('sym', 'NSE symbol', T(data.sym).trim().toUpperCase().slice(0, 24), { mode: 'text', caps: true, ph: 'e.g. RELIANCE', max: 24 }) +
         '<div class="two">' + field('qty', 'Quantity', '', { mode: 'decimal', post: 'shares', max: 10 }) + field('avg', 'Average buy price', '', { pre: '₹', enter: 'done' }) + '</div>' +
         '<div class="formerr" id="formerr" hidden></div>',
         btn('sheet-close', null, 'Cancel', 'ghost') + btn('submit', null, 'Add holding', 'pri', { icon: 'plus' }));
@@ -978,7 +1338,7 @@
     N: N, T: T, O: O, A: A, esc: esc, rs: rs, px: px, pc: pc, cnt: cnt, hm: hm, dm: dm, rel: rel, ts: ts, ic: ic,
     header: function (S, ui) { return header(O(S), O(ui)); },
     tabbar: function (S, ui) { return tabbar(O(S), O(ui)); },
-    view: view, sheet: sheet, deviceList: deviceList, deviceIssues: deviceIssues,
+    stockPart: stockPart, searchBody: searchBody, view: view, sheet: sheet, deviceList: deviceList, deviceIssues: deviceIssues,
     takeCalc: takeCalc, closeCalc: closeCalc, settingsCalc: settingsCalc, isBusy: function (S) { return isBusy(O(S)); },
     actItems: function (S) { return actItems(O(S)); }
   };

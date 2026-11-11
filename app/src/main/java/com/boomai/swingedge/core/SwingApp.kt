@@ -1,10 +1,17 @@
 package com.boomai.swingedge.core
 
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 
 /**
  * The whole app behind four methods. tick/action are serialised by one lock; stateJson never takes it and serves the
  * last published snapshot (plus live clock fields and `busy`).
+ *
+ * Read-only actions (search, stockInfo, getChart) do NOT take the lock either, so they answer while a scan runs:
+ * `live`/`quotes` are concurrent maps written only by the lock holder (Series objects are never modified once stored),
+ * the daily cache has its own short-held monitor, the universe/search index are built once under their own lock and
+ * published through volatile fields, and the parts of the app state they need come from [refs], an immutable copy
+ * rebuilt on every publish().
  */
 class SwingApp(private val p: Platform) {
     @Volatile private var watchItems: List<Map<String, Any?>> = emptyList()
@@ -18,13 +25,40 @@ class SwingApp(private val p: Platform) {
     @Volatile private var vTested = false
 
     private val cache = DailyCache(p)
-    private var universe: List<String> = emptyList()
-    private var names: Map<String, String> = emptyMap()
-    private var nameToSym: Map<String, String> = emptyMap()
-    private var universeLoaded = false
-    /** Series (history + today's bar) and quotes from the latest fetch, kept in memory for quick actions. */
-    private val live = HashMap<String, Series>()
-    private val quotes = HashMap<String, Intraday>()
+    @Volatile private var universe: List<String> = emptyList()
+    @Volatile private var universeSet: Set<String> = emptySet()
+    @Volatile private var names: Map<String, String> = emptyMap()
+    @Volatile private var nameToSym: Map<String, String> = emptyMap()
+    @Volatile private var universeLoaded = false
+    private val uniLock = Any()
+    /** Series (history + today's bar) and quotes from the latest fetch, kept in memory for quick actions. Written only under [lock]. */
+    private val live = ConcurrentHashMap<String, Series>()
+    private val quotes = ConcurrentHashMap<String, Intraday>()
+
+    /** Immutable view of the bits of [st] that the lock-free read actions need. */
+    private class Refs(
+        /** sym -> [avg, stop, bookAt, valueRs] */
+        val holdings: Map<String, DoubleArray>,
+        val holdingsValue: Double,
+        val watch: Set<String>,
+        /** sym -> [entry, sl, t1, t2] of the first open real trade */
+        val trades: Map<String, DoubleArray>,
+        /** sym -> [entry, sl, t1, t2] of the first NEW signal */
+        val signals: Map<String, DoubleArray>,
+        val regime: Int,
+        val verdicts: Map<String, String>
+    )
+    @Volatile private var refs = Refs(emptyMap(), 0.0, emptySet(), emptyMap(), emptyMap(), 0, emptyMap())
+    /** Cut-offs and breadth from the last full scan, for the stock page's strategy checks. */
+    @Volatile private var scanCtx: Ctx? = null
+    @Volatile private var symIndex: SymbolIndex? = null
+    private val idxLock = Any()
+
+    /** Daily history (and the last quote) of symbols looked up outside the scanned set; small in-memory LRU. */
+    private class Looked(val daily: Series?, val key: Int, val quote: Intraday?, val quoteAt: Long)
+    private val lru = object : LinkedHashMap<String, Looked>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Looked>?): Boolean = size > LRU_MAX
+    }
 
     init {
         try {
@@ -81,6 +115,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
+        if (name == "search" || name == "stockInfo" || name == "getChart") return readAction(name, argsJson)
         lock.lock()
         try {
             val args = Json.parseObject(argsJson) ?: emptyMap()
@@ -136,7 +171,13 @@ class SwingApp(private val p: Platform) {
 
     private fun loadUniverse() {
         if (universeLoaded) return
-        universeLoaded = true
+        synchronized(uniLock) {
+            if (universeLoaded) return
+            try { loadUniverseOnce() } finally { universeLoaded = true }
+        }
+    }
+
+    private fun loadUniverseOnce() {
         try {
             val text = p.asset("universe.csv") ?: ""
             val syms = ArrayList<String>()
@@ -165,7 +206,7 @@ class SwingApp(private val p: Platform) {
                 if (!rev.containsKey(nn)) rev[nn] = sym
                 if (!nm.containsKey(sym)) nm[sym] = line.substring(k + 1).trim()
             }
-            universe = syms; names = nm; nameToSym = rev
+            universe = syms; universeSet = syms.toHashSet(); names = nm; nameToSym = rev
         } catch (t: Throwable) {
             log("universe load failed: $t")
         }
@@ -364,6 +405,7 @@ class SwingApp(private val p: Platform) {
         all.addAll(universe)
         for (h in st.holdings) all.add(h.sym)
         for (t in st.trades) if (t.status == "OPEN") all.add(t.sym)
+        all.addAll(st.watch)
         val key = dailyKeyFor(day)
         val buyWindowNow = weekday && min >= Params.BUY_WINDOW_START_MIN && min <= Params.BUY_WINDOW_END_MIN
         val fullQuotes = manual || (buyWindowNow && (anyLive() || Params.EXPERIMENTAL_ENABLED)) || universe.size <= Params.FULL_QUOTE_MAX_UNIVERSE
@@ -373,6 +415,7 @@ class SwingApp(private val p: Platform) {
             q.add(idxSym)
             for (h in st.holdings) q.add(h.sym)
             for (t in st.trades) if (t.status == "OPEN") q.add(t.sym)
+            q.addAll(st.watch)
             quoteOnly = q
         }
         fetchSymbols(all.toList(), day, key, manual, 3, 80, quoteOnly)
@@ -398,6 +441,7 @@ class SwingApp(private val p: Platform) {
             min >= Params.BUY_WINDOW_START_MIN && min <= Params.BUY_WINDOW_END_MIN
         if (inWindow) makeSignals(now, day)
         try { computeWatch() } catch (e: Throwable) { p.log("watch: " + e) }
+        try { scanCtx = buildScanCtx() ?: scanCtx } catch (e: Throwable) { log("scan context: $e") }
 
         st.lastScanAt = now
         st.lastScanStatus = when {
@@ -508,44 +552,41 @@ class SwingApp(private val p: Platform) {
      */
     private fun computeWatch() {
         val out = ArrayList<Pair<Double, Map<String, Any?>>>()
-        val k10 = 2.0 / 11.0; val k20 = 2.0 / 21.0; val k50 = 2.0 / 51.0; val k100 = 2.0 / 101.0; val k200 = 2.0 / 201.0
-        val keep = Params.WATCH_MAX_DAYS_SINCE + 2
-        val g = DoubleArray(keep)            // g[0] = today's (EMA10 - EMA20), g[1] = yesterday's, ...
         for (sym in universe) {
             val s = live[sym] ?: continue
-            val n = s.n
-            if (n < 260) continue
-            val c = s.c[n - 1]
-            if (!(c >= Params.MIN_PRICE)) continue
-            var tv = 0.0
-            for (j in n - 21 until n - 1) tv += s.c[j] * s.v[j]
-            if (tv / 20.0 < Params.MIN_AVG_TURNOVER_RS) continue
-            var e10 = s.c[0]; var e20 = e10; var e50 = e10; var e100 = e10; var e200 = e10
-            java.util.Arrays.fill(g, 0.0)
-            for (j in 1 until n) {
-                val x = s.c[j]
-                e10 += k10 * (x - e10); e20 += k20 * (x - e20); e50 += k50 * (x - e50); e100 += k100 * (x - e100); e200 += k200 * (x - e200)
-                if (j >= n - keep) { for (q in keep - 1 downTo 1) g[q] = g[q - 1]; g[0] = e10 - e20 }
-            }
-            if (!(e10 > e20 && e10 > e50 && e10 > e100 && e10 > e200)) continue
-            // days since the cross: the 10 EMA has been above the 20 EMA for (since + 1) bars and was at/below it before
-            var since = -1
-            for (q in 0..Params.WATCH_MAX_DAYS_SINCE) {
-                if (!(g[q] > 0)) break
-                if (g[q + 1] <= 0) { since = q; break }
-            }
+            if (EmaScreen.gate(s) != EmaScreen.PASS) continue
+            val L = EmaLines(s)
+            val since = EmaScreen.match(s, L)
             if (since < 0) continue
+            val n = s.n
+            val c = s.c[n - 1]
+            val e10 = L.e10[n - 1]; val e20 = L.e20[n - 1]; val e50 = L.e50[n - 1]; val e100 = L.e100[n - 1]; val e200 = L.e200[n - 1]
             val prev = s.c[n - 2]
             val spark = ArrayList<Any?>(30)
             for (j in maxOf(0, n - 30) until n) spark.add(Fmt.r2(s.c[j]))
             val m = linkedMapOf<String, Any?>("sym" to sym, "name" to nameOf(sym), "ltp" to Fmt.r2(c),
                 "dayChgPct" to Fmt.r2(if (prev > 0) (c / prev - 1) * 100.0 else 0.0), "ema10" to Fmt.r2(e10), "ema20" to Fmt.r2(e20),
                 "ema50" to Fmt.r2(e50), "ema100" to Fmt.r2(e100), "ema200" to Fmt.r2(e200), "gapPct" to Fmt.r2((e10 - e20) / e20 * 100.0),
-                "daysSince" to since, "barDay" to s.d[n - 1], "spark" to spark, "status" to "CROSSED")
+                "daysSince" to since, "barDay" to StockPage.yyyymmdd(s.d[n - 1]), "spark" to spark, "status" to "CROSSED")
             out.add(Pair(since * 1000.0 - (e10 - e20) / e20 * 100.0, m))
         }
         out.sortBy { it.first }
         watchItems = out.take(Params.WATCH_MAX).map { it.second }
+    }
+
+    /** Cross-sectional context of the latest common bar of the scanned universe (what makeSignals would use). */
+    private fun buildScanCtx(): Ctx? {
+        val uni = ArrayList<Series>()
+        for (sym in universe) live[sym]?.let { if (it.n > 0) uni.add(it) }
+        if (uni.isEmpty()) return null
+        val count = HashMap<Int, Int>()
+        for (x in uni) count[x.lastDay()] = (count[x.lastDay()] ?: 0) + 1
+        val ref = count.entries.maxWith(compareBy<Map.Entry<Int, Int>> { it.value }.thenBy { it.key }).key
+        val idxArr = IntArray(uni.size) { k -> if (uni[k].lastDay() == ref) uni[k].n - 1 else -1 }
+        val ctx = Ctx()
+        ctx.regime = regimeInt()
+        Strategies.fillCutoffs(ctx, uni, idxArr, DoubleArray(uni.size))
+        return ctx
     }
 
     private fun makeSignals(now: Long, day: Int) {
@@ -965,41 +1006,19 @@ class SwingApp(private val p: Platform) {
                 st.feed.clear()
                 return ok()
             }
-            "getChart" -> {
+            "addWatch" -> {
                 loadUniverse()
-                cache.ensureLoaded()
                 val sym = HoldingsImport.cleanSymbol(a.str("sym"))
-                val x = live[sym] ?: cache.get(sym) ?: return err("No price history for $sym yet — run a scan while online")
-                if (x.n < 2) return err("No price history for $sym yet")
-                val from = maxOf(0, x.n - Params.CHART_BARS)
-                val d = ArrayList<Any?>(); val o = ArrayList<Any?>(); val h = ArrayList<Any?>(); val l = ArrayList<Any?>(); val c = ArrayList<Any?>()
-                val m50 = ArrayList<Any?>(); val m200 = ArrayList<Any?>()
-                val x10 = ArrayList<Any?>(); val x20 = ArrayList<Any?>(); val x50 = ArrayList<Any?>(); val x200 = ArrayList<Any?>()
-                var e10 = x.c[0]; var e20 = e10; var e50 = e10; var e200 = e10
-                for (i in 1 until from) { val v = x.c[i]; e10 += (2.0 / 11.0) * (v - e10); e20 += (2.0 / 21.0) * (v - e20); e50 += (2.0 / 51.0) * (v - e50); e200 += (2.0 / 201.0) * (v - e200) }
-                for (i in from until x.n) {
-                    d.add(x.d[i].toLong() * Clock.DAY_MS); o.add(Fmt.r2(x.o[i])); h.add(Fmt.r2(x.h[i])); l.add(Fmt.r2(x.l[i])); c.add(Fmt.r2(x.c[i]))
-                    if (i > 0) { val v = x.c[i]; e10 += (2.0 / 11.0) * (v - e10); e20 += (2.0 / 21.0) * (v - e20); e50 += (2.0 / 51.0) * (v - e50); e200 += (2.0 / 201.0) * (v - e200) }
-                    x10.add(Fmt.r2(e10)); x20.add(Fmt.r2(e20)); x50.add(if (i >= 100) Fmt.r2(e50) else 0.0); x200.add(if (i >= 250) Fmt.r2(e200) else 0.0)
-                    val a50 = Ind.sma(x.c, i, 50); val a200 = Ind.sma(x.c, i, 200)
-                    m50.add(if (a50.isNaN()) 0.0 else Fmt.r2(a50)); m200.add(if (a200.isNaN()) 0.0 else Fmt.r2(a200))
-                }
-                val levels = ArrayList<Any?>()
-                fun lv(kind: String, label: String, v: Double) { if (v > 0) levels.add(linkedMapOf<String, Any?>("kind" to kind, "label" to label, "v" to Fmt.r2(v))) }
-                val tr = st.trades.firstOrNull { it.sym == sym && it.status == "OPEN" && !it.paper }
-                val sg = st.signals.firstOrNull { it.sym == sym && it.status == "NEW" }
-                val ho = st.holdings.firstOrNull { it.sym == sym }
-                if (tr != null) { lv("entry", "Bought", tr.entry); lv("stop", "Stop-loss", tr.sl); lv("target", "Target 1", tr.t1); lv("target", "Target 2", tr.t2) }
-                else if (sg != null) { lv("entry", "Entry", sg.entry); lv("stop", "Stop-loss", sg.sl); lv("target", "Target 1", sg.t1); lv("target", "Target 2", sg.t2) }
-                if (ho != null) { lv("entry", "Your avg", ho.avg); if (tr == null && sg == null) { lv("stop", "Trailing stop", ho.stop); lv("target", "Book near", ho.bookAt) } }
-                val last = x.n - 1
-                val a50 = Ind.sma(x.c, last, 50); val a200 = Ind.sma(x.c, last, 200); val rsi = Ind.rsi(x.c, last, 14)
-                val hi = Ind.highest(x.h, last, minOf(250, x.n)); val lo = Ind.lowest(x.l, last, minOf(250, x.n))
-                fun rt(n: Int): Double { val r = Ind.ret(x.c, last, n); return if (r.isNaN()) 0.0 else Fmt.r2(r * 100.0) }
-                return ok("sym" to sym, "name" to nameOf(sym), "d" to d, "o" to o, "h" to h, "l" to l, "c" to c, "sma50" to m50, "sma200" to m200, "ema10" to x10, "ema20" to x20, "ema50" to x50, "ema200" to x200, "levels" to levels,
-                    "stats" to linkedMapOf<String, Any?>("ltp" to Fmt.r2(x.c[last]), "sma50" to (if (a50.isNaN()) 0.0 else Fmt.r2(a50)), "sma200" to (if (a200.isNaN()) 0.0 else Fmt.r2(a200)),
-                        "rsi14" to (if (rsi.isNaN()) 0.0 else Fmt.r1(rsi)), "high52" to (if (hi.isNaN()) 0.0 else Fmt.r2(hi)), "low52" to (if (lo.isNaN()) 0.0 else Fmt.r2(lo)),
-                        "ret5" to rt(5), "ret21" to rt(21), "ret63" to rt(63), "ret126" to rt(126), "bars" to x.n))
+                if (!validSym(sym)) return err("Enter a valid NSE symbol, e.g. RELIANCE")
+                if (st.watch.contains(sym)) return ok("sym" to sym)
+                if (st.watch.size >= AppState.MAX_WATCH) return err("Your watchlist is full (" + AppState.MAX_WATCH + " stocks) — remove one first")
+                st.watch.add(sym)
+                if (!live.containsKey(sym)) loadWatchSymbol(sym, now, day)
+                return ok("sym" to sym)
+            }
+            "removeWatch" -> {
+                val sym = HoldingsImport.cleanSymbol(a.str("sym"))
+                return if (st.watch.remove(sym)) ok("sym" to sym) else err("$sym is not in your watchlist")
             }
             else -> return err("Unknown action: $name")
         }
@@ -1030,6 +1049,246 @@ class SwingApp(private val p: Platform) {
             checkHoldings(day, now, syms.toHashSet(), false)
         } catch (t: Throwable) {
             log("refreshHoldings failed: $t")
+        }
+    }
+
+    // =========================================================================================== watchlist / lock-free reads
+
+    private fun validSym(sym: String): Boolean = sym.isNotEmpty() && sym.length <= 25 && SYM_RE.matches(sym)
+
+    /** Prices for a just-added watchlist symbol (re-uses a stock-page lookup when there is one). Runs under the lock. */
+    private fun loadWatchSymbol(sym: String, now: Long, day: Int) {
+        try {
+            val key = dailyKeyFor(day)
+            val le = synchronized(lru) { lru[sym] }
+            if (le?.daily != null && le.key == key) {
+                cache.put(sym, le.daily, key)
+                cache.flush()
+                val q = if (le.quote != null && Clock.epochDay(le.quoteAt) == day) le.quote else null
+                if (q != null) quotes[sym] = q
+                buildLive(sym, q)?.let { live[sym] = it }
+                return
+            }
+            setBusy("Loading prices…", 5)
+            cache.ensureLoaded()
+            fetchSymbols(listOf(sym), day, key, true, 5, 90)
+            cache.flush()
+        } catch (t: Throwable) {
+            log("loadWatchSymbol failed: $t")
+        }
+    }
+
+    private fun errSym(sym: String, msg: String): Map<String, Any?> = linkedMapOf("ok" to false, "sym" to sym, "error" to msg)
+
+    private fun asset(name: String): String? = try { p.asset(name) } catch (t: Throwable) { null }
+
+    /** Built once, lazily; safe to call from any thread. */
+    private fun searchIndex(): SymbolIndex {
+        symIndex?.let { return it }
+        synchronized(idxLock) {
+            symIndex?.let { return it }
+            loadUniverse()
+            val ix = try { SymbolIndex.build(asset("symbols.csv"), universe, names, asset("aliases.csv")) }
+            catch (t: Throwable) { log("search index failed: $t"); SymbolIndex.build(null, universe, names, null) }
+            symIndex = ix
+            return ix
+        }
+    }
+
+    /** Best company name: universe name unless it just repeats the symbol, else the full symbol list. */
+    private fun displayName(sym: String): String {
+        val n = names[sym]
+        if (n != null && n.isNotBlank() && n != sym) return n
+        return searchIndex().nameOf(sym) ?: n ?: sym
+    }
+
+    private fun readAction(name: String, argsJson: String): String {
+        var a: Map<String, Any?> = emptyMap()
+        try {
+            a = Json.parseObject(argsJson) ?: emptyMap()
+            val res = when (name) {
+                "search" -> ok("q" to a.str("q"), "results" to searchIndex().find(a.str("q")))
+                "stockInfo" -> stockInfo(a)
+                else -> chart(a)
+            }
+            return Json.stringify(res)
+        } catch (t: Throwable) {
+            log("action $name failed: $t")
+            return try {
+                val e = "Something went wrong: " + (t.message ?: t.javaClass.simpleName)
+                Json.stringify(if (name == "search") err(e) else errSym(HoldingsImport.cleanSymbol(a.str("sym")), e))
+            } catch (x: Throwable) { "{\"ok\":false,\"error\":\"failed\"}" }
+        }
+    }
+
+    private class Obtained(val s: Series, val quote: Intraday?, val live: Boolean, val asOf: Long)
+    private class Fetched(val daily: HashMap<String, Series>, val intr: HashMap<String, Intraday>, val anyResponse: Boolean)
+
+    /** One round on host 1, failures retried once on host 2, like a scan, but without touching `busy` (safe outside the lock). */
+    private fun fetchQuiet(dailySyms: List<String>, intrSyms: List<String>, today: Int): Fetched {
+        val daily = HashMap<String, Series>()
+        val intr = HashMap<String, Intraday>()
+        var any = false
+        var pending: List<Pair<String, Boolean>> = dailySyms.map { Pair(it, true) } + intrSyms.map { Pair(it, false) }
+        for (host in listOf(Params.YAHOO_HOST_1, Params.YAHOO_HOST_2)) {
+            if (pending.isEmpty()) break
+            val res = httpAll(pending.map { if (it.second) Yahoo.dailyUrl(host, it.first) else Yahoo.intradayUrl(host, it.first) })
+            val failed = ArrayList<Pair<String, Boolean>>()
+            for ((k, rq) in pending.withIndex()) {
+                val text = res.getOrNull(k)
+                if (text != null) any = true
+                val got = try {
+                    if (rq.second) Yahoo.daily(rq.first, text, today)?.let { daily[rq.first] = it; true } ?: false
+                    else Yahoo.intraday(rq.first, text)?.let { intr[rq.first] = it; true } ?: false
+                } catch (t: Throwable) { false }
+                if (!got) failed.add(rq)
+            }
+            pending = failed
+        }
+        return Fetched(daily, intr, any)
+    }
+
+    private fun join(base: Series?, q: Intraday?, sym: String): Series? {
+        if (base == null && q == null) return null
+        val s = Series(sym, (base?.n ?: 0) + (q?.days?.n ?: 0) + 1)
+        if (base != null) for (k in 0 until base.n) s.add(base.d[k], base.o[k], base.h[k], base.l[k], base.c[k], base.v[k])
+        if (q != null) { val x = q.days; for (k in 0 until x.n) s.add(x.d[k], x.o[k], x.h[k], x.l[k], x.c[k], x.v[k]) }
+        return if (s.n > 0) s else null
+    }
+
+    private fun obtained(s: Series, base: Series?, q: Intraday?): Obtained {
+        val isLive = q != null && q.days.n > 0 && s.lastDay() == q.days.lastDay() && (base == null || q.days.lastDay() > base.lastDay())
+        return Obtained(s, q, isLive, if (isLive) q!!.lastTsMs else Clock.msAt(s.lastDay(), Clock.CLOSE_MIN))
+    }
+
+    /** True for symbols whose history belongs in the persistent cache (scanned, held, watched, traded or the index). */
+    private fun member(sym: String): Boolean {
+        val r = refs
+        return sym == Params.INDEX_SYMBOL || universeSet.contains(sym) || r.holdings.containsKey(sym) || r.watch.contains(sym) || r.trades.containsKey(sym)
+    }
+
+    /**
+     * Daily history + latest bar for any symbol, without the scan lock. [wantQuote]: always try a fresh intraday quote
+     * (stock page); otherwise the last scan's data is good enough (chart). Returns the data or an error text.
+     */
+    private fun obtain(sym: String, wantQuote: Boolean, now: Long): Pair<Obtained?, String> {
+        val today = Clock.epochDay(now)
+        val key = dailyKeyFor(today)
+        val le = synchronized(lru) { lru[sym] }
+        if (!wantQuote) {
+            live[sym]?.let { if (it.n > 0) return Pair(obtained(it, cache.get(sym), quotes[sym]), "") }
+            cache.get(sym)?.let { return Pair(obtained(it, it, null), "") }
+            if (le != null && le.key == key) join(le.daily, le.quote, sym)?.let { return Pair(obtained(it, le.daily, le.quote), "") }
+        }
+        var base: Series? = null
+        if (cache.keyOf(sym) == key) base = cache.get(sym)
+        if (base == null && le?.daily != null && le.key == key) base = le.daily
+        val haveFresh = base != null
+        var q: Intraday? = if (le?.quote != null && now - le.quoteAt in 0..QUOTE_REUSE_MS) le.quote else null
+        val needIndex = live[Params.INDEX_SYMBOL] == null && cache.get(Params.INDEX_SYMBOL) == null
+        val dSyms = ArrayList<String>()
+        val iSyms = ArrayList<String>()
+        if (!haveFresh) dSyms.add(sym)
+        if (q == null) iSyms.add(sym)
+        if (needIndex) { dSyms.add(Params.INDEX_SYMBOL); iSyms.add(Params.INDEX_SYMBOL) }
+        var anyResponse = true
+        if (dSyms.isNotEmpty() || iSyms.isNotEmpty()) {
+            val f = fetchQuiet(dSyms, iSyms, today)
+            anyResponse = f.anyResponse
+            f.daily[Params.INDEX_SYMBOL]?.let { cache.put(Params.INDEX_SYMBOL, it, key) }
+            val d = f.daily[sym]
+            val fq = f.intr[sym]
+            if (fq != null) q = fq
+            if (d != null) base = d
+            if (member(sym)) {
+                if (d != null) cache.put(sym, d, key)
+            } else if (d != null || fq != null) {
+                val keepDaily = d ?: le?.daily
+                synchronized(lru) { lru[sym] = Looked(keepDaily, if (d != null) key else (le?.key ?: 0), q, if (fq != null) now else (le?.quoteAt ?: 0L)) }
+            }
+            if (d != null || f.daily.containsKey(Params.INDEX_SYMBOL)) cache.flush()
+        }
+        if (base == null) base = cache.get(sym) ?: le?.daily            // stale history beats none
+        if (q == null) q = quotes[sym] ?: le?.quote                      // the last scan's (or lookup's) quote
+        val s = join(base, q, sym)
+        if (s != null) return Pair(obtained(s, base, q), "")
+        live[sym]?.let { if (it.n > 0) return Pair(obtained(it, null, quotes[sym]), "") }
+        return Pair(null, if (!anyResponse) "Could not reach the price feed for $sym — check the internet connection and try again."
+        else "No price data found for $sym. Check the symbol.")
+    }
+
+    private fun indexSeries(): Series? = live[Params.INDEX_SYMBOL] ?: cache.get(Params.INDEX_SYMBOL)
+
+    private fun stockInfo(a: Map<String, Any?>): Map<String, Any?> {
+        val raw = a.str("sym")
+        val sym = HoldingsImport.cleanSymbol(raw)
+        if (!validSym(sym)) return errSym(sym.ifEmpty { raw.trim() }, "Enter a valid NSE symbol, e.g. RELIANCE")
+        loadUniverse()
+        val now = now()
+        val (got, why) = obtain(sym, true, now)
+        if (got == null) return errSym(sym, why)
+        val r = refs
+        val h = r.holdings[sym]
+        val weight = if (h != null && r.holdings.size >= 2 && r.holdingsValue > 0) h[3] / r.holdingsValue * 100.0 else 0.0
+        return StockPage.build(StockInput(sym, displayName(sym), universeSet.contains(sym), h != null, r.watch.contains(sym),
+            got.s, indexSeries(), got.live, got.asOf, now, scanCtx, r.regime, weight, r.verdicts))
+    }
+
+    private fun chart(a: Map<String, Any?>): Map<String, Any?> {
+        val raw = a.str("sym")
+        val sym = HoldingsImport.cleanSymbol(raw)
+        if (!validSym(sym)) return errSym(sym.ifEmpty { raw.trim() }, "Enter a valid NSE symbol, e.g. RELIANCE")
+        loadUniverse()
+        val want = a.int("bars", Params.CHART_BARS).let { if (it <= 0) Params.CHART_BARS else minOf(it, 5000) }
+        val (got, why) = obtain(sym, false, now())
+        val x = got?.s ?: return errSym(sym, why)
+        if (x.n < 2) return errSym(sym, "No price history for $sym yet")
+        val from = maxOf(0, x.n - want)
+        val L = EmaLines(x)
+        val d = ArrayList<Any?>(); val o = ArrayList<Any?>(); val h = ArrayList<Any?>(); val l = ArrayList<Any?>(); val c = ArrayList<Any?>(); val v = ArrayList<Any?>()
+        val m50 = ArrayList<Any?>(); val m200 = ArrayList<Any?>()
+        val x10 = ArrayList<Any?>(); val x20 = ArrayList<Any?>(); val x50 = ArrayList<Any?>(); val x100 = ArrayList<Any?>(); val x200 = ArrayList<Any?>()
+        for (i in from until x.n) {
+            d.add(x.d[i].toLong() * Clock.DAY_MS); o.add(Fmt.r2(x.o[i])); h.add(Fmt.r2(x.h[i])); l.add(Fmt.r2(x.l[i])); c.add(Fmt.r2(x.c[i])); v.add(Math.rint(x.v[i]))
+            x10.add(Fmt.r2(L.shown(10, i))); x20.add(Fmt.r2(L.shown(20, i))); x50.add(Fmt.r2(L.shown(50, i))); x100.add(Fmt.r2(L.shown(100, i))); x200.add(Fmt.r2(L.shown(200, i)))
+            val a50 = Ind.sma(x.c, i, 50); val a200 = Ind.sma(x.c, i, 200)
+            m50.add(if (a50.isNaN()) 0.0 else Fmt.r2(a50)); m200.add(if (a200.isNaN()) 0.0 else Fmt.r2(a200))
+        }
+        val levels = ArrayList<Any?>()
+        fun lv(kind: String, label: String, v: Double) { if (v > 0) levels.add(linkedMapOf<String, Any?>("kind" to kind, "label" to label, "v" to Fmt.r2(v))) }
+        val r = refs
+        val tr = r.trades[sym]
+        val sg = r.signals[sym]
+        val ho = r.holdings[sym]
+        if (tr != null) { lv("entry", "Bought", tr[0]); lv("stop", "Stop-loss", tr[1]); lv("target", "Target 1", tr[2]); lv("target", "Target 2", tr[3]) }
+        else if (sg != null) { lv("entry", "Entry", sg[0]); lv("stop", "Stop-loss", sg[1]); lv("target", "Target 1", sg[2]); lv("target", "Target 2", sg[3]) }
+        if (ho != null) { lv("entry", "Your avg", ho[0]); if (tr == null && sg == null) { lv("stop", "Trailing stop", ho[1]); lv("target", "Book near", ho[2]) } }
+        val last = x.n - 1
+        val a50 = Ind.sma(x.c, last, 50); val a200 = Ind.sma(x.c, last, 200); val rsi = Ind.rsi(x.c, last, 14)
+        val hi = Ind.highest(x.h, last, minOf(250, x.n)); val lo = Ind.lowest(x.l, last, minOf(250, x.n))
+        fun rt(n: Int): Double { val q = Ind.ret(x.c, last, n); return if (q.isNaN()) 0.0 else Fmt.r2(q * 100.0) }
+        return ok("sym" to sym, "name" to displayName(sym), "d" to d, "o" to o, "h" to h, "l" to l, "c" to c, "v" to v, "sma50" to m50, "sma200" to m200,
+            "ema10" to x10, "ema20" to x20, "ema50" to x50, "ema100" to x100, "ema200" to x200, "levels" to levels,
+            "stats" to linkedMapOf<String, Any?>("ltp" to Fmt.r2(x.c[last]), "sma50" to (if (a50.isNaN()) 0.0 else Fmt.r2(a50)), "sma200" to (if (a200.isNaN()) 0.0 else Fmt.r2(a200)),
+                "rsi14" to (if (rsi.isNaN()) 0.0 else Fmt.r1(rsi)), "high52" to (if (hi.isNaN()) 0.0 else Fmt.r2(hi)), "low52" to (if (lo.isNaN()) 0.0 else Fmt.r2(lo)),
+                "ret5" to rt(5), "ret21" to rt(21), "ret63" to rt(63), "ret126" to rt(126), "bars" to x.n))
+    }
+
+    /** `myWatch` rows from the last known prices. Loads the file cache only on a tick/action thread, never on the UI's first getState. */
+    private fun myWatch(s: AppState, now: Long): List<Map<String, Any?>> {
+        if (s.watch.isEmpty()) return emptyList()
+        val canLoad = lock.isHeldByCurrentThread || cache.isLoaded()
+        if (lock.isHeldByCurrentThread) loadUniverse()
+        val idx = live[Params.INDEX_SYMBOL] ?: if (canLoad) cache.get(Params.INDEX_SYMBOL) else null
+        return s.watch.map { sym ->
+            val nm = names[sym]?.takeIf { it != sym } ?: symIndex?.nameOf(sym) ?: names[sym] ?: sym
+            try {
+                val le = synchronized(lru) { lru[sym] }
+                val x = live[sym] ?: (if (canLoad) cache.get(sym) else null) ?: le?.let { join(it.daily, it.quote, sym) }
+                StockPage.watchItem(sym, nm, x, idx, now)
+            } catch (t: Throwable) {
+                StockPage.watchItem(sym, nm, null, null, now)
+            }
         }
     }
 
@@ -1095,6 +1354,7 @@ class SwingApp(private val p: Platform) {
             m["scorecard"] = scorecard(s)
             m["feed"] = s.feed.take(AppState.MAX_FEED).map { it.toMap() }
             m["watch"] = watchItems
+            m["myWatch"] = myWatch(s, now)
             return m
         }
     }
@@ -1104,12 +1364,30 @@ class SwingApp(private val p: Platform) {
         vAnyLive = anyLive()
         vTested = Strategies.all.any { st.strat(it.id).testedAt != 0L }
         snapshot = buildSnapshot(st)
+        try { refs = buildRefs() } catch (t: Throwable) { log("refs: $t") }
+    }
+
+    private fun buildRefs(): Refs {
+        val hm = HashMap<String, DoubleArray>()
+        var total = 0.0
+        for (h in st.holdings) { total += h.valueRs(); if (!hm.containsKey(h.sym)) hm[h.sym] = doubleArrayOf(h.avg, h.stop, h.bookAt, h.valueRs()) }
+        val tm = HashMap<String, DoubleArray>()
+        for (t in st.trades) if (t.status == "OPEN" && !t.paper && !tm.containsKey(t.sym)) tm[t.sym] = doubleArrayOf(t.entry, t.sl, t.t1, t.t2)
+        val sm = HashMap<String, DoubleArray>()
+        for (g in st.signals) if (g.status == "NEW" && !sm.containsKey(g.sym)) sm[g.sym] = doubleArrayOf(g.entry, g.sl, g.t1, g.t2)
+        val vm = HashMap<String, String>()
+        for (sg in Strategies.all) vm[sg.id] = if (sg.enabled()) st.strat(sg.id).verdict else "PAUSED"
+        return Refs(hm, total, st.watch.toHashSet(), tm, sm, regimeInt(), vm)
     }
 
     companion object {
         const val STATE_FILE = "state.json"
         const val NID_BRIEF = 1001
         const val NID_EOD = 1002
+        private val SYM_RE = Regex("^[A-Z0-9&][A-Z0-9&\\-]*$")
+        private const val LRU_MAX = 20
+        /** A stock-page quote younger than this is reused by the next lookup of the same symbol. */
+        private const val QUOTE_REUSE_MS = 60_000L
         const val NO_LIVE_TEXT = "No strategy is passing its test right now — no new buys. Sell calls and portfolio checks still run."
 
         /** qty = floor(capital x riskPct% / (entry - sl + entry x costPct%)), capped at MAX_POSITION_FRACTION of capital. */

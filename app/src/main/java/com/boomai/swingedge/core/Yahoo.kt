@@ -135,17 +135,27 @@ object Yahoo {
     }
 }
 
-/** File-backed cache of completed daily bars, split over a few shard files. Loaded lazily, written only when changed. */
+/**
+ * File-backed cache of completed daily bars, split over a few shard files. Loaded lazily, written only when changed.
+ * Thread-safe: the map is guarded by this object's monitor (short holds only); [flush] builds the shard texts under
+ * that monitor but writes the files outside it, serialised by a separate lock so a newer shard is never overwritten
+ * by an older one. Series objects stored here are never modified afterwards.
+ */
 class DailyCache(private val p: Platform) {
     private class Entry(val series: Series, val key: Int)
 
     private val map = HashMap<String, Entry>()
-    private var loaded = false
+    @Volatile private var loaded = false
     private val dirty = BooleanArray(64)
+    private val flushLock = Any()
 
     private fun shardOf(sym: String): Int = Math.floorMod(sym.hashCode(), Params.CACHE_SHARDS.coerceIn(1, 64))
     private fun fileName(k: Int) = "daily_cache_$k.json"
 
+    /** True once the shard files have been read (cheap check that never touches storage). */
+    fun isLoaded(): Boolean = loaded
+
+    @Synchronized
     fun ensureLoaded() {
         if (loaded) return
         loaded = true
@@ -163,6 +173,7 @@ class DailyCache(private val p: Platform) {
         }
     }
 
+    @Synchronized
     fun get(sym: String): Series? {
         ensureLoaded()
         val s = map[sym]?.series
@@ -170,23 +181,27 @@ class DailyCache(private val p: Platform) {
     }
 
     /** Day key under which the symbol's history was last fetched (0 if never). */
+    @Synchronized
     fun keyOf(sym: String): Int {
         ensureLoaded()
         return map[sym]?.key ?: 0
     }
 
+    @Synchronized
     fun put(sym: String, s: Series, key: Int) {
         ensureLoaded()
         map[sym] = Entry(s, key)
         dirty[shardOf(sym)] = true
     }
 
+    @Synchronized
     fun size(): Int {
         ensureLoaded()
         return map.size
     }
 
     /** Drops symbols that are no longer needed (keeps the files small). */
+    @Synchronized
     fun retain(keep: Set<String>) {
         ensureLoaded()
         val it = map.keys.iterator()
@@ -201,25 +216,38 @@ class DailyCache(private val p: Platform) {
 
     fun flush() {
         if (!loaded) return
-        val shards = Params.CACHE_SHARDS.coerceIn(1, 64)
-        for (k in 0 until shards) {
-            if (!dirty[k]) continue
-            try {
-                val sb = StringBuilder(1 shl 16)
-                sb.append("{\"v\":1,\"s\":{")
-                var first = true
-                for ((sym, e) in map) {
-                    if (shardOf(sym) != k) continue
-                    if (!first) sb.append(',')
-                    first = false
-                    Json.quote(sb, sym)
-                    sb.append(":{\"k\":").append(e.key).append(",\"b\":\"").append(e.series.encode()).append("\"}")
+        synchronized(flushLock) {
+            val shards = Params.CACHE_SHARDS.coerceIn(1, 64)
+            val texts = ArrayList<Pair<Int, String>>()
+            synchronized(this) {
+                for (k in 0 until shards) {
+                    if (!dirty[k]) continue
+                    try {
+                        val sb = StringBuilder(1 shl 16)
+                        sb.append("{\"v\":1,\"s\":{")
+                        var first = true
+                        for ((sym, e) in map) {
+                            if (shardOf(sym) != k) continue
+                            if (!first) sb.append(',')
+                            first = false
+                            Json.quote(sb, sym)
+                            sb.append(":{\"k\":").append(e.key).append(",\"b\":\"").append(e.series.encode()).append("\"}")
+                        }
+                        sb.append("}}")
+                        texts.add(Pair(k, sb.toString()))
+                        dirty[k] = false
+                    } catch (t: Throwable) {
+                        try { p.log("cache shard $k write failed: $t") } catch (x: Throwable) {}
+                    }
                 }
-                sb.append("}}")
-                p.write(fileName(k), sb.toString())
-                dirty[k] = false
-            } catch (t: Throwable) {
-                try { p.log("cache shard $k write failed: $t") } catch (x: Throwable) {}
+            }
+            for ((k, text) in texts) {
+                try {
+                    p.write(fileName(k), text)
+                } catch (t: Throwable) {
+                    synchronized(this) { dirty[k] = true }
+                    try { p.log("cache shard $k write failed: $t") } catch (x: Throwable) {}
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 /* SwingEdge desktop mock — installed only when the real `Android` bridge is absent.
    Implements every bridge method over an in-memory state.
-   URL params: ?scenario=empty|paused|closed|broken  ?busy=scan|backtest */
+   URL params: ?scenario=empty|paused|closed|broken  ?busy=scan|backtest
+   Stock page: stockInfo/getChart work for any symbol; ZZ* fails, SLOW answers after 6 s, FAILWATCH cannot be added to the watchlist. */
 (function () {
   'use strict';
   if (typeof window === 'undefined' || window.Android) return;
@@ -178,6 +179,175 @@
     ];
   }
 
+  /* ---------- stock model: one deterministic 500-bar series per symbol drives search, stockInfo, getChart, myWatch ---------- */
+  var UNI = [
+    ['RELIANCE', 'Reliance Industries Ltd', 2918.45, 1], ['TCS', 'Tata Consultancy Services Ltd', 4120.3, 1], ['HDFCBANK', 'HDFC Bank Ltd', 1702.3, 1],
+    ['INFY', 'Infosys Ltd', 1534.75, 1], ['ICICIBANK', 'ICICI Bank Ltd', 1288.9, 1], ['HINDUNILVR', 'Hindustan Unilever Ltd', 2395.6, 1],
+    ['ITC', 'ITC Ltd', 468.9, 1], ['SBIN', 'State Bank of India', 801.2, 1], ['BHARTIARTL', 'Bharti Airtel Ltd', 1712.4, 1],
+    ['KOTAKBANK', 'Kotak Mahindra Bank Ltd', 1895.2, 1], ['LT', 'Larsen & Toubro Ltd', 3540.5, 1], ['AXISBANK', 'Axis Bank Ltd', 1104.0, 1],
+    ['ASIANPAINT', 'Asian Paints Ltd', 2318.7, 1], ['MARUTI', 'Maruti Suzuki India Ltd', 12480.0, 1], ['SUNPHARMA', 'Sun Pharmaceutical Industries Ltd', 1764.2, 1],
+    ['TITAN', 'Titan Company Ltd', 3588.0, 1], ['BAJFINANCE', 'Bajaj Finance Ltd', 7120.5, 1], ['WIPRO', 'Wipro Ltd', 512.3, 1],
+    ['ULTRACEMCO', 'UltraTech Cement Ltd', 11240.0, 1], ['NESTLEIND', 'Nestle India Ltd', 2288.4, 1], ['ONGC', 'Oil & Natural Gas Corporation Ltd', 262.8, 1],
+    ['NTPC', 'NTPC Ltd', 372.5, 1], ['POWERGRID', 'Power Grid Corporation of India Ltd', 318.2, 1], ['TATAMOTORS', 'Tata Motors Ltd', 934.6, 1],
+    ['TATASTEEL', 'Tata Steel Ltd', 162.4, 1], ['TATAPOWER', 'Tata Power Company Ltd', 436.2, 1], ['TATACONSUM', 'Tata Consumer Products Ltd', 1108.9, 1],
+    ['TATAELXSI', 'Tata Elxsi Ltd', 6240.0, 0], ['TATACOMM', 'Tata Communications Ltd', 1795.3, 0], ['M&M', 'Mahindra & Mahindra Ltd', 2986.0, 1],
+    ['HCLTECH', 'HCL Technologies Ltd', 1648.5, 1], ['TECHM', 'Tech Mahindra Ltd', 1522.8, 1], ['ADANIENT', 'Adani Enterprises Ltd', 2410.7, 1],
+    ['ADANIPORTS', 'Adani Ports and Special Economic Zone Ltd', 1356.2, 1], ['COALINDIA', 'Coal India Ltd', 484.15, 1], ['BEL', 'Bharat Electronics Ltd', 302.85, 1],
+    ['HAL', 'Hindustan Aeronautics Ltd', 4648.3, 1], ['POLYCAB', 'Polycab India Ltd', 6198.5, 1], ['CUMMINSIND', 'Cummins India Ltd', 3862.4, 1],
+    ['FEDERALBNK', 'Federal Bank Ltd', 212.4, 1], ['TVSMOTOR', 'TVS Motor Company Ltd', 3105.0, 1], ['IRCTC', 'Indian Railway Catering & Tourism Corp Ltd', 812.0, 1],
+    ['ZEEL', 'Zee Entertainment Enterprises Ltd', 131.4, 1], ['YESBANK', 'Yes Bank Ltd', 19.82, 1], ['MARICO', 'Marico Ltd', 664.9, 1],
+    ['DIXON', 'Dixon Technologies (India) Ltd', 14820.0, 1], ['PFC', 'Power Finance Corporation Ltd', 468.0, 1], ['SIEMENS', 'Siemens Ltd', 6985.0, 1],
+    ['HDFCLIFE', 'HDFC Life Insurance Company Ltd', 712.4, 1], ['ILLIQTEXTILE', 'Illiq Textile Mills Ltd', 41.2, 0]
+  ];
+  var UBY = {}; UNI.forEach(function (u) { UBY[u[0]] = u; });
+  var DAYCHG = {}; holdings().forEach(function (h) { DAYCHG[h.sym] = h.dayChgPct; });
+  var NIFTY_RET = { d21: 1.6, d63: 4.3, d126: 7.9 };
+  function hash(s) { var h = 7, i; for (i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 1000003; return h; }
+  function mkRnd(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function r2(x) { return Math.round(x * 100) / 100; }
+  function emaOf(c, k) {
+    var out = [], a = 2 / (k + 1), i, s = 0, e = 0;
+    for (i = 0; i < c.length; i++) {
+      if (i < k - 1) { s += c[i]; out.push(0); continue; }
+      if (i === k - 1) { s += c[i]; e = s / k; } else e = e + a * (c[i] - e);
+      out.push(r2(e));
+    }
+    return out;
+  }
+  function lastOf(a) { return a[a.length - 1]; }
+  function ago(n) { return n === 0 ? 'today' : n === 1 ? '1 day ago' : n + ' days ago'; }
+  var models = {};
+  function model(sym) {
+    if (models[sym]) return models[sym];
+    var u = UBY[sym], base = u ? u[2] : 60 + hash(sym) % 3400, n = 500, rnd = mkRnd(hash(sym) * 7 + 13), i;
+    var drift = (rnd() - 0.4) * 0.0018, vol = 0.011 + rnd() * 0.011, p = 100, raw = [];
+    for (i = 0; i < n; i++) { p *= 1 + drift + (rnd() + rnd() + rnd() - 1.5) * vol * 1.5; raw.push(p); }
+    var k = base / raw[n - 1], c = [], o = [], h = [], l = [], v = [], d = [];
+    for (i = 0; i < n; i++) c.push(r2(raw[i] * k));
+    if (DAYCHG[sym] != null) c[n - 2] = r2(c[n - 1] / (1 + DAYCHG[sym] / 100));
+    var turn = /^ILLIQ/.test(sym) ? 3 : 40 + rnd() * 300, v0 = turn * 1e7 / base;
+    for (i = 0; i < n; i++) {
+      var op = i ? r2(c[i - 1] * (1 + (rnd() - 0.5) * 0.008)) : c[0];
+      o.push(op); h.push(r2(Math.max(op, c[i]) * (1 + rnd() * 0.01))); l.push(r2(Math.min(op, c[i]) * (1 - rnd() * 0.01)));
+      v.push(Math.round(v0 * (0.5 + rnd() * 1.1) * (1 + Math.abs(c[i] / (i ? c[i - 1] : c[i]) - 1) * 18)));
+    }
+    // dates: n weekdays ending on the latest trading day (IST)
+    var IST = 19800000, dt = new Date(Date.now() + IST), day;
+    while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) dt = new Date(dt.getTime() - 86400000);
+    for (i = n - 1; i >= 0; i--) {
+      d[i] = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate(), 3, 45);
+      dt = new Date(dt.getTime() - 86400000);
+      while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) dt = new Date(dt.getTime() - 86400000);
+    }
+    var ld = new Date(d[n - 1] + IST), barDay = ld.getUTCFullYear() * 10000 + (ld.getUTCMonth() + 1) * 100 + ld.getUTCDate();
+    var E = { 10: emaOf(c, 10), 20: emaOf(c, 20), 50: emaOf(c, 50), 100: emaOf(c, 100), 200: emaOf(c, 200) };
+    var ltp = c[n - 1], prev = c[n - 2], e = {}, dist = {};
+    [10, 20, 50, 100, 200].forEach(function (q) { e['e' + q] = lastOf(E[q]); dist['e' + q] = r2((ltp / e['e' + q] - 1) * 100); });
+    function crossOf(a, b, maxBack) {
+      var cur = a[n - 1] >= b[n - 1] ? 'ABOVE' : 'BELOW', ds = -1, j;
+      for (j = 0; j <= maxBack; j++) { var ix = n - 1 - j; if (ix < 1 || !(b[ix - 1] > 0)) break; if ((a[ix] >= b[ix]) !== (a[ix - 1] >= b[ix - 1])) { ds = j; break; } }
+      return { state: cur, daysSince: ds };
+    }
+    var cr = crossOf(E[10], E[20], 60), gap = (e.e10 - e.e20) / e.e20 * 100, gap2 = (E[10][n - 3] - E[20][n - 3]) / E[20][n - 3] * 100;
+    var conv = Math.abs(gap) < Math.abs(gap2);
+    var gd = crossOf(E[50], E[200], 480);
+    var stackLab = e.e10 > e.e20 && e.e20 > e.e50 && e.e50 > e.e100 && e.e100 > e.e200 ? 'BULLISH' : e.e10 < e.e20 && e.e20 < e.e50 && e.e50 < e.e100 && e.e100 < e.e200 ? 'BEARISH' : 'MIXED';
+    // RSI (Wilder) and ATR
+    function rsi(per) {
+      var up = 0, dn = 0, j;
+      for (j = 1; j <= per; j++) { var ch = c[j] - c[j - 1]; if (ch > 0) up += ch; else dn -= ch; }
+      up /= per; dn /= per;
+      for (j = per + 1; j < n; j++) { var cc = c[j] - c[j - 1]; up = (up * (per - 1) + Math.max(cc, 0)) / per; dn = (dn * (per - 1) + Math.max(-cc, 0)) / per; }
+      return dn === 0 ? 100 : 100 - 100 / (1 + up / dn);
+    }
+    var atr = 0, j2; for (j2 = 1; j2 < n; j2++) { var tr = Math.max(h[j2] - l[j2], Math.abs(h[j2] - c[j2 - 1]), Math.abs(l[j2] - c[j2 - 1])); atr = j2 < 15 ? atr + tr / 14 : (atr * 13 + tr) / 14; }
+    function ret(b) { return r2((ltp / c[n - 1 - b] - 1) * 100); }
+    var rets = { d5: ret(5), d21: ret(21), d63: ret(63), d126: ret(126), d250: ret(250) };
+    var vsN = { d21: r2(rets.d21 - NIFTY_RET.d21), d63: r2(rets.d63 - NIFTY_RET.d63), d126: r2(rets.d126 - NIFTY_RET.d126) };
+    var hi52 = Math.max.apply(null, h.slice(-250)), lo52 = Math.min.apply(null, l.slice(-250)), hi20 = Math.max.apply(null, h.slice(-20)), lo20 = Math.min.apply(null, l.slice(-20));
+    var avgV = Math.round(v.slice(-21, -1).reduce(function (a, b) { return a + b; }, 0) / 20), volu = v[n - 1];
+    var turnCr = r2(volu * ltp / 1e7), liquid = turnCr >= 25;
+    var resist = hi20; if (hi52 > ltp && hi52 / ltp - 1 <= 0.03) resist = hi52; else if (hi20 <= ltp && hi52 > ltp) resist = hi52;
+    var trail = Math.max.apply(null, c.slice(-22)) - 3 * atr;
+    var rsi14 = r2(rsi(14)), rsi2 = r2(rsi(2));
+    var strength = Math.max(0, Math.min(100, Math.round(50 + (stackLab === 'BULLISH' ? 25 : stackLab === 'BEARISH' ? -25 : 0) + (ltp > e.e200 ? 10 : -10) + (ltp > e.e50 ? 8 : -8) + Math.max(-15, Math.min(15, rets.d63)))));
+    var vlab = strength >= 65 ? 'HOLD' : strength >= 45 ? 'WATCH' : strength >= 30 ? 'TRIM' : 'SELL';
+    var vhead = { HOLD: 'Uptrend intact: price is above the 50 and 200 EMA', WATCH: 'Trend is mixed; the next few closes matter', TRIM: 'Trend is fading: price is losing its longer averages', SELL: 'Trend has broken: price is below its key averages' }[vlab];
+    var pctTxt = function (x) { return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1) + '%'; };
+    var rup = function (x) { return '₹' + Math.round(x).toLocaleString('en-IN'); };
+    var checks = [
+      { label: 'Above the 200 EMA', ok: ltp > e.e200, text: rup(ltp) + ' vs ' + rup(e.e200) + ' (' + pctTxt(dist.e200) + ')' },
+      { label: 'Above the 50 EMA', ok: ltp > e.e50, text: rup(ltp) + ' vs ' + rup(e.e50) + ' (' + pctTxt(dist.e50) + ')' },
+      { label: '10 EMA above the 20 EMA', ok: cr.state === 'ABOVE', text: 'Gap ' + pctTxt(gap) },
+      { label: '50 EMA above the 200 EMA', ok: gd.state === 'ABOVE', text: rup(e.e50) + ' vs ' + rup(e.e200) },
+      { label: 'Not overheated (RSI below 70)', ok: rsi14 < 70, text: 'RSI (14) is ' + Math.round(rsi14) },
+      { label: 'Within 10% of the 52-week high', ok: ltp / hi52 - 1 > -0.1, text: pctTxt((ltp / hi52 - 1) * 100) + ' from ' + rup(hi52) },
+      { label: 'Volume at or above its 20-day average', ok: volu >= avgV, text: (volu / avgV).toFixed(2) + '× the average' },
+      { label: 'Liquid enough', ok: liquid, text: '₹' + turnCr.toFixed(1) + ' crore traded today (screen needs ₹25 crore+)' },
+      { label: 'Positive 3-month return', ok: rets.d63 > 0, text: pctTxt(rets.d63) + ' over 63 trading days' }
+    ];
+    var xmatch = cr.state === 'ABOVE' && cr.daysSince === 0 && e.e10 > e.e50 && e.e10 > e.e100 && e.e10 > e.e200 && liquid;
+    var xtxt = xmatch ? 'Crossed today with the 10 EMA above the 50, 100 and 200 EMA' :
+      cr.state === 'BELOW' ? 'The 10 EMA is below the 20 EMA, so there is no upward cross' :
+      cr.daysSince === 0 ? 'Crossed today but the 10 EMA is not above all the longer averages' :
+      cr.daysSince > 0 ? 'Crossed ' + ago(cr.daysSince) + ' — the screen only lists crosses from the last 3 bars' : 'No cross in the last 60 bars';
+    var setups = [{ id: 'EMA_CROSS', label: 'Fresh 10/20 EMA cross', match: xmatch && cr.daysSince <= 2, text: xtxt }];
+    var hiPrev = Math.max.apply(null, h.slice(-21, -1));
+    strategies('default').filter(function (s) { return s.verdict === 'LIVE'; }).forEach(function (s) {
+      var m = false, t = 'Does not qualify today';
+      if (s.id === 'pullback') { m = ltp > e.e200 && ltp > e.e50 && ltp <= e.e20 * 1.01; t = m ? 'Uptrend with price back at the 20 EMA' : ltp <= e.e200 ? 'Price is below the 200 EMA, so there is no uptrend' : 'Price is not pulled back to the 20 EMA (' + pctTxt(dist.e20) + ' from it)'; }
+      if (s.id === 'breakout') { m = ltp > hiPrev && volu / avgV >= 1.5; t = m ? 'Closed above the 20-day high on strong volume' : ltp > hiPrev ? 'Above the 20-day high but volume is only ' + (volu / avgV).toFixed(1) + '× average' : 'Below the 20-day high of ' + rup(hiPrev); }
+      setups.push({ id: s.id.toUpperCase(), label: s.label, match: m, text: t });
+    });
+    var nm = u ? u[1] : sym.charAt(0) + sym.slice(1).toLowerCase() + ' Ltd';
+    var crossText = '10 EMA ' + (cr.state === 'ABOVE' ? 'above' : 'below') + ' 20 EMA' + (cr.daysSince >= 0 ? ' for ' + cr.daysSince + ' day' + (cr.daysSince === 1 ? '' : 's') : ' for over 60 days');
+    var crossFull = cr.daysSince === 0 ? '10 EMA crossed ' + (cr.state === 'ABOVE' ? 'above' : 'below') + ' the 20 EMA today' :
+      cr.daysSince > 0 ? '10 EMA crossed ' + (cr.state === 'ABOVE' ? 'above' : 'below') + ' the 20 EMA ' + ago(cr.daysSince) : '10 EMA has been ' + (cr.state === 'ABOVE' ? 'above' : 'below') + ' the 20 EMA for more than 60 days';
+    var info = {
+      ok: true, sym: sym, name: nm, tracked: !u || u[3] === 1, barDay: barDay, bars: n,
+      ltp: ltp, prevClose: prev, dayChgPct: r2((ltp / prev - 1) * 100), open: o[n - 1], dayHigh: h[n - 1], dayLow: l[n - 1],
+      volume: volu, avgVol20: avgV, volRatio: r2(volu / avgV), turnoverCr: turnCr, liquid: liquid,
+      ema: e, emaDist: dist,
+      stack: { label: stackLab, text: stackLab === 'BULLISH' ? '10 > 20 > 50 > 100 > 200: every average is stacked in order' : stackLab === 'BEARISH' ? '10 < 20 < 50 < 100 < 200: every average is stacked against the price' : 'The averages are not in a clean order, so the trend is mixed' },
+      cross: { state: cr.state, daysSince: cr.daysSince, gapPct: r2(gap), converging: conv, text: crossFull + ' and the gap is ' + (conv ? 'narrowing' : 'widening') },
+      golden: { state: gd.state, daysSince: gd.daysSince, text: '50 EMA ' + (gd.state === 'ABOVE' ? 'above' : 'below') + ' the 200 EMA' + (gd.daysSince >= 0 ? ' for ' + gd.daysSince + ' days' : ' for the whole 2-year history') },
+      rsi14: rsi14, rsi2: rsi2, atr: r2(atr), atrPct: r2(atr / ltp * 100), ret: rets, vsNifty: vsN,
+      high52: hi52, low52: lo52, fromHighPct: r2((ltp / hi52 - 1) * 100), fromLowPct: r2((ltp / lo52 - 1) * 100), high20: hi20, low20: lo20,
+      levels: { support: lo20, resistance: resist, trailStop: r2(trail) },
+      strength: strength, verdict: { label: vlab, headline: vhead }, checks: checks, setups: setups,
+      summary: nm + ' last traded at ' + rup(ltp) + ', ' + pctTxt(dist.e200) + ' from its 200 EMA. ' + (stackLab === 'BULLISH' ? 'The averages are stacked in order, which is how a steady uptrend looks on the chart. ' : stackLab === 'BEARISH' ? 'The averages are stacked against the price, which is how a steady downtrend looks. ' : 'The averages are tangled, so there is no clean trend. ') +
+        'RSI (14) is ' + Math.round(rsi14) + '. The picture would change on a close below the ' + rup(lo20) + ' support or above the ' + rup(resist) + ' resistance.' + (liquid ? '' : ' Trading is thin here, so prices can jump between trades.')
+    };
+    return (models[sym] = { c: c, o: o, h: h, l: l, v: v, d: d, E: E, info: info, crossText: crossText, strength: strength });
+  }
+  function validSym(sym) { return /^[A-Z0-9&\-]{1,20}$/.test(sym) && !/^ZZ/.test(sym); }
+  function watchRow(sym) {
+    var m = model(sym), i = m.info;
+    return { sym: sym, name: i.name, ltp: i.ltp, dayChgPct: i.dayChgPct, spark: m.c.slice(-30), strength: m.strength, stack: i.stack.label, crossText: m.crossText, dataOk: true };
+  }
+  function defaultWatch() {
+    var w = ['DIXON', 'SIEMENS', 'BHARTIARTL'].map(watchRow);
+    w.push({ sym: 'NEWLISTCO', name: 'Newly Listed Company Ltd', ltp: 0, dayChgPct: 0, spark: [], strength: 0, stack: 'MIXED', crossText: '', dataOk: false });
+    return w;
+  }
+  function normQ(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9& ]/g, ' ').replace(/\b(ltd|limited)\b/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function doSearch(q) {
+    var nq = normQ(q), qq = nq.replace(/ /g, '');
+    if (qq.length < 2) return [];
+    var words = nq.split(' '), out = [];
+    UNI.forEach(function (u, idx) {
+      var s = u[0].toLowerCase(), nn = normQ(u[1]), nw = nn.split(' '), rank = 99;
+      if (s === qq) rank = 0;
+      else if (s.indexOf(qq) === 0) rank = 1;
+      else if (words.every(function (w) { return nw.some(function (x) { return x.indexOf(w) === 0; }); })) rank = 2;
+      else if (s.indexOf(qq) >= 0) rank = 3;
+      else if (nn.indexOf(nq) >= 0) rank = 4;
+      if (rank < 99) out.push({ r: rank, i: idx, u: u });
+    });
+    out.sort(function (a, b) { return a.r - b.r || a.i - b.i; });
+    return out.slice(0, 25).map(function (x) { return { sym: x.u[0], name: x.u[1], tracked: x.u[3] === 1 }; });
+  }
+
   function baseState() {
     var hs = holdings();
     return {
@@ -193,7 +363,13 @@
   function build() {
     var s = baseState();
     s.watch = [{"sym": "POLYCAB", "name": "Polycab India", "ltp": 7421.5, "dayChgPct": 0.84, "ema10": 7310.18, "ema20": 7287.91, "ema50": 7050.42, "ema100": 6753.57, "ema200": 6234.06, "gapPct": 0.31, "daysSince": 0, "barDay": 20261111, "spark": [6793.67, 6831.83, 6881.61, 6954.13, 7047.55, 7023.8, 7049.12, 7034.39, 7113.22, 7064.86, 7013.98, 7045.74, 7137.69, 7131.28, 7199.21, 7258.65, 7341.03, 7304.14, 7394.78, 7488.31, 7564.42, 7669.29, 7598.78, 7540.88, 7630.58, 7723.86, 7834.68, 7790.09, 7868.05, 7966.51], "status": "CROSSED"}, {"sym": "CUMMINSIND", "name": "Cummins India", "ltp": 3980.1, "dayChgPct": 1.92, "ema10": 3920.4, "ema20": 3908.46, "ema50": 3781.09, "ema100": 3621.89, "ema200": 3343.28, "gapPct": 0.31, "daysSince": 0, "barDay": 20261111, "spark": [3639.8, 3687.02, 3737.32, 3724.68, 3720.53, 3745.94, 3713.11, 3681.23, 3723.49, 3706.23, 3727.53, 3701.36, 3702.01, 3698.98, 3670.37, 3683.35, 3726.91, 3747.97, 3776.0, 3778.39, 3791.95, 3787.94, 3823.6, 3876.73, 3931.37, 3902.19, 3946.06, 3956.24, 3922.06, 3908.4], "status": "CROSSED"}, {"sym": "FEDERALBNK", "name": "Federal Bank", "ltp": 212.4, "dayChgPct": -0.21, "ema10": 209.21, "ema20": 208.58, "ema50": 201.78, "ema100": 193.28, "ema200": 178.42, "gapPct": 0.31, "daysSince": 0, "barDay": 20261111, "spark": [195.44, 198.23, 199.73, 198.15, 198.96, 197.85, 196.22, 198.27, 201.11, 201.76, 202.97, 201.74, 200.29, 199.81, 198.28, 200.11, 199.02, 199.39, 197.78, 196.86, 196.64, 197.21, 196.76, 197.53, 198.55, 197.46, 198.27, 196.89, 198.15, 200.16], "status": "CROSSED"}, {"sym": "BEL", "name": "Bharat Electronics", "ltp": 412.3, "dayChgPct": 1.1, "ema10": 406.12, "ema20": 404.88, "ema50": 391.69, "ema100": 375.19, "ema200": 346.33, "gapPct": 0.31, "daysSince": 1, "barDay": 20261111, "spark": [378.39, 381.31, 378.29, 383.79, 381.26, 379.45, 377.69, 378.49, 375.61, 378.4, 378.06, 383.0, 384.12, 386.53, 385.62, 389.21, 389.31, 394.22, 393.7, 396.02, 394.42, 399.79, 402.83, 403.3, 408.73, 413.43, 410.0, 408.92, 406.58, 404.66], "status": "CROSSED"}, {"sym": "TVSMOTOR", "name": "TVS Motor Company", "ltp": 3105.0, "dayChgPct": 0.4, "ema10": 3058.43, "ema20": 3049.11, "ema50": 2949.75, "ema100": 2825.55, "ema200": 2608.2, "gapPct": 0.31, "daysSince": 2, "barDay": 20261111, "spark": [2862.71, 2847.25, 2879.3, 2855.93, 2895.02, 2913.89, 2953.09, 2941.98, 2956.18, 2954.82, 2980.74, 2985.24, 3014.99, 3046.99, 3083.29, 3097.81, 3108.35, 3142.0, 3159.08, 3187.24, 3231.81, 3278.73, 3275.25, 3293.51, 3302.84, 3292.95, 3292.89, 3314.85, 3342.59, 3363.38], "status": "CROSSED"}];
-    if (scenario === 'empty') s.watch = [];
+    s.watch.forEach(function (r) { // keep the EMA-cross rows consistent with the stock page
+      var m = model(r.sym), f = m.info.ltp / r.ltp, key;
+      ['ltp', 'ema10', 'ema20', 'ema50', 'ema100', 'ema200'].forEach(function (k2) { r[k2] = r2(r[k2] * f); });
+      r.spark = r.spark.map(function (x) { return r2(x * f); }); r.dayChgPct = m.info.dayChgPct;
+    });
+    s.myWatch = defaultWatch();
+    if (scenario === 'empty') { s.watch = []; s.myWatch = []; }
     if (scenario === 'empty') {
       s.signals = []; s.trades = []; s.holdings = []; s.feed = [];
       s.portfolio = portfolioOf([]);
@@ -260,6 +436,13 @@
         ],
         scorecard: { n: null, winPct: 'NaN', netRs: -1e15, recent: [{ sym: null, closedAt: -5, pnlRs: 'x', paper: 'maybe' }, null, { sym: 'OK', closedAt: 8.7e15, result: LONG, pnlRs: 1e14, pnlPct: 1e6, paper: true }] },
         watch: [{"sym": "POLYCAB", "name": "Polycab India", "ltp": 7421.5, "dayChgPct": 0.84, "ema10": 7310.18, "ema20": 7287.91, "ema50": 7050.42, "ema100": 6753.57, "ema200": 6234.06, "gapPct": 0.31, "daysSince": 0, "barDay": 20261111, "spark": [6793.67, 6831.83, 6881.61, 6954.13, 7047.55, 7023.8, 7049.12, 7034.39, 7113.22, 7064.86, 7013.98, 7045.74, 7137.69, 7131.28, 7199.21, 7258.65, 7341.03, 7304.14, 7394.78, 7488.31, 7564.42, 7669.29, 7598.78, 7540.88, 7630.58, 7723.86, 7834.68, 7790.09, 7868.05, 7966.51], "status": "CROSSED"}, {"sym": "CUMMINSIND", "name": "Cummins India", "ltp": 3980.1, "dayChgPct": 1.92, "ema10": 3920.4, "ema20": 3908.46, "ema50": 3781.09, "ema100": 3621.89, "ema200": 3343.28, "gapPct": 0.31, "daysSince": 0, "barDay": 20261111, "spark": [3639.8, 3687.02, 3737.32, 3724.68, 3720.53, 3745.94, 3713.11, 3681.23, 3723.49, 3706.23, 3727.53, 3701.36, 3702.01, 3698.98, 3670.37, 3683.35, 3726.91, 3747.97, 3776.0, 3778.39, 3791.95, 3787.94, 3823.6, 3876.73, 3931.37, 3902.19, 3946.06, 3956.24, 3922.06, 3908.4], "status": "CROSSED"}, {"sym": "FEDERALBNK", "name": "Federal Bank", "ltp": 212.4, "dayChgPct": -0.21, "ema10": 209.21, "ema20": 208.58, "ema50": 201.78, "ema100": 193.28, "ema200": 178.42, "gapPct": 0.31, "daysSince": 0, "barDay": 20261111, "spark": [195.44, 198.23, 199.73, 198.15, 198.96, 197.85, 196.22, 198.27, 201.11, 201.76, 202.97, 201.74, 200.29, 199.81, 198.28, 200.11, 199.02, 199.39, 197.78, 196.86, 196.64, 197.21, 196.76, 197.53, 198.55, 197.46, 198.27, 196.89, 198.15, 200.16], "status": "CROSSED"}, {"sym": "BEL", "name": "Bharat Electronics", "ltp": 412.3, "dayChgPct": 1.1, "ema10": 406.12, "ema20": 404.88, "ema50": 391.69, "ema100": 375.19, "ema200": 346.33, "gapPct": 0.31, "daysSince": 1, "barDay": 20261111, "spark": [378.39, 381.31, 378.29, 383.79, 381.26, 379.45, 377.69, 378.49, 375.61, 378.4, 378.06, 383.0, 384.12, 386.53, 385.62, 389.21, 389.31, 394.22, 393.7, 396.02, 394.42, 399.79, 402.83, 403.3, 408.73, 413.43, 410.0, 408.92, 406.58, 404.66], "status": "CROSSED"}, {"sym": "TVSMOTOR", "name": "TVS Motor Company", "ltp": 3105.0, "dayChgPct": 0.4, "ema10": 3058.43, "ema20": 3049.11, "ema50": 2949.75, "ema100": 2825.55, "ema200": 2608.2, "gapPct": 0.31, "daysSince": 2, "barDay": 20261111, "spark": [2862.71, 2847.25, 2879.3, 2855.93, 2895.02, 2913.89, 2953.09, 2941.98, 2956.18, 2954.82, 2980.74, 2985.24, 3014.99, 3046.99, 3083.29, 3097.81, 3108.35, 3142.0, 3159.08, 3187.24, 3231.81, 3278.73, 3275.25, 3293.51, 3302.84, 3292.95, 3292.89, 3314.85, 3342.59, 3363.38], "status": "CROSSED"}],
+        myWatch: [
+          { sym: 'SUPERLONGSYMBOLNAME-EQ', name: LONG, ltp: 123456789012.55, dayChgPct: 'NaN', spark: [1, 'x', null, 5, 9, 2, 7], strength: 1e9, stack: 'WHATEVER', crossText: LONG + ' ' + LONG, dataOk: true },
+          { sym: 'NODATA', name: null, dataOk: false },
+          { sym: '<img src=x onerror=alert(1)>', name: '<b>x</b>', ltp: 'abc', spark: 'no', stack: null, crossText: null },
+          null, 'junk', { name: 'no symbol' },
+          { sym: 'OKCO', name: 'Fine Company Ltd', ltp: 250.5, dayChgPct: -1.2, spark: [250, 251, 249, 248, 247, 246, 245], strength: 50, stack: 'MIXED', crossText: '10 EMA below 20 EMA for 4 days', dataOk: true }
+        ],
         feed: [
           { ts: T0 - MIN, kind: 'explode', title: LONG, body: LONG + ' ' + LONG },
           { ts: 'NaN', kind: null, title: null, body: null },
@@ -399,31 +582,51 @@
       finish('saveSettings', { ok: true });
     },
     clearFeed: function () { state.feed = []; finish('clearFeed', { ok: true }); },
+    search: function (a) {
+      var q = String(a.q == null ? '' : a.q);
+      setTimeout(function () { finish('search', { ok: true, q: q, results: doSearch(q) }, 0); }, 70);
+    },
+    stockInfo: function (a) {
+      var sym = String(a.sym || '').toUpperCase();
+      if (/^ZZ/.test(sym) || !/^[A-Z0-9&\-]{1,20}$/.test(sym)) return finish('stockInfo', { ok: false, sym: sym, error: 'No price data found for ' + sym + '. Check the symbol.' }, 500);
+      var res = JSON.parse(JSON.stringify(model(sym).info));
+      res.asOf = Date.now(); res.live = scenario !== 'closed';
+      res.isHolding = (state.holdings || []).some(function (h) { return h && h.sym === sym; });
+      res.inWatch = (state.myWatch || []).some(function (w) { return w && w.sym === sym; });
+      finish('stockInfo', res, sym === 'SLOW' ? 6000 : 400);
+    },
     getChart: function (a) {
-      var sym = String(a.sym || ''), seed = 7, i;
-      for (i = 0; i < sym.length; i++) seed = (seed * 31 + sym.charCodeAt(i)) % 9973;
-      var rnd = function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+      var sym = String(a.sym || '').toUpperCase();
+      if (/^ZZ/.test(sym) || !/^[A-Z0-9&\-]{1,20}$/.test(sym)) return finish('getChart', { ok: false, sym: sym, error: 'No price data found for ' + sym + '. Check the symbol.' }, 350);
+      var m = model(sym), nb = [130, 260, 500].indexOf(Number(a.bars)) >= 0 ? Number(a.bars) : 130, tl = function (arr) { return arr.slice(-nb); };
       var h0 = (state.holdings || []).filter(function (x) { return x.sym === sym; })[0];
       var g0 = (state.signals || []).filter(function (x) { return x.sym === sym; })[0];
       var t0 = (state.trades || []).filter(function (x) { return x.sym === sym; })[0];
-      var ltp = (h0 && h0.ltp) || (g0 && g0.ltp) || (t0 && t0.ltp) || 500, n = 130, c = [], p = ltp * (0.78 + rnd() * 0.2);
-      for (i = 0; i < n; i++) { p *= 1 + (rnd() - 0.47) * 0.035; c.push(p); }
-      var k = ltp / c[n - 1], d = [], o = [], h = [], l = [], m50 = [], m200 = [], now = Date.now();
-      for (i = 0; i < n; i++) {
-        c[i] = +(c[i] * k).toFixed(2); var op = +(i ? c[i - 1] * (1 + (rnd() - 0.5) * 0.01) : c[i]).toFixed(2);
-        o.push(op); h.push(+(Math.max(op, c[i]) * (1 + rnd() * 0.012)).toFixed(2)); l.push(+(Math.min(op, c[i]) * (1 - rnd() * 0.012)).toFixed(2));
-        d.push(now - (n - 1 - i) * 86400000 * 1.45);
-        var s = 0, q; for (q = Math.max(0, i - 49); q <= i; q++) s += c[q]; m50.push(i >= 49 ? +(s / 50).toFixed(2) : 0); m200.push(+(ltp * (0.8 + i / n * 0.1)).toFixed(2));
-      }
       var lv = [];
       if (t0 && t0.status === 'OPEN') lv = [{ kind: 'entry', label: 'Bought', v: t0.entry }, { kind: 'stop', label: 'Stop-loss', v: t0.sl }, { kind: 'target', label: 'Target 1', v: t0.t1 }, { kind: 'target', label: 'Target 2', v: t0.t2 }];
       else if (g0) lv = [{ kind: 'entry', label: 'Entry', v: g0.entry }, { kind: 'stop', label: 'Stop-loss', v: g0.sl }, { kind: 'target', label: 'Target 1', v: g0.t1 }, { kind: 'target', label: 'Target 2', v: g0.t2 }];
       else if (h0) lv = [{ kind: 'entry', label: 'Your avg', v: h0.avg }, { kind: 'stop', label: 'Trailing stop', v: h0.stop }, { kind: 'target', label: 'Book near', v: h0.bookAt }];
-      var e10 = [], e20 = [], x1 = c[0], x2 = c[0]; for (i = 0; i < n; i++) { x1 += 2 / 11 * (c[i] - x1); x2 += 2 / 21 * (c[i] - x2); e10.push(+x1.toFixed(2)); e20.push(+x2.toFixed(2)); }
+      var i = m.info;
       setTimeout(function () {
-        finish('getChart', { ok: true, sym: sym, ema10: e10, ema20: e20, name: (h0 && h0.name) || (g0 && g0.name) || sym, d: d, o: o, h: h, l: l, c: c, sma50: m50, sma200: m200, levels: lv,
-          stats: { ltp: ltp, ret5: 2.1, ret21: 6.4, ret63: 12.8, ret126: 21.5, sma50: m50[n - 1], sma200: m200[n - 1], rsi14: 58, high52: Math.max.apply(null, h), low52: Math.min.apply(null, l) } });
+        finish('getChart', { ok: true, sym: sym, name: i.name, d: tl(m.d), o: tl(m.o), h: tl(m.h), l: tl(m.l), c: tl(m.c), v: tl(m.v),
+          ema10: tl(m.E[10]), ema20: tl(m.E[20]), ema50: tl(m.E[50]), ema100: tl(m.E[100]), ema200: tl(m.E[200]), sma50: tl(m.E[50]), sma200: tl(m.E[200]), levels: lv,
+          stats: { ltp: i.ltp, ret5: i.ret.d5, ret21: i.ret.d21, ret63: i.ret.d63, ret126: i.ret.d126, sma50: i.ema.e50, sma200: i.ema.e200, rsi14: i.rsi14, high52: i.high52, low52: i.low52 } }, 0);
       }, 300);
+    },
+    addWatch: function (a) {
+      var sym = String(a.sym || '').toUpperCase();
+      if (!validSym(sym)) return finish('addWatch', { ok: false, error: sym + ' is not an NSE symbol I can find' });
+      if (sym === 'FAILWATCH') return finish('addWatch', { ok: false, error: 'Your watchlist is full (50 stocks). Remove one first.' });
+      if (!Array.isArray(state.myWatch)) state.myWatch = [];
+      if (state.myWatch.some(function (w) { return w && w.sym === sym; })) return finish('addWatch', { ok: true });
+      if (state.myWatch.length >= 50) return finish('addWatch', { ok: false, error: 'Your watchlist is full (50 stocks). Remove one first.' });
+      state.myWatch.push(watchRow(sym));
+      finish('addWatch', { ok: true });
+    },
+    removeWatch: function (a) {
+      var sym = String(a.sym || '').toUpperCase();
+      state.myWatch = (state.myWatch || []).filter(function (w) { return !w || w.sym !== sym; });
+      finish('removeWatch', { ok: true });
     }
   };
 

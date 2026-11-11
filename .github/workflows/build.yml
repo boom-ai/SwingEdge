@@ -1,0 +1,58 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build debug APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Collect APK
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk SwingEdge.apk
+          ls -l SwingEdge.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwingEdge
+          path: SwingEdge.apk
+          if-no-files-found: error
+
+      - name: Publish rolling release (tag latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest SwingEdge.apk \
+            --target "$GITHUB_SHA" \
+            --title "SwingEdge (build $GITHUB_RUN_NUMBER)" \
+            --notes "Automatic build $GITHUB_RUN_NUMBER from commit $GITHUB_SHA. Download SwingEdge.apk below and install it over the previous version." \
+            --latest

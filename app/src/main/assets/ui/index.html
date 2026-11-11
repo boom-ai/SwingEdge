@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0B0F14">
+<meta name="format-detection" content="telephone=no">
+<title>SwingEdge</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+  <header id="top"></header>
+  <div id="errbar" hidden>
+    <span>Display error. The data is safe; this screen could not be drawn.</span>
+    <button type="button" id="errretry">Retry</button>
+  </div>
+  <main id="view" tabindex="-1"></main>
+  <nav id="tabbar" aria-label="Sections"></nav>
+</div>
+<div id="sheet-root" hidden></div>
+<div id="toasts" aria-live="polite"></div>
+<noscript><p style="color:#E6ECF2;padding:24px;font-family:sans-serif">SwingEdge needs JavaScript enabled in the WebView.</p></noscript>
+<script src="mock.js"></script>
+<script src="render.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

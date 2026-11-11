@@ -1,0 +1,76 @@
+<!doctype html><meta charset="utf-8"><body><iframe id="f" width="390" height="844" src="file:///home/claude/SwingEdge/app/src/main/assets/ui/index.html?tab=today"></iframe><pre id="out">RUNNING</pre>
+<script>
+const out=[];let fails=0;
+function ok(c,m){out.push((c?'ok   ':'FAIL ')+m);if(!c)fails++;}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+document.getElementById('f').onload=async()=>{
+ try{
+  const w=document.getElementById('f').contentWindow,d=w.document;
+  const q=s=>d.querySelector(s),qa=s=>[...d.querySelectorAll(s)];
+  const click=s=>{const e=typeof s==='string'?q(s):s;if(!e)throw new Error('missing '+s);e.click();};
+  const type=(n,v)=>{const i=q('#sheet-root [name="'+n+'"]');i.value=v;i.dispatchEvent(new w.Event('input',{bubbles:true}));};
+  const st=()=>JSON.parse(w.Android.getState());
+  const calls=[];const orig=w.Android.action;w.Android.action=function(n,a){calls.push(n);return orig.call(this,n,a);};
+  const toasts=()=>qa('.toast').map(t=>t.textContent).join(' | ');
+  await sleep(100);
+  ok(qa('#view .card.k-buy').length===3,'3 buy cards');
+  // order: exits, book half, sell, trim, buy
+  const tags=qa('#view .sec ~ article .sym .tag').map(t=>t.textContent).join(',');
+  ok(tags==='EXIT NOW,TIME EXIT,BOOK HALF,SELL,SELL,TRIM,BUY,BUY,BUY','act-now order: '+tags);
+  // scan: double fire guard + busy
+  click('[data-c="scan"]');click('[data-c="scan"]');
+  ok(calls.filter(c=>c==='scanNow').length===1,'scan fired once on double tap');
+  ok(q('[data-c="scan"]').disabled,'scan button disabled while pending');
+  await sleep(1500);ok(!!q('.status .prog'),'progress shown while busy');ok(q('[data-c="scan"]').disabled,'scan disabled while busy');
+  await sleep(4000);ok(!q('[data-c="scan"]').disabled,'scan re-enabled after finish');ok(/Scan finished/.test(toasts()),'scan toast: '+toasts());
+  // expand keeps across poll
+  click('[data-c="toggle"][data-id="sig:sg-1"]');ok(!!q('.k-buy .reasons'),'reasons expanded');
+  w.onStateChanged();await sleep(50);ok(!!q('.k-buy .reasons'),'still expanded after state change');
+  // scroll kept across poll
+  q('#view').scrollTop=400;w.Android.action('clearFeed','{}');await sleep(700);ok(Math.abs(q('#view').scrollTop-400)<3,'scroll kept after re-render: '+q('#view').scrollTop);
+  // take sheet + back button
+  click('[data-c="take"][data-id="sg-1"]');ok(!q('#sheet-root').hidden,'take sheet open');
+  ok(q('[name=price]').value==='435'&&q('[name=qty]').value==='57','prefilled '+q('[name=price]').value+'/'+q('[name=qty]').value);
+  w.history.back();await sleep(100);ok(q('#sheet-root').hidden,'back closes sheet');
+  click('[data-c="take"][data-id="sg-1"]');type('price','436.5');type('qty','');
+  w.onStateChanged();await sleep(50);ok(!q('#sheet-root').hidden&&q('[name=price]').value==='436.5','sheet + input survive poll');
+  click('#sheet-root [data-c="submit"]');ok(q('[data-f=qty]').className.indexOf('bad')>=0,'empty qty rejected');
+  type('qty','50');ok(/21,825/.test(q('#calc').textContent),'calc updates: '+q('#calc').textContent.slice(0,40));
+  click('#sheet-root [data-c="submit"]');ok(q('#sheet-root [data-c="submit"]').disabled,'submit disabled in flight');
+  await sleep(800);ok(q('#sheet-root').hidden,'sheet closed after ok');ok(st().trades.some(t=>t.sym==='TATAPOWER'&&t.entry===436.5&&t.qty===50),'trade created with edited values');
+  ok(qa('#view .card.k-buy').length===2,'buy card gone');
+  // skip
+  click('[data-c="skip"][data-id="sg-2"]');ok(q('[data-c="skip"][data-id="sg-2"]').disabled,'skip disabled in flight');await sleep(800);ok(qa('#view .card.k-buy').length===1,'skipped');
+  // close trade
+  click('[data-c="tab"][data-id="trades"]');ok(qa('#view .track').length===5,'5 open trades: '+qa('#view .track').length);
+  click('[data-c="close"][data-id="tr-1"]');ok(q('[name=price]').value==='6198.5','close prefilled ltp');click('#sheet-root [data-c="submit"]');await sleep(800);
+  ok(st().trades.find(t=>t.id==='tr-1').status==='CLOSED','trade closed');ok(/Trade closed/.test(toasts()),'toast '+toasts());
+  // portfolio add: validation, error from app, success
+  click('[data-c="tab"][data-id="portfolio"]');click('[data-c="add"]');
+  type('sym','fail');ok(q('[name=sym]').value==='FAIL','symbol uppercased');click('#sheet-root [data-c="submit"]');ok(qa('#sheet-root .fld.bad').length===2,'qty+avg validation');
+  type('qty','10');type('avg','100');click('#sheet-root [data-c="submit"]');await sleep(800);
+  ok(!q('#sheet-root').hidden&&/not in the NSE list/.test(q('#formerr').textContent),'app error shown in sheet: '+q('#formerr').textContent);ok(!q('#sheet-root [data-c="submit"]').disabled,'submit re-enabled after error');
+  type('sym','wipro');click('#sheet-root [data-c="submit"]');await sleep(800);ok(q('#sheet-root').hidden&&st().holdings.some(h=>h.sym==='WIPRO'),'holding added');
+  ok(/NO DATA/.test(q('#view').textContent),'no-data state shown');
+  // paste import
+  click('[data-c="paste"]');type('text','Symbol,Qty,Avg\nLT,6,3540.5\nrubbish line\nAXISBANK 18 1104');click('#sheet-root [data-c="submit"]');await sleep(1200);
+  ok(q('#sheet-root').hidden&&!!q('.result'),'import result card');ok(/2 holdings imported/.test(q('.result').textContent)&&/rubbish line/.test(q('.result').textContent),'result text: '+q('.result').textContent.slice(0,80));
+  click('[data-c="pick"]');await sleep(1800);ok(/3 holdings imported/.test(q('.result').textContent),'file import result: '+q('.result').textContent.slice(0,60));
+  // remove with confirm
+  click('[data-c="remove"][data-id="YESBANK"]');ok(/Remove YESBANK/.test(q('#sheet-root').textContent),'confirm sheet');click('#sheet-root [data-c="submit"]');await sleep(800);ok(!st().holdings.some(h=>h.sym==='YESBANK'),'removed');
+  // settings + device
+  click('[data-c="settings"]');ok(qa('#devlist .chk.no').length===2,'2 device issues');click('#devlist [data-c="dev-notif"]');await sleep(900);ok(qa('#devlist .chk.no').length===1,'device row turns ok');
+  type('capital','250000');click('.tog[data-id="notifyBrief"]');type('riskPct','9');click('#sheet-root [data-c="submit"]');ok(q('[data-f=riskPct]').className.indexOf('bad')>=0,'risk validated');
+  type('riskPct','1');click('#sheet-root [data-c="submit"]');await sleep(800);const s=st().settings;ok(s.capital===250000&&s.riskPct===1&&s.notifyBrief===false&&s.notifyBuy===true,'settings saved '+JSON.stringify(s));
+  // alerts: backtest
+  click('[data-c="tab"][data-id="alerts"]');click('[data-c="backtest"]');click('[data-c="backtest"]');ok(calls.filter(c=>c==='runBacktest').length===1,'backtest once');await sleep(1000);ok(q('[data-c="backtest"]').disabled&&!!q('.busyline'),'backtest busy');
+  click('[data-c="tab"][data-id="today"]');ok(q('[data-c="scan"]').disabled,'scan blocked during backtest');await sleep(9000);ok(!q('[data-c="scan"]').disabled&&!q('.busyline'),'idle after backtest');
+  // malformed pushes must not throw
+  w.onActionResult('whatever','not json');w.onActionResult('importHoldings','{"ok":false}');w.onActionResult(null,null);ok(true,'bad action results tolerated');
+  // stuck-button safety: bridge that never answers
+  w.Android.action=function(){};click('[data-c="tab"][data-id="today"]');const sk=q('[data-c="skip"]');const id=sk.getAttribute('data-id');sk.click();ok(q('[data-c="skip"][data-id="'+id+'"]').disabled,'pending');await sleep(21000);ok(!q('[data-c="skip"][data-id="'+id+'"]').disabled,'button released by timeout');
+  ok(!q('#errbar')||q('#errbar').hidden,'no display error bar');
+ }catch(e){ok(false,'EXCEPTION '+(e&&e.stack||e));}
+ document.getElementById('out').textContent=out.join('\n')+'\nRESULT fails='+fails+' of '+out.length;
+};
+</script>

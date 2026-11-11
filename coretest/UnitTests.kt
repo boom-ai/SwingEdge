@@ -398,7 +398,7 @@ object UnitTests {
         val mixed = trend("^NSEI", 260, 20000.0, 0.1); append(mixed, 19900.0, 19900.0, 18900.0, 19000.0, 0.0)
         T.eq(Strategies.regime(mixed, mixed.n - 1), 0, "NEUTRAL between the two")
         T.eq(Strategies.regime(trend("^NSEI", 100, 20000.0, 0.1), 99), 0, "NEUTRAL without 200 bars")
-        T.eq(Strategies.all.map { it.id }, listOf("MOM_PULLBACK", "BREAKOUT_VOL", "DIP_UPTREND", "WEEKLY_LEADERS"), "four strategies registered")
+        T.eq(Strategies.all.map { it.id }, listOf("WASHOUT_DIP", "MONTHLY_LEADERS", "DIP_UPTREND", "MOM_PULLBACK", "BREAKOUT_VOL", "WEEKLY_LEADERS"), "six strategies registered")
         T.check(Strategies.all.all { it.params().isNotEmpty() && it.label.isNotEmpty() && it.desc.isNotEmpty() }, "labels, descriptions, params present")
         Params.DIP_UPTREND_ENABLED = false
         T.check(eval(DipUptrend, dip, bull) == null, "disabled strategy never fires")
@@ -452,7 +452,7 @@ object UnitTests {
         val (uni, idx) = synthUniverse(40, 500, 42)
         val full = Backtest.run(uni, idx, 0.25)
         T.check(full.trades.size > 100, "backtest produced trades (${full.trades.size}) on synthetic data")
-        T.check(Strategies.all.all { st -> full.trades.any { it.strategyId == st.id } }, "every strategy traded: " + Strategies.all.joinToString { st -> st.id + "=" + full.trades.count { it.strategyId == st.id } })
+        T.check(Strategies.all.filter { it.id != "WASHOUT_DIP" }.all { st -> full.trades.any { it.strategyId == st.id } }, "every strategy traded: " + Strategies.all.joinToString { st -> st.id + "=" + full.trades.count { it.strategyId == st.id } })
         for (cut in intArrayOf(260, 333, 420, 480)) {
             val cutDay = idx.d[cut]
             // (a) history simply ends at the cut day

@@ -147,6 +147,14 @@
       clearPending(name, true);
       var ok = res.ok === true;
       var err = typeof res.error === 'string' && res.error.trim() ? res.error.trim() : 'Something went wrong';
+      if (name === 'getChart') {
+        if (ui.chart && (!res.sym || String(res.sym) === ui.chart.sym)) {
+          if (chartTimer) { clearTimeout(chartTimer); chartTimer = null; }
+          if (ok) ui.chart.res = res; else ui.chart.err = err;
+          showChart();
+        }
+        return;
+      }
       if (name === 'importHoldings') {
         ui.importResult = res;
         if (ok) {
@@ -326,6 +334,20 @@
     setTimeout(function () { readDevice(); render(); }, 700);
     setTimeout(function () { readDevice(); render(); }, 2500);
   }
+  var chartTimer = null;
+  function showChart() { try { if (sheet && sheet.kind === 'chart') elSheet.innerHTML = SE.sheet('chart', S, ui, sheet.data); } catch (e) { /* ignore */ } }
+  function openChart(sym) {
+    sym = String(sym || '').trim();
+    if (!sym) return;
+    ui.chart = { sym: sym, res: null, err: '' };
+    openSheet('chart', { id: sym });
+    if (chartTimer) clearTimeout(chartTimer);
+    chartTimer = setTimeout(function () {
+      if (ui.chart && ui.chart.sym === sym && !ui.chart.res) { ui.chart.err = 'No reply yet. Close and try again.'; showChart(); }
+    }, 15000);
+    try { bridge().action('getChart', JSON.stringify({ sym: sym })); }
+    catch (e) { ui.chart.err = 'Could not load the chart.'; showChart(); }
+  }
   function command(c, id, el) {
     switch (c) {
       case 'tab': setTab(id); break;
@@ -352,6 +374,8 @@
       case 'dev-battery': device('openBatterySettings'); break;
       case 'dev-alarm': device('openExactAlarmSettings'); break;
       case 'sheet-close': closeSheet(); break;
+      case 'sort': ui.sort = id; render(true); break;
+      case 'chart': openChart(id); break;
       case 'submit': submitSheet(); break;
       case 'tog':
         if (el) {
@@ -399,6 +423,7 @@
       else if (qs.sheet === 'close') { first = SE.A(S.trades).filter(function (t) { return t.status === 'OPEN'; })[0]; openSheet('close', { id: first ? SE.T(first.id) : '' }, true); }
       else if (qs.sheet === 'remove' || qs.sheet === 'sold') { first = SE.A(S.holdings)[0]; openSheet(qs.sheet, { id: first ? SE.T(first.sym) : '' }, true); }
       else if ({ settings: 1, add: 1, paste: 1, clearfeed: 1 }[qs.sheet]) openSheet(qs.sheet, {}, true);
+      else if (qs.sheet === 'chart') { first = SE.A(S.holdings)[0]; openChart(qs.sym || (first ? SE.T(first.sym) : 'RELIANCE')); }
       if (qs.sheetscroll) { var sb = elSheet.querySelector('.sb'); if (sb) sb.scrollTop = Number(qs.sheetscroll) || 0; }
     }
   } catch (e) { /* ignore */ }

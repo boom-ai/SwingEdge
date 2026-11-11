@@ -107,31 +107,31 @@
   function holdings() {
     return [
       { sym: 'YESBANK', name: 'Yes Bank Ltd', qty: 900, avg: 24.6, ltp: 19.82, valueRs: 17838, pnlRs: -4302, pnlPct: -19.43, dayChgPct: -2.1,
-        verdict: 'SELL', headline: 'Below 200-day average and falling for 3 weeks', stop: 0, bookAt: 0,
+        verdict: 'SELL', strength: 22, headline: 'Below 200-day average and falling for 3 weeks', stop: 0, bookAt: 0,
         reasons: ['Closed below the 200-day average for 14 sessions', 'Each bounce has made a lower high', 'Money here could work harder elsewhere'], dataOk: true },
       { sym: 'ZEEL', name: 'Zee Entertainment Enterprises Ltd', qty: 120, avg: 268.0, ltp: 131.4, valueRs: 15768, pnlRs: -16392, pnlPct: -50.97, dayChgPct: -0.8,
-        verdict: 'SELL', headline: 'Broke the ₹134 support on heavy volume', stop: 0, bookAt: 0,
+        verdict: 'SELL', strength: 22, headline: 'Broke the ₹134 support on heavy volume', stop: 0, bookAt: 0,
         reasons: ['New 52-week low this week', 'Long-term trend is down'], dataOk: true },
       { sym: 'ITC', name: 'ITC Ltd', qty: 150, avg: 301.5, ltp: 468.9, valueRs: 70335, pnlRs: 25110, pnlPct: 55.52, dayChgPct: 0.35,
-        verdict: 'TRIM', headline: 'Up 55% and stretched 11% above the 50-day average', stop: 441.0, bookAt: 482.0,
+        verdict: 'TRIM', strength: 81, headline: 'Up 55% and stretched 11% above the 50-day average', stop: 441.0, bookAt: 482.0,
         reasons: ['Position is now 27% of the portfolio', 'Momentum is slowing: lower highs on RSI', 'Book a third near ₹482 and trail the rest'], dataOk: true },
       { sym: 'TATAMOTORS', name: 'Tata Motors Ltd', qty: 40, avg: 912.0, ltp: 934.6, valueRs: 37384, pnlRs: 904, pnlPct: 2.48, dayChgPct: -1.42,
-        verdict: 'WATCH', headline: 'Sitting on the 50-day average — next 2 days decide', stop: 908.0, bookAt: 0,
+        verdict: 'WATCH', strength: 48, headline: 'Sitting on the 50-day average — next 2 days decide', stop: 908.0, bookAt: 0,
         reasons: ['A close below ₹908 turns this into a SELL', 'Sector is weak this week'], dataOk: true },
       { sym: 'RELIANCE', name: 'Reliance Industries Ltd', qty: 20, avg: 2456.0, ltp: 2918.45, valueRs: 58369, pnlRs: 9249, pnlPct: 18.83, dayChgPct: 0.62,
-        verdict: 'HOLD', headline: 'Uptrend intact above the 50-day average', stop: 2790.0, bookAt: 3080.0,
+        verdict: 'HOLD', strength: 70, headline: 'Uptrend intact above the 50-day average', stop: 2790.0, bookAt: 3080.0,
         reasons: ['Above 50 and 200-day averages', 'Higher highs and higher lows since August'], dataOk: true },
       { sym: 'HDFCBANK', name: 'HDFC Bank Ltd', qty: 30, avg: 1588.0, ltp: 1702.3, valueRs: 51069, pnlRs: 3429, pnlPct: 7.2, dayChgPct: 0.18,
-        verdict: 'HOLD', headline: 'Steady; trend up, no stretch', stop: 1638.0, bookAt: 1790.0,
+        verdict: 'HOLD', strength: 70, headline: 'Steady; trend up, no stretch', stop: 1638.0, bookAt: 1790.0,
         reasons: ['Holding above the 20-day average', 'Relative strength vs Nifty improving'], dataOk: true },
       { sym: 'INFY', name: 'Infosys Ltd', qty: 25, avg: 1490.0, ltp: 1534.75, valueRs: 38369, pnlRs: 1119, pnlPct: 3.0, dayChgPct: -0.44,
-        verdict: 'HOLD', headline: 'Range-bound, above long-term average', stop: 1472.0, bookAt: 1610.0,
+        verdict: 'HOLD', strength: 70, headline: 'Range-bound, above long-term average', stop: 1472.0, bookAt: 1610.0,
         reasons: ['Trading between ₹1,480 and ₹1,600 for 5 weeks'], dataOk: true },
       { sym: 'SBIN', name: 'State Bank of India', qty: 60, avg: 742.0, ltp: 801.2, valueRs: 48072, pnlRs: 3552, pnlPct: 7.98, dayChgPct: 1.05,
-        verdict: 'HOLD', headline: 'Fresh 20-day high today', stop: 768.0, bookAt: 846.0,
+        verdict: 'HOLD', strength: 70, headline: 'Fresh 20-day high today', stop: 768.0, bookAt: 846.0,
         reasons: ['Breakout with volume 1.3× average'], dataOk: true },
       { sym: 'NEWLISTCO', name: 'Newly Listed Company Ltd', qty: 15, avg: 720.0, ltp: 0, valueRs: 0, pnlRs: 0, pnlPct: 0, dayChgPct: 0,
-        verdict: 'HOLD', headline: '', stop: 0, bookAt: 0, reasons: [], dataOk: false }
+        verdict: 'HOLD', strength: 70, headline: '', stop: 0, bookAt: 0, reasons: [], dataOk: false }
     ];
   }
 
@@ -244,9 +244,9 @@
           'garbage', 42
         ],
         holdings: [
-          { sym: 'SUPERLONGSYMBOLNAME-EQ', name: LONG, qty: 1e12, avg: 1e9, ltp: 1e9, valueRs: 1e21, pnlRs: -1e21, pnlPct: 1e9, dayChgPct: 'NaN', verdict: 'SELL', headline: LONG, stop: -1, bookAt: null, reasons: [LONG, LONG], dataOk: true },
+          { sym: 'SUPERLONGSYMBOLNAME-EQ', name: LONG, qty: 1e12, avg: 1e9, ltp: 1e9, valueRs: 1e21, pnlRs: -1e21, pnlPct: 1e9, dayChgPct: 'NaN', verdict: 'SELL', strength: 22, headline: LONG, stop: -1, bookAt: null, reasons: [LONG, LONG], dataOk: true },
           { sym: 'NOVERDICT', verdict: 'MAYBE', dataOk: 'false' },
-          { verdict: 'TRIM' },
+          { verdict: 'TRIM', strength: 81 },
           null,
           { sym: 'NODATA', name: 'No data co', qty: 5, avg: 10, dataOk: false }
         ],
@@ -320,7 +320,7 @@
     if (!Array.isArray(state.holdings)) state.holdings = [];
     state.holdings = state.holdings.filter(function (h) { return !h || h.sym !== sym; });
     state.holdings.push({ sym: sym, name: sym, qty: qty, avg: avg, ltp: 0, valueRs: 0, pnlRs: 0, pnlPct: 0, dayChgPct: 0,
-      verdict: 'HOLD', headline: '', stop: 0, bookAt: 0, reasons: [], dataOk: false });
+      verdict: 'HOLD', strength: 70, headline: '', stop: 0, bookAt: 0, reasons: [], dataOk: false });
     try { state.portfolio = portfolioOf(state.holdings); } catch (e) { /* ignore */ }
   }
 
@@ -395,7 +395,32 @@
         notifyBuy: !!a.notifyBuy, notifySell: !!a.notifySell, notifyBrief: !!a.notifyBrief };
       finish('saveSettings', { ok: true });
     },
-    clearFeed: function () { state.feed = []; finish('clearFeed', { ok: true }); }
+    clearFeed: function () { state.feed = []; finish('clearFeed', { ok: true }); },
+    getChart: function (a) {
+      var sym = String(a.sym || ''), seed = 7, i;
+      for (i = 0; i < sym.length; i++) seed = (seed * 31 + sym.charCodeAt(i)) % 9973;
+      var rnd = function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+      var h0 = (state.holdings || []).filter(function (x) { return x.sym === sym; })[0];
+      var g0 = (state.signals || []).filter(function (x) { return x.sym === sym; })[0];
+      var t0 = (state.trades || []).filter(function (x) { return x.sym === sym; })[0];
+      var ltp = (h0 && h0.ltp) || (g0 && g0.ltp) || (t0 && t0.ltp) || 500, n = 130, c = [], p = ltp * (0.78 + rnd() * 0.2);
+      for (i = 0; i < n; i++) { p *= 1 + (rnd() - 0.47) * 0.035; c.push(p); }
+      var k = ltp / c[n - 1], d = [], o = [], h = [], l = [], m50 = [], m200 = [], now = Date.now();
+      for (i = 0; i < n; i++) {
+        c[i] = +(c[i] * k).toFixed(2); var op = +(i ? c[i - 1] * (1 + (rnd() - 0.5) * 0.01) : c[i]).toFixed(2);
+        o.push(op); h.push(+(Math.max(op, c[i]) * (1 + rnd() * 0.012)).toFixed(2)); l.push(+(Math.min(op, c[i]) * (1 - rnd() * 0.012)).toFixed(2));
+        d.push(now - (n - 1 - i) * 86400000 * 1.45);
+        var s = 0, q; for (q = Math.max(0, i - 49); q <= i; q++) s += c[q]; m50.push(i >= 49 ? +(s / 50).toFixed(2) : 0); m200.push(+(ltp * (0.8 + i / n * 0.1)).toFixed(2));
+      }
+      var lv = [];
+      if (t0 && t0.status === 'OPEN') lv = [{ kind: 'entry', label: 'Bought', v: t0.entry }, { kind: 'stop', label: 'Stop-loss', v: t0.sl }, { kind: 'target', label: 'Target 1', v: t0.t1 }, { kind: 'target', label: 'Target 2', v: t0.t2 }];
+      else if (g0) lv = [{ kind: 'entry', label: 'Entry', v: g0.entry }, { kind: 'stop', label: 'Stop-loss', v: g0.sl }, { kind: 'target', label: 'Target 1', v: g0.t1 }, { kind: 'target', label: 'Target 2', v: g0.t2 }];
+      else if (h0) lv = [{ kind: 'entry', label: 'Your avg', v: h0.avg }, { kind: 'stop', label: 'Trailing stop', v: h0.stop }, { kind: 'target', label: 'Book near', v: h0.bookAt }];
+      setTimeout(function () {
+        finish('getChart', { ok: true, sym: sym, name: (h0 && h0.name) || (g0 && g0.name) || sym, d: d, o: o, h: h, l: l, c: c, sma50: m50, sma200: m200, levels: lv,
+          stats: { ltp: ltp, ret5: 2.1, ret21: 6.4, ret63: 12.8, ret126: 21.5, sma50: m50[n - 1], sma200: m200[n - 1], rsi14: 58, high52: Math.max.apply(null, h), low52: Math.min.apply(null, l) } });
+      }, 300);
+    }
   };
 
   window.Android = {

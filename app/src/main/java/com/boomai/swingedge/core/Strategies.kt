@@ -23,6 +23,10 @@ class Ctx {
     var leaderCutoff = Double.NaN
     /** Fraction of the session elapsed for the current bar (1.0 for a completed day). */
     var sessionFraction = 1.0
+    /** Share of the universe trading above its own 50-day average (0..1); NaN if too few stocks. */
+    var breadth = Double.NaN
+    /** Risk-adjusted 6-month momentum needed to be a monthly leader; NaN = nobody qualifies. */
+    var monthlyCutoff = Double.NaN
 }
 
 /** Per-bar features shared by all strategies. One instance is reused; compute() allocates nothing. */
@@ -61,16 +65,27 @@ interface Strategy {
     fun enabled(): Boolean
     fun params(): Map<String, Double>
     fun evaluate(s: Series, i: Int, f: Feat, ctx: Ctx): Setup?
+    /** Trading days a position is held before the time exit. */
+    val holdDays: Int get() = Params.HOLD_DAYS
+    /** True for rules that are meant to buy during market sell-offs. */
+    fun allowInBear(): Boolean = false
+    /**
+     * Results of this exact rule, run through this app's own backtest engine on 15 years of real NSE daily data
+     * (2011–2026, 574 liquid stocks, 0.25% charges, max 4 positions). Null when there is no such long test, in which
+     * case only the in-app test on the phone's ~2 years of data decides. Needed for rare-event rules that trade too
+     * seldom in 2 years to be judged there.
+     */
+    fun research(): StratStats? = null
 }
 
 object Strategies {
-    val all: List<Strategy> = listOf(MomPullback, BreakoutVol, DipUptrend, WeeklyLeaders)
+    val all: List<Strategy> = listOf(WashoutDip, MonthlyLeaders, DipUptrend, MomPullback, BreakoutVol, WeeklyLeaders)
     fun byId(id: String): Strategy? = all.firstOrNull { it.id == id }
 
     /** Common gates + the strategy's own rules. The single entry point for the live scan and the backtest. */
     fun evaluate(st: Strategy, s: Series, i: Int, f: Feat, ctx: Ctx): Setup? {
         if (!st.enabled() || !f.ok) return null
-        if (Params.BLOCK_BUYS_IN_BEAR && ctx.regime < 0) return null
+        if (Params.BLOCK_BUYS_IN_BEAR && ctx.regime < 0 && !st.allowInBear()) return null
         if (f.c < Params.MIN_PRICE) return null
         if (!(f.avgTurnover20 >= Params.MIN_AVG_TURNOVER_RS)) return null
         val su = st.evaluate(s, i, f, ctx) ?: return null
@@ -154,6 +169,126 @@ object Strategies {
             val take = minOf(Params.WL_TOP_N, m)
             ctx.leaderCutoff = scratch[m - take]
         } else ctx.leaderCutoff = Double.NaN
+        // market breadth: share of stocks above their own 50-day average
+        var tot = 0
+        var above = 0
+        for (k in universe.indices) {
+            val i = idx[k]
+            if (i < 0) continue
+            val s = universe[k]
+            val a50 = Ind.sma(s.c, i, 50)
+            if (a50.isNaN()) continue
+            tot++
+            if (s.c[i] > a50) above++
+        }
+        ctx.breadth = if (tot >= Params.MIN_UNIVERSE_FOR_RANK) above.toDouble() / tot else Double.NaN
+        // monthly leaders: top N by risk-adjusted 6-month momentum among stocks above their 200DMA
+        m = 0
+        for (k in universe.indices) {
+            val i = idx[k]
+            if (i < 0) continue
+            val s = universe[k]
+            val x = riskAdjMomentum(s, i)
+            if (x.isNaN()) continue
+            val sma200 = Ind.sma(s.c, i, 200)
+            if (sma200.isNaN() || !(s.c[i] > sma200)) continue
+            scratch[m++] = x
+        }
+        if (m >= minOf(Params.ML_TOP_N, Params.MIN_UNIVERSE_FOR_RANK)) {
+            java.util.Arrays.sort(scratch, 0, m)
+            ctx.monthlyCutoff = scratch[m - minOf(Params.ML_TOP_N, m)]
+        } else ctx.monthlyCutoff = Double.NaN
+    }
+
+    /** (return over ML_LOOKBACK bars ending ML_SKIP bars ago) / (volatility of daily returns over the same window); NaN if short. */
+    fun riskAdjMomentum(s: Series, i: Int): Double {
+        val a = i - Params.ML_SKIP
+        val b = a - Params.ML_LOOKBACK
+        if (b < 1) return Double.NaN
+        val base = s.c[b]
+        if (!(base > 0)) return Double.NaN
+        var sum = 0.0
+        var sq = 0.0
+        var n = 0
+        for (j in b + 1..i) {
+            val p = s.c[j - 1]
+            if (!(p > 0)) continue
+            val r = s.c[j] / p - 1
+            sum += r; sq += r * r; n++
+        }
+        if (n < Params.ML_LOOKBACK / 2) return Double.NaN
+        val mean = sum / n
+        val v = sq / n - mean * mean
+        if (!(v > 0)) return Double.NaN
+        return (s.c[a] / base - 1) / (Math.sqrt(v) * Math.sqrt(Params.ML_LOOKBACK.toDouble()))
+    }
+}
+
+// ============================================================================ WASHOUT_DIP
+/** Research (2013–2026, real NSE data): the one short-term rule that held up in and out of sample. Fires only in market-wide sell-offs. */
+object WashoutDip : Strategy {
+    override val id = "WASHOUT_DIP"
+    override val label = "Sell-off bounce"
+    override val desc = "Only when the whole market is washed out (under a quarter of stocks above their 50-day average): buys the most oversold stocks that are still in long-term uptrends, for a bounce within about a week. Rare — a few weeks a year."
+    override fun enabled() = Params.WASHOUT_ENABLED
+    override fun allowInBear() = true
+    override fun research(): StratStats {
+        val r = StratStats()
+        r.n = 388; r.winPct = 58.2; r.avgPct = 1.06; r.pf = 1.57; r.maxDdPct = 24.0; r.oosN = 123; r.oosAvgPct = 1.62
+        return r
+    }
+    override fun params(): Map<String, Double> = linkedMapOf(
+        "breadthMax" to Params.WO_BREADTH_MAX, "rsiMax" to Params.WO_RSI_MAX, "stopAtr" to Params.WO_STOP_ATR, "stopCapPct" to Params.WO_STOP_CAP_PCT)
+
+    override fun evaluate(s: Series, i: Int, f: Feat, ctx: Ctx): Setup? {
+        if (ctx.breadth.isNaN() || !(ctx.breadth < Params.WO_BREADTH_MAX)) return null
+        if (!(f.c > f.sma200)) return null
+        val rsi = Ind.rsi(s.c, i, 2)
+        if (rsi.isNaN() || !(rsi < Params.WO_RSI_MAX)) return null
+        val entry = f.c
+        val sl = Strategies.atrStop(entry, f.atr, Params.WO_STOP_ATR, Params.WO_STOP_CAP_PCT)
+        val reasons = ArrayList<String>(4)
+        reasons.add("Market-wide sell-off: only " + Math.round(ctx.breadth * 100) + "% of stocks are above their 50-day average")
+        reasons.add("This stock is still in a long-term uptrend (above its 200-day average " + Fmt.rs(f.sma200) + ")")
+        reasons.add("Sharply oversold: 2-day RSI at " + Fmt.p1(rsi))
+        reasons.add("No price target: sell at the close of day " + holdDays + " or at the stop. Wide stop on purpose — tight stops hurt this rule in testing")
+        return Setup(id, s.sym, s.d[i], entry, sl, 0.0, 0.0, 100.0 - rsi, reasons)
+    }
+}
+
+// ============================================================================ MONTHLY_LEADERS
+/** Longer hold: strongest risk-adjusted 6-month performers, bought on the first trading day of the month, held about a month. */
+object MonthlyLeaders : Strategy {
+    override val id = "MONTHLY_LEADERS"
+    override val label = "Monthly leaders"
+    override val desc = "The strongest steady climbers of the last 6 months, bought on the first trading day of each month and held about a month. Beat the index in testing, but with deep drawdowns in bad years."
+    override fun enabled() = Params.MONTHLY_LEADERS_ENABLED
+    override val holdDays: Int get() = Params.ML_HOLD_DAYS
+    override fun params(): Map<String, Double> = linkedMapOf(
+        "topN" to Params.ML_TOP_N.toDouble(), "lookback" to Params.ML_LOOKBACK.toDouble(), "skip" to Params.ML_SKIP.toDouble(),
+        "holdDays" to Params.ML_HOLD_DAYS.toDouble(), "stopAtr" to Params.ML_STOP_ATR, "stopCapPct" to Params.ML_STOP_CAP_PCT)
+
+    private fun monthOf(epochDay: Int): Int {
+        val d = java.time.LocalDate.ofEpochDay(epochDay.toLong())
+        return d.year * 12 + d.monthValue
+    }
+
+    override fun evaluate(s: Series, i: Int, f: Feat, ctx: Ctx): Setup? {
+        if (ctx.monthlyCutoff.isNaN()) return null
+        if (i < 1 || monthOf(s.d[i]) == monthOf(s.d[i - 1])) return null      // first trading day of the month only
+        if (!(f.c > f.sma200)) return null
+        val score = Strategies.riskAdjMomentum(s, i)
+        if (score.isNaN() || score < ctx.monthlyCutoff) return null
+        val entry = f.c
+        val sl = Strategies.atrStop(entry, f.atr, Params.ML_STOP_ATR, Params.ML_STOP_CAP_PCT)
+        val a = i - Params.ML_SKIP
+        val r6 = (s.c[a] / s.c[a - Params.ML_LOOKBACK] - 1) * 100.0
+        val reasons = ArrayList<String>(4)
+        reasons.add("Among the " + Params.ML_TOP_N + " steadiest strong stocks of the last 6 months (" + Fmt.pct(r6) + ")")
+        reasons.add("Above its 200-day average (" + Fmt.rs(f.sma200) + ")")
+        reasons.add("First trading day of the month — monthly rotation entry")
+        reasons.add("No price target: hold about a month (sell at the close of day " + holdDays + ") or at the stop")
+        return Setup(id, s.sym, s.d[i], entry, sl, 0.0, 0.0, score, reasons)
     }
 }
 

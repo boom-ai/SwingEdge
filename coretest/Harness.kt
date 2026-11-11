@@ -44,6 +44,10 @@ fun main(args: Array<String>) {
     com.boomai.swingedge.core.Params.DIP_RSI_MAX = 8.0
     if (System.getenv("TIERED") == "1") com.boomai.swingedge.core.Params.FULL_QUOTE_MAX_UNIVERSE = 0
     com.boomai.swingedge.core.Params.EXPERIMENTAL_ENABLED = System.getenv("EXPERIMENTAL") == "1"
+    // legacy portfolio rules stay covered by the existing tests
+    com.boomai.swingedge.core.Params.PF_SELL_ON_FALLING_50 = true; com.boomai.swingedge.core.Params.PF_SELL_ON_STOP_BREAK = true
+    com.boomai.swingedge.core.Params.PF_SELL_ON_REL_WEAK = true; com.boomai.swingedge.core.Params.PF_TRIM_ON_STRENGTH = true
+    com.boomai.swingedge.core.Params.BT_MAX_CONCURRENT = 100000   // equality tests compare every setup; the cap is exercised on real data
     val only = args.firstOrNull()
     if (only == "sample") {
         Sample.run()

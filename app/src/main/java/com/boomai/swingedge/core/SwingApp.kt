@@ -420,7 +420,24 @@ class SwingApp(private val p: Platform) {
         val f = Params.REGIME_FAST_DMA
         val s = Params.REGIME_SLOW_DMA
         st.regimeLabel = if (r > 0) "BULL" else if (r < 0) "BEAR" else "NEUTRAL"
-        st.regimeNote = if (r > 0) "Nifty above $f & $s DMA" else if (r < 0) "Nifty below $f & $s DMA — new buys are off" else "Nifty between its $f & $s DMA — be selective"
+        var note = if (r > 0) "Nifty above $f & $s DMA" else if (r < 0) "Nifty below $f & $s DMA — only sell-off bounce buys" else "Nifty between its $f & $s DMA — be selective"
+        // market breadth: what the sell-off bounce rule waits for
+        var tot = 0
+        var above = 0
+        for (sym in universe) {
+            val x = live[sym] ?: cache.get(sym) ?: continue
+            if (x.n < 50) continue
+            val a50 = Ind.sma(x.c, x.n - 1, 50)
+            if (a50.isNaN()) continue
+            tot++
+            if (x.c[x.n - 1] > a50) above++
+        }
+        if (tot >= 50) {
+            val b = Math.round(above * 100.0 / tot)
+            val trig = Math.round(Params.WO_BREADTH_MAX * 100)
+            note += " · " + b + "% of stocks above their 50-day average" + (if (b < trig) " — market-wide sell-off, bounce buys are on" else " (sell-off bounce buys start under $trig%)")
+        }
+        st.regimeNote = note
     }
 
     private fun regimeInt(): Int = when (st.regimeLabel) { "BULL" -> 1; "BEAR" -> -1; else -> 0 }
@@ -449,10 +466,23 @@ class SwingApp(private val p: Platform) {
             val ss = res.stats[sg.id] ?: StratStats()
             val x = st.strat(sg.id)
             val was = x.verdict
+            val rs = sg.research()
+            if (rs != null) {
+                // judged on the 15-year test; the phone's own recent test can only veto it
+                val recentBad = ss.n >= Params.RESEARCH_VETO_MIN_TRADES && ss.avgPct < 0
+                x.n = rs.n; x.winPct = rs.winPct; x.avgPct = rs.avgPct; x.pf = rs.pf; x.maxDdPct = rs.maxDdPct; x.oosN = rs.oosN; x.oosAvgPct = rs.oosAvgPct
+                x.testedAt = now
+                x.verdict = if (sg.enabled() && Gate.passes(rs) && !recentBad) "LIVE" else "PAUSED"
+                val recent = if (ss.n == 0) "No trades of this kind in the phone's recent data yet." else "Recent check on this phone: " + Fmt.plural(ss.n, "trade") + ", " + Fmt.pct(ss.avgPct) + " per trade."
+                x.why = if (!sg.enabled()) "Switched off in this version of the app."
+                else if (recentBad) "Passed the 15-year test, but lost " + Fmt.p1(-ss.avgPct) + "% per trade over " + Fmt.plural(ss.n, "recent trade") + " — paused until that recovers."
+                else "Passed on 15 years of NSE data (2011–2026): " + rs.n + " trades, " + Math.round(rs.winPct) + "% winners, " + Fmt.pct(rs.avgPct) + " per trade after charges; worst year −0.9% per trade. " + recent
+            } else {
             x.n = ss.n; x.winPct = ss.winPct; x.avgPct = ss.avgPct; x.pf = ss.pf; x.maxDdPct = ss.maxDdPct; x.oosN = ss.oosN; x.oosAvgPct = ss.oosAvgPct
             x.testedAt = now
             x.verdict = if (sg.enabled() && Gate.passes(ss)) "LIVE" else "PAUSED"
             x.why = Gate.why(sg, ss)
+            }
             if (x.verdict == "LIVE") liveN++ else paused++
             if (was == "LIVE" && x.verdict == "PAUSED") feed("warn", sg.label + " paused", x.why)
         }
@@ -469,11 +499,11 @@ class SwingApp(private val p: Platform) {
     private fun sizeFor(entry: Double, sl: Double): Int = positionSize(st.settings.capital, st.settings.riskPct, st.settings.costPct, entry, sl)
 
     private fun makeSignals(now: Long, day: Int) {
-        var liveStrats = Strategies.all.filter { it.enabled() && st.strat(it.id).verdict == "LIVE" }
-        // Experimental mode: when nothing is LIVE, show setups from enabled strategies that FAILED their test,
-        // clearly labelled, so the scorecard can show on paper whether they would have worked.
-        val experimental = liveStrats.isEmpty() && Params.EXPERIMENTAL_ENABLED
-        if (experimental) liveStrats = Strategies.all.filter { it.enabled() && st.strat(it.id).testedAt > 0L }
+        val reallyLive = Strategies.all.filter { it.enabled() && st.strat(it.id).verdict == "LIVE" }
+        // Experimental ideas: setups from enabled strategies that have NOT passed their test are still shown,
+        // clearly labelled and paper-tracked, so the scorecard shows whether they would have worked.
+        var liveStrats = reallyLive
+        if (Params.EXPERIMENTAL_ENABLED) liveStrats = Strategies.all.filter { it.enabled() && st.strat(it.id).testedAt > 0L }
         if (liveStrats.isEmpty()) {
             if (st.noLiveWarnDay != day) {
                 st.noLiveWarnDay = day
@@ -500,11 +530,14 @@ class SwingApp(private val p: Platform) {
             for (sg in liveStrats) Strategies.evaluate(sg, s, i, feat, ctx)?.let { found.add(it) }
         }
         if (found.isEmpty()) return
-        found.sortWith(compareByDescending<Setup> { st.strat(it.strategyId).avgPct }.thenByDescending { it.rank }.thenBy { it.sym })
+        val liveIds = reallyLive.map { it.id }.toHashSet()
+        found.sortWith(compareByDescending<Setup> { if (liveIds.contains(it.strategyId)) 1 else 0 }.thenByDescending { st.strat(it.strategyId).avgPct }.thenByDescending { it.rank }.thenBy { it.sym })
+        var expLeft = Params.EXPERIMENTAL_MAX_PER_DAY - st.signals.count { it.day == day && it.strategyLabel.startsWith("EXPERIMENTAL") }
         var slots = st.settings.maxOpenTrades - st.trades.count { it.status == "OPEN" && !it.paper } - st.signals.count { it.status == "NEW" }
-        if (experimental) slots = minOf(slots, Params.EXPERIMENTAL_MAX_PER_DAY - st.signals.count { it.day == day })
         for (raw in found) {
             if (slots <= 0) break
+            val experimental = !liveIds.contains(raw.strategyId)
+            if (experimental && expLeft <= 0) continue
             // levels are fixed to the paisa here, so the money maths uses exactly what the user is shown
             val su = Setup(raw.strategyId, raw.sym, raw.day, Fmt.r2(raw.entry), Fmt.r2(raw.sl), Fmt.r2(raw.t1), Fmt.r2(raw.t2), raw.rank, raw.reasons)
             if (!(su.sl < su.entry)) continue
@@ -527,22 +560,24 @@ class SwingApp(private val p: Platform) {
             val half = if (qty >= 2) qty / 2 else 0
             sig.rewardRs = if (su.t2 > 0) maxOf(0.0, half * (su.t1 - su.entry) + (qty - half) * (su.t2 - su.entry) - cost) else 0.0
             sig.edgeN = ss.n; sig.edgeWinPct = ss.winPct; sig.edgeAvgPct = ss.avgPct; sig.edgePf = ss.pf
-            sig.reasons = if (experimental) listOf("Experimental: this rule FAILED its latest test (" + ss.n + " trades, avg " + Fmt.pct(ss.avgPct) +
-                " after charges). Tracked on paper — the scorecard will show how it does.") + su.reasons else su.reasons
+            sig.holdDays = sg.holdDays
+            sig.reasons = if (experimental) listOf("Experimental: this rule has NOT passed its test. " + ss.why + " Tracked on paper — the scorecard will show how it does.") + su.reasons else su.reasons
             st.signals.add(sig)
             // every signal starts life as a paper trade; it is removed if the user takes the trade for real
             val pt = Trade()
             pt.id = "P" + (++st.seq); pt.paper = true; pt.signalId = sig.id
             pt.sym = su.sym; pt.name = sig.name; pt.strategyId = sg.id; pt.strategyLabel = sg.label
             pt.openedAt = now; pt.entryDay = day; pt.lastBarDay = day
+            pt.maxDays = sg.holdDays
             pt.entry = su.entry; pt.qty = qty; pt.sl = su.sl; pt.sl0 = su.sl; pt.t1 = su.t1; pt.t2 = su.t2; pt.ltp = su.entry
             st.trades.add(pt)
             val levels = if (su.t2 > 0) "SL " + Fmt.rs(su.sl) + " · T1 " + Fmt.rs(su.t1) + " · T2 " + Fmt.rs(su.t2)
-            else "SL " + Fmt.rs(su.sl) + " · sell at close of day " + Params.HOLD_DAYS
-            post("buy", nid("buy", sig.id), (if (experimental) "EXPERIMENTAL (failed test) " else "BUY ") + su.sym + " " + Fmt.rs(su.entry) + "–" + Fmt.num(sig.entryMax),
+            else "SL " + Fmt.rs(su.sl) + " · sell at close of day " + sg.holdDays
+            post("buy", nid("buy", sig.id), (if (experimental) "TEST IDEA (unproven) " else "BUY ") + su.sym + " " + Fmt.rs(su.entry) + "–" + Fmt.num(sig.entryMax),
                 levels + " · " + Fmt.plural(qty, "share") + " (" + Fmt.rs0(sig.investRs) + ") · " + sg.label + ": " + ss.n + " test trades, " +
                     Math.round(ss.winPct) + "% won, avg " + Fmt.pct(ss.avgPct))
             slots--
+            if (experimental) expLeft--
         }
     }
 
@@ -690,7 +725,7 @@ class SwingApp(private val p: Platform) {
             val frac = if (s != null && s.lastDay() == day) Clock.sessionFraction(now).let { if (Clock.minuteOfDay(now) >= Clock.CLOSE_MIN) 1.0 else it } else 1.0
             val weight = if (total > 0) h.valueRs() / total * 100.0 else 0.0
             val a = Advisor.check(s, idx, frac, if (st.holdings.size >= 2) weight else 0.0)
-            h.verdict = a.verdict; h.headline = a.headline; h.stop = a.stop; h.bookAt = a.bookAt; h.reasons = a.reasons; h.dataOk = a.dataOk
+            h.verdict = a.verdict; h.headline = a.headline; h.stop = a.stop; h.bookAt = a.bookAt; h.reasons = a.reasons; h.dataOk = a.dataOk; h.strength = a.strength
             if (!a.dataOk) continue
             // h.notifiedKey = "SELL,TRIM,@day": the verdicts already announced today (each at most once a day)
             val dayTag = "@$day"
@@ -819,6 +854,7 @@ class SwingApp(private val p: Platform) {
                 val t = Trade()
                 t.id = "T" + (++st.seq); t.signalId = sig.id
                 t.sym = sig.sym; t.name = sig.name; t.strategyId = sig.strategyId; t.strategyLabel = sig.strategyLabel
+                t.maxDays = sig.holdDays
                 t.openedAt = now; t.entryDay = day; t.lastBarDay = day
                 t.entry = price; t.qty = qty.toInt(); t.sl = sig.sl; t.sl0 = sig.sl; t.t1 = sig.t1; t.t2 = sig.t2
                 t.ltp = live[sig.sym]?.let { it.c[it.n - 1] } ?: price
@@ -868,6 +904,37 @@ class SwingApp(private val p: Platform) {
             "clearFeed" -> {
                 st.feed.clear()
                 return ok()
+            }
+            "getChart" -> {
+                loadUniverse()
+                cache.ensureLoaded()
+                val sym = HoldingsImport.cleanSymbol(a.str("sym"))
+                val x = live[sym] ?: cache.get(sym) ?: return err("No price history for $sym yet — run a scan while online")
+                if (x.n < 2) return err("No price history for $sym yet")
+                val from = maxOf(0, x.n - Params.CHART_BARS)
+                val d = ArrayList<Any?>(); val o = ArrayList<Any?>(); val h = ArrayList<Any?>(); val l = ArrayList<Any?>(); val c = ArrayList<Any?>()
+                val m50 = ArrayList<Any?>(); val m200 = ArrayList<Any?>()
+                for (i in from until x.n) {
+                    d.add(x.d[i].toLong() * Clock.DAY_MS); o.add(Fmt.r2(x.o[i])); h.add(Fmt.r2(x.h[i])); l.add(Fmt.r2(x.l[i])); c.add(Fmt.r2(x.c[i]))
+                    val a50 = Ind.sma(x.c, i, 50); val a200 = Ind.sma(x.c, i, 200)
+                    m50.add(if (a50.isNaN()) 0.0 else Fmt.r2(a50)); m200.add(if (a200.isNaN()) 0.0 else Fmt.r2(a200))
+                }
+                val levels = ArrayList<Any?>()
+                fun lv(kind: String, label: String, v: Double) { if (v > 0) levels.add(linkedMapOf<String, Any?>("kind" to kind, "label" to label, "v" to Fmt.r2(v))) }
+                val tr = st.trades.firstOrNull { it.sym == sym && it.status == "OPEN" && !it.paper }
+                val sg = st.signals.firstOrNull { it.sym == sym && it.status == "NEW" }
+                val ho = st.holdings.firstOrNull { it.sym == sym }
+                if (tr != null) { lv("entry", "Bought", tr.entry); lv("stop", "Stop-loss", tr.sl); lv("target", "Target 1", tr.t1); lv("target", "Target 2", tr.t2) }
+                else if (sg != null) { lv("entry", "Entry", sg.entry); lv("stop", "Stop-loss", sg.sl); lv("target", "Target 1", sg.t1); lv("target", "Target 2", sg.t2) }
+                if (ho != null) { lv("entry", "Your avg", ho.avg); if (tr == null && sg == null) { lv("stop", "Trailing stop", ho.stop); lv("target", "Book near", ho.bookAt) } }
+                val last = x.n - 1
+                val a50 = Ind.sma(x.c, last, 50); val a200 = Ind.sma(x.c, last, 200); val rsi = Ind.rsi(x.c, last, 14)
+                val hi = Ind.highest(x.h, last, minOf(250, x.n)); val lo = Ind.lowest(x.l, last, minOf(250, x.n))
+                fun rt(n: Int): Double { val r = Ind.ret(x.c, last, n); return if (r.isNaN()) 0.0 else Fmt.r2(r * 100.0) }
+                return ok("sym" to sym, "name" to nameOf(sym), "d" to d, "o" to o, "h" to h, "l" to l, "c" to c, "sma50" to m50, "sma200" to m200, "levels" to levels,
+                    "stats" to linkedMapOf<String, Any?>("ltp" to Fmt.r2(x.c[last]), "sma50" to (if (a50.isNaN()) 0.0 else Fmt.r2(a50)), "sma200" to (if (a200.isNaN()) 0.0 else Fmt.r2(a200)),
+                        "rsi14" to (if (rsi.isNaN()) 0.0 else Fmt.r1(rsi)), "high52" to (if (hi.isNaN()) 0.0 else Fmt.r2(hi)), "low52" to (if (lo.isNaN()) 0.0 else Fmt.r2(lo)),
+                        "ret5" to rt(5), "ret21" to rt(21), "ret63" to rt(63), "ret126" to rt(126), "bars" to x.n))
             }
             else -> return err("Unknown action: $name")
         }

@@ -2,7 +2,9 @@ package com.boomai.swingedge.core
 
 class Advice(
     val verdict: String, val headline: String, val stop: Double, val bookAt: Double,
-    val reasons: List<String>, val dataOk: Boolean, val belowStop: Boolean
+    val reasons: List<String>, val dataOk: Boolean, val belowStop: Boolean,
+    /** 0–100 trend strength used to rank holdings: 200/50-day trend plus 3-month return vs Nifty. 0 when unknown. */
+    val strength: Int = 0
 )
 
 /** Health check of one holding. Thresholds are in Params.PF_*. */
@@ -77,12 +79,19 @@ object Advisor {
         var headline: String
         val reasons = ArrayList<String>(4)
 
-        val sellTrend = has200 && c < sma200 && (sma50 < sma200 || sma50Falling)
-        val sellStop = c < stop * (1 - Params.PF_SELL_BELOW_STOP_PCT / 100.0) && rv >= Params.PF_SELL_RELVOL
-        val sellWeak = !rs.isNaN() && rs <= Params.PF_RS_WEAK_PTS && c < sma50
-        val trimExt = ext > Params.PF_TRIM_ABOVE_50DMA_PCT
-        val trimRsi = !rsi.isNaN() && rsi > Params.PF_TRIM_RSI
-        val trimBlow = (s.h[i] - s.l[i]) >= Params.PF_BLOWOFF_RANGE_ATR * atr && rv >= Params.PF_BLOWOFF_RELVOL && dayChg >= Params.PF_BLOWOFF_UP_PCT
+        // Which rules may call SELL / TRIM follows the 2011–2026 NSE study (research/REPORT2.md):
+        //  - below the 200-day with the 50-day under it: trailed the average stock by ~0.7% over a month and ~2% over
+        //    3 months, in and out of sample -> SELL
+        //  - trailing-stop breaks, 3-month laggards, first cross under the 200-day: too weak to act on -> WATCH
+        //  - "stretched" stocks (far above the 50-day, RSI > 80, blow-off days) went on to BEAT the average stock,
+        //    so trimming them cost money -> no TRIM on strength
+        val sellTrend = has200 && c < sma200 && (sma50 < sma200 || (Params.PF_SELL_ON_FALLING_50 && sma50Falling))
+        val sellStop = Params.PF_SELL_ON_STOP_BREAK && c < stop * (1 - Params.PF_SELL_BELOW_STOP_PCT / 100.0) && rv >= Params.PF_SELL_RELVOL
+        val sellWeak = Params.PF_SELL_ON_REL_WEAK && !rs.isNaN() && rs <= Params.PF_RS_WEAK_PTS && c < sma50
+        val strongExt = ext > Params.PF_TRIM_ABOVE_50DMA_PCT || (!rsi.isNaN() && rsi > Params.PF_TRIM_RSI)
+        val trimExt = Params.PF_TRIM_ON_STRENGTH && ext > Params.PF_TRIM_ABOVE_50DMA_PCT
+        val trimRsi = Params.PF_TRIM_ON_STRENGTH && !rsi.isNaN() && rsi > Params.PF_TRIM_RSI
+        val trimBlow = Params.PF_TRIM_ON_STRENGTH && (s.h[i] - s.l[i]) >= Params.PF_BLOWOFF_RANGE_ATR * atr && rv >= Params.PF_BLOWOFF_RELVOL && dayChg >= Params.PF_BLOWOFF_UP_PCT
         val trimWeight = weightPct > Params.PF_MAX_WEIGHT_PCT
 
         when {
@@ -93,6 +102,7 @@ object Advisor {
                 reasons.add("Price " + Fmt.rs(c) + " is under the 200-day average " + Fmt.rs(sma200))
                 reasons.add(if (sma50 < sma200) "50-day average (" + Fmt.rs(sma50) + ") is below the 200-day — a downtrend"
                 else "50-day average has turned down over the last " + Params.PF_SMA50_SLOPE_BARS + " sessions")
+                if (sma50 < sma200) reasons.add("Tested on 15 years of NSE data: stocks in this state trailed the average stock by about 2% over the next 3 months")
             }
             sellStop -> {
                 verdict = SELL
@@ -133,7 +143,7 @@ object Advisor {
             }
             belowStop -> {
                 verdict = WATCH
-                headline = "Below its trailing stop " + Fmt.rs(stop) + " — sell if it does not recover"
+                headline = "Below its trailing stop " + Fmt.rs(stop) + " — weak, watch closely"
                 reasons.add("Price " + Fmt.rs(c) + " slipped under the stop, but without heavy volume so far")
                 reasons.add(if (c > sma50) "Still above the 50-day average " + Fmt.rs(sma50) else "Also under the 50-day average " + Fmt.rs(sma50))
             }
@@ -144,8 +154,9 @@ object Advisor {
                 if (has200) reasons.add(if (c > sma200) "Still above the 200-day average " + Fmt.rs(sma200) else "Under the 200-day average " + Fmt.rs(sma200))
             }
             else -> {
-                headline = "Uptrend intact — hold with stop " + Fmt.rs(stop)
+                headline = if (strongExt) "Running strong — hold, trail the stop at " + Fmt.rs(stop) else "Uptrend intact — hold with stop " + Fmt.rs(stop)
                 reasons.add("Price " + Fmt.rs(c) + " is above the 50-day average " + Fmt.rs(sma50))
+                if (strongExt) reasons.add("It is " + Math.round(ext) + "% above its 50-day average. In 15 years of NSE data such strong stocks kept beating the average, so this is not a reason to sell")
                 if (has200) reasons.add(if (sma50 > sma200) "50-day average is above the 200-day — a healthy trend" else "50-day average is still under the 200-day — early recovery")
             }
         }
@@ -158,7 +169,12 @@ object Advisor {
                 else "Stop " + Fmt.rs(stop) + " · consider booking some near " + Fmt.rs(bookAt) + (if (bookIsHigh) " (previous high)" else " (about 2 average days' move)")
             )
         }
-        return Advice(verdict, headline, stop, bookAt, reasons, true, belowStop)
+        var score = 50.0
+        if (has200) { score += if (c > sma200) 15.0 else -15.0; score += if (sma50 > sma200) 10.0 else -10.0 }
+        score += if (c > sma50) 10.0 else -10.0
+        if (!rs.isNaN()) score += maxOf(-15.0, minOf(15.0, rs))
+        val strength = maxOf(1, minOf(100, Math.round(score).toInt()))
+        return Advice(verdict, headline, stop, bookAt, reasons, true, belowStop, strength)
     }
 }
 

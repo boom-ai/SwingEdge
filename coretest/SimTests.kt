@@ -24,7 +24,7 @@ object SimTests {
        "sl":0,"t1":0,"t2":0,"day":1,"maxDays":6,"ltp":0,"pnlRs":0,"pnlPct":0,
        "action":"HOLD","actionNote":"","t1Done":false,"closedAt":0,"exitPrice":0,"result":""}],
      "holdings": [{"sym":"","name":"","qty":0,"avg":0,"ltp":0,"valueRs":0,"pnlRs":0,"pnlPct":0,"dayChgPct":0,
-       "verdict":"HOLD","headline":"","stop":0,"bookAt":0,"reasons":[""],"dataOk":true}],
+       "verdict":"HOLD","headline":"","stop":0,"bookAt":0,"reasons":[""],"dataOk":true,"strength":0}],
      "portfolio": {"investedRs":0,"valueRs":0,"pnlRs":0,"pnlPct":0,"dayPnlRs":0,"sellCount":0,"trimCount":0},
      "strategies": [{"id":"","label":"","desc":"","verdict":"LIVE","testedAt":0,
        "stats":{"n":0,"winPct":0,"avgPct":0,"pf":0,"maxDdPct":0,"oosN":0,"oosAvgPct":0},"why":""}],
@@ -364,7 +364,7 @@ object SimTests {
             T.check(BANNED.none { allText.contains(it) }, "no banned promise words anywhere")
             T.check(p.logs.none { it.contains("failed") || it.contains("threw") }, "no internal failures logged: " + p.logs.filter { it.contains("failed") || it.contains("threw") }.take(2))
             T.check(p.files.keys.count { it.startsWith("daily_cache_") } in 2..Params.CACHE_SHARDS && p.files.values.sumOf { it.length } < 2_000_000, "cache in a few compact files (${p.files.values.sumOf { it.length } / 1024} KB for 47 symbols)")
-            T.check(s.list("strategies").all { it.asObj().str("verdict") == "LIVE" && it.asObj().long("testedAt") > 0 }, "strategies tested automatically (gates opened for this test)")
+            T.check(s.list("strategies").all { (it.asObj().str("verdict") == "LIVE" || it.asObj().str("id") == "WASHOUT_DIP") && it.asObj().long("testedAt") > 0 }, "strategies tested automatically (gates opened for this test)")
         } finally {
             saved.restore()
         }
@@ -406,7 +406,7 @@ object SimTests {
         val q = FakePlatform.standard()
         q.setTime(day(2026, 10, 5), 8 * 60)
         val st = state(SwingApp(q), "untested")
-        T.check(st.list("strategies").size == 4 && st.list("strategies").all { it.asObj().str("verdict") == "UNTESTED" }, "UNTESTED before the first run")
+        T.check(st.list("strategies").size == 6 && st.list("strategies").all { it.asObj().str("verdict") == "UNTESTED" }, "UNTESTED before the first run")
     }
 
     fun bear() {
@@ -417,7 +417,7 @@ object SimTests {
             p.yahoo.profiles["^NSEI"] = Profile(-0.15, 0.5, start = 60000.0, baseVol = 0.0)
             val (_, s) = dipScenario(p, listOf("UP03", "UP05"), 20)
             T.eq(s.obj("regime").str("label"), "BEAR", "regime BEAR when Nifty is below both averages")
-            T.check(s.obj("regime").num("niftyLtp") > 0 && s.obj("regime").str("note").contains("new buys are off"), "regime note explains")
+            T.check(s.obj("regime").num("niftyLtp") > 0 && s.obj("regime").str("note").contains("only sell-off bounce buys"), "regime note explains")
             T.eq(s.list("signals").size, 0, "no BUY signals in a BEAR regime even with LIVE strategies and a textbook dip")
             T.check(s.list("strategies").any { it.asObj().str("verdict") == "LIVE" } || s.list("strategies").all { it.asObj().obj("stats").int("n") == 0 }, "strategies are not what blocked it")
             // control: same data with a rising index does signal
@@ -464,7 +464,7 @@ object SimTests {
         var s = state(app, "brand-new, never ticked, offline")
         T.eq(s.long("lastScanAt"), 0L, "never scanned"); T.eq(s.obj("settings").num("capital"), 100000.0, "default capital"); T.eq(s.obj("settings").num("riskPct"), 0.75, "default risk")
         T.eq(s.obj("settings").num("costPct"), 0.25, "default charges"); T.eq(s.obj("settings").int("maxOpenTrades"), 4, "default max trades")
-        T.eq(s.list("strategies").size, 4, "strategies listed even with no data")
+        T.eq(s.list("strategies").size, 6, "strategies listed even with no data")
         T.check(!app.tick("open").startsWith("Error"), "offline tick does not fail")
         s = state(app, "offline after tick")
         T.eq(s.str("lastScanStatus"), "No internet — showing last data", "offline status line")

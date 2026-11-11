@@ -68,6 +68,20 @@ object Params {
     var DIP_T2_SMA = 5
 
     // ---------------------------------------------------------------- WEEKLY_LEADERS
+    // --- WASHOUT_DIP (research: top-4 avg +1.7% in-sample / +1.25% out-of-sample per 5-day trade after charges, 2013–2026)
+    var WASHOUT_ENABLED = true
+    var WO_BREADTH_MAX = 0.25
+    var WO_RSI_MAX = 10.0
+    var WO_STOP_ATR = 3.0
+    var WO_STOP_CAP_PCT = 12.0
+    // --- MONTHLY_LEADERS (research: top-10 risk-adjusted 6m momentum, 21-day hold: 30%/18% CAGR in/out of sample, drawdowns 35-40%)
+    var MONTHLY_LEADERS_ENABLED = true
+    var ML_TOP_N = 10
+    var ML_LOOKBACK = 126
+    var ML_SKIP = 5
+    var ML_HOLD_DAYS = 21
+    var ML_STOP_ATR = 4.0
+    var ML_STOP_CAP_PCT = 15.0
     var WL_TOP_N = 5
     var WL_RET_SHORT = 63
     var WL_RET_LONG = 126
@@ -93,6 +107,8 @@ object Params {
     var BACKTEST_MAX_AGE_DAYS = 7
     /** Backtest takes at most this many new trades per strategy per day (best rank first). */
     var BT_MAX_NEW_PER_DAY = 4
+    /** The backtest holds at most this many trades per strategy at once, like a small real account. */
+    var BT_MAX_CONCURRENT = 4
     /** Capital share given to each backtest trade when building the equity curve for max drawdown. */
     var BT_POSITION_WEIGHT = 0.25
     /** Minimum symbols with daily history before a backtest is attempted. */
@@ -110,6 +126,11 @@ object Params {
     var STALE_QUOTE_MIN = 40
 
     // ---------------------------------------------------------------- portfolio check
+    // which portfolio rules may call SELL / TRIM (set from the 2011–2026 study; see Portfolio.kt)
+    var PF_SELL_ON_FALLING_50 = false
+    var PF_SELL_ON_STOP_BREAK = false
+    var PF_SELL_ON_REL_WEAK = false
+    var PF_TRIM_ON_STRENGTH = false
     var PF_MIN_BARS = 60
     var PF_TRAIL_LOOKBACK = 22
     var PF_TRAIL_ATR = 3.0
@@ -131,11 +152,14 @@ object Params {
     // ---------------------------------------------------------------- data
     var DAILY_BARS_CAP = 520
     var CACHE_SHARDS = 16
+    var CHART_BARS = 130
     /** Up to this many stocks, every scan fetches a live quote for all of them; above it, only when buys are possible. */
     var FULL_QUOTE_MAX_UNIVERSE = 250
     /** When no strategy is LIVE, still show (clearly labelled, paper-tracked) setups from enabled strategies that failed the test. */
     var EXPERIMENTAL_ENABLED = true
     var EXPERIMENTAL_MAX_PER_DAY = 3
+    /** A strategy judged on its long research test is paused if the phone's own recent test has at least this many trades and lost money. */
+    var RESEARCH_VETO_MIN_TRADES = 10
     var HTTP_BATCH = 40
     var YAHOO_HOST_1 = "https://query1.finance.yahoo.com"
     var YAHOO_HOST_2 = "https://query2.finance.yahoo.com"

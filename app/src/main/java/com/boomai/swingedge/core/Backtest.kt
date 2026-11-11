@@ -64,6 +64,8 @@ object Backtest {
         val idx = IntArray(nu)
         val scratch = DoubleArray(nu)
         val busyUntil = Array(ns) { IntArray(nu) { Int.MIN_VALUE } }
+        // exit days of the trades each strategy currently holds: a real account has only a few slots (BT_MAX_CONCURRENT)
+        val openExits = Array(ns) { ArrayList<Int>() }
         val found = Array(ns) { ArrayList<Setup>() }
         val foundK = Array(ns) { ArrayList<Int>() }
         val feat = Feat()
@@ -106,7 +108,10 @@ object Backtest {
                 val ks = foundK[si]
                 var taken = 0
                 val used = BooleanArray(list.size)
-                while (taken < Params.BT_MAX_NEW_PER_DAY) {
+                val oe = openExits[si]
+                var q = oe.size - 1
+                while (q >= 0) { if (oe[q] < day) oe.removeAt(q); q-- }
+                while (taken < Params.BT_MAX_NEW_PER_DAY && oe.size < Params.BT_MAX_CONCURRENT) {
                     var best = -1
                     for (j in list.indices) {
                         if (used[j]) continue
@@ -123,11 +128,12 @@ object Backtest {
                     var j = i + 1
                     while (j < s.n && !pos.closed) {
                         val dayNo = j - i + 1
-                        ExitModel.step(pos, s.o[j], s.h[j], s.l[j], s.c[j], dayNo >= Params.HOLD_DAYS)
+                        ExitModel.step(pos, s.o[j], s.h[j], s.l[j], s.c[j], dayNo >= strategies[si].holdDays)
                         j++
                     }
                     val exitDay = if (pos.closed) s.d[j - 1] else Int.MAX_VALUE
                     busyUntil[si][k] = exitDay
+                    oe.add(exitDay)
                     trades.add(
                         BtTrade(su.strategyId, su.sym, day, exitDay, su.entry, su.sl, su.t1, su.t2,
                             ExitModel.netPct(pos, costPct), ci >= split, pos.closed)

@@ -124,6 +124,7 @@
   var IC = {
     today: '<path d="M4 13h3l2.5-7 4 13 2.5-6H20"/>',
     trades: '<path d="M4 19V9M10 19V5M16 19v-8M21 19H3"/>',
+    chart: '<path d="M4 4.5v15h16"/><path d="M7.5 14.5l3.5-4 3 2.5 4.5-6"/>',
     portfolio: '<rect x="3.5" y="7" width="17" height="12.5" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12.5h17"/>',
     alerts: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" transform="translate(1.2 1.2) scale(.9)"/>',
@@ -156,6 +157,11 @@
   /* ---------- small shared pieces ---------- */
   function tag(kind, label, icon) {
     return '<span class="tag ' + kind + (icon ? '' : ' plain') + '">' + (icon ? ic(icon) : '') + esc(label) + '</span>';
+  }
+  function symBtn(sym) {
+    var x = T(sym).trim();
+    if (!x) return '<b>' + DASH + '</b>';
+    return '<button type="button" class="symbtn" data-c="chart" data-id="' + esc(x) + '" aria-label="Chart for ' + esc(x) + '"><b>' + esc(x) + '</b>' + ic('chart') + '</button>';
   }
   function btn(cmd, id, label, cls, o) {
     o = o || {};
@@ -203,7 +209,15 @@
   /* ---------- derived lists ---------- */
   function openTrades(S) { return A(S.trades).filter(function (t) { return t.status === 'OPEN'; }); }
   function newSignals(S) { return A(S.signals).filter(function (g) { return g.status === 'NEW'; }); }
-  function sortedHoldings(S) {
+  function sortedHoldings(S, key) {
+    var num = function (v) { var n = N(v); return n === null ? -Infinity : n; };
+    if (key === 'pnl' || key === 'value' || key === 'day' || key === 'strength') {
+      var f = key === 'pnl' ? 'pnlPct' : key === 'value' ? 'valueRs' : key === 'strength' ? 'strength' : 'dayChgPct';
+      return A(S.holdings).map(function (h, i) { return { h: h, i: i }; }).sort(function (a, b) {
+        var na = a.h.dataOk === false ? -Infinity : num(a.h[f]), nb = b.h.dataOk === false ? -Infinity : num(b.h[f]);
+        return (nb > na ? 1 : nb < na ? -1 : 0) || a.i - b.i;
+      }).map(function (x) { return x.h; });
+    }
     return A(S.holdings).map(function (h, i) { return { h: h, i: i }; }).sort(function (a, b) {
       var ra = a.h.dataOk === false ? 4 : (VERDICT[a.h.verdict] ? VERDICT[a.h.verdict].rank : 3.5);
       var rb = b.h.dataOk === false ? 4 : (VERDICT[b.h.verdict] ? VERDICT[b.h.verdict].rank : 3.5);
@@ -253,9 +267,12 @@
         text: (T(S.marketNote).trim() ? T(S.marketNote).trim() + '. ' : '') + 'Nothing to act on until it reopens.' + nx,
         short: 'Market is closed. Buy ideas resume on the next trading day.' };
     }
+    var liveNames = st.filter(function (s) { return s.verdict === 'LIVE'; }).map(function (s) { return T(s.label).trim(); }).filter(Boolean);
+    var rare = liveNames.length === 1 && /sell-off/i.test(liveNames[0]);
     return { kind: 'waiting', icon: 'clock', title: 'Nothing to act on right now',
-      text: 'Buy ideas usually arrive around 2:45 pm, when the day\'s price bar is nearly complete. Exits and your portfolio are checked every 15 minutes.',
-      short: 'No buy ideas right now. They usually arrive around 2:45 pm.' };
+      text: (rare ? 'The one rule that passed its test (' + liveNames[0] + ') only buys during market-wide sell-offs, a few weeks a year. ' : '') +
+        'Buy and test ideas are checked around 2:45 pm, when the day\'s price bar is nearly complete. Exits and your portfolio are checked every 15 minutes.',
+      short: rare ? 'No buy calls: the sell-off bounce rule is waiting for a market-wide sell-off. Test ideas come around 2:45 pm.' : 'No buy ideas right now. They usually arrive around 2:45 pm.' };
   }
 
   /* ---------- header + tab bar ---------- */
@@ -357,7 +374,7 @@
     if (vt !== null) facts += vt > now ? '<span>Valid till <b>' + hm(vt) + '</b></span>' : '<span class="mut">Validity passed ' + esc(rel(vt, now)) + '</span>';
     var exp = /^EXPERIMENTAL/i.test(T(g.strategyLabel)); /* strategy failed its test: shown as a paper idea, not a buy call */
     return '<article class="card rail ' + (exp ? 'k-trim' : 'k-buy') + '"><div class="cb">' +
-      '<div class="hd"><div class="who"><div class="sym">' + (exp ? tag('trim', 'TEST IDEA') : tag('buy', 'BUY', 'up')) + '<b>' + tx(g.sym) + '</b></div>' +
+      '<div class="hd"><div class="who"><div class="sym">' + (exp ? tag('trim', 'TEST IDEA') : tag('buy', 'BUY', 'up')) + symBtn(g.sym) + '</div>' +
       '<div class="sub">' + tx(g.name, '') + (T(g.name).trim() && T(g.strategyLabel).trim() ? ' · ' : '') + tx(g.strategyLabel, '') + '</div></div>' +
       '<div class="px"><div class="ltp">' + px(g.ltp) + '</div><div class="ltpl">last price</div></div></div>' +
       '<div class="zone"><span class="k">Buy between</span><span class="v">' + zone + '</span></div>' +
@@ -375,7 +392,7 @@
     var a = TACT[t.action] || TACT.HOLD, id = T(t.id);
     var exit = t.action === 'EXIT' || t.action === 'TIME_EXIT';
     return '<article class="card rail k-' + (a.cls === 'sell' ? 'sell' : 'trim') + '"><div class="cb">' +
-      '<div class="hd"><div class="who"><div class="sym">' + tag(a.cls, a.label, a.icon) + '<b>' + tx(t.sym) + '</b></div>' +
+      '<div class="hd"><div class="who"><div class="sym">' + tag(a.cls, a.label, a.icon) + symBtn(t.sym) + '</div>' +
       '<div class="sub">Your trade · ' + qtyStr(t.qty) + ' shares at ' + px(t.entry) + '</div></div>' +
       '<div class="px"><div class="ltp">' + px(t.ltp) + '</div><div class="ltpl num ' + tone(t.pnlRs) + '">' + rs(t.pnlRs, true) + ' (' + pc(t.pnlPct, true) + ')</div></div></div>' +
       '<div class="note">' + tx(t.actionNote, exit ? 'Sell this position now.' : 'Target 1 reached. Sell half and hold the rest.') + '</div>' +
@@ -390,7 +407,7 @@
     if (N(h.bookAt) > 0) facts += '<span>Book near <b>' + px(h.bookAt) + '</b></span>';
     if (N(h.stop) > 0) facts += '<span>Stop <b>' + px(h.stop) + '</b></span>';
     return '<article class="card rail k-' + v.cls + '"><div class="cb">' +
-      '<div class="hd"><div class="who"><div class="sym">' + tag(v.cls, v.label, v.icon) + '<b>' + tx(h.sym) + '</b></div>' +
+      '<div class="hd"><div class="who"><div class="sym">' + tag(v.cls, v.label, v.icon) + symBtn(h.sym) + '</div>' +
       '<div class="sub">Your holding' + (T(h.name).trim() ? ' · ' + esc(T(h.name).trim()) : '') + '</div></div>' +
       '<div class="px"><div class="ltp">' + px(h.ltp) + '</div><div class="ltpl num ' + tone(h.pnlRs) + '">' + rs(h.pnlRs, true) + ' (' + pc(h.pnlPct, true) + ')</div></div></div>' +
       '<div class="note">' + tx(h.headline, sell ? 'The checks say sell this holding.' : 'The checks say reduce this holding.') + '</div>' +
@@ -404,14 +421,44 @@
     return '<div class="hint hintpad">' + ic(bs.icon) + '<span class="t">' + esc(bs.short) +
       (bs.link ? ' <button type="button" class="linkbtn" data-c="strategies">' + esc(bs.link) + '</button>' : '') + '</span></div>';
   }
+  function plan(S, items, bs) {
+    var hs = A(S.holdings).filter(function (x) { return x.dataOk !== false; });
+    var sells = 0, exits = 0, buys = 0, tests = 0;
+    items.forEach(function (x) {
+      if (x.type === 'trade') exits++; else if (x.type === 'holding') sells++;
+      else if (/^EXPERIMENTAL/i.test(T(x.it.strategyLabel))) tests++; else buys++;
+    });
+    var li = [];
+    if (exits) li.push(['down', 'sell', 'Act on ' + exits + ' open trade' + (exits > 1 ? 's' : '') + ' (exit or book)']);
+    if (sells) li.push(['down', 'sell', sells + ' holding' + (sells > 1 ? 's' : '') + ' flagged to sell or trim']);
+    if (buys) li.push(['up', 'buy', buys + ' buy call' + (buys > 1 ? 's' : '') + ' from a rule that passed its test']);
+    if (tests) li.push(['flask', 'trim', tests + ' test idea' + (tests > 1 ? 's' : '') + ' (unproven rule, paper-tracked)']);
+    if (!exits && !sells) li.push(['check', 'ok', hs.length ? 'Nothing to sell: no holding is flagged' : 'Add your holdings to get sell calls']);
+    if (!buys && !tests) li.push(['clock', 'mut', bs.short]);
+    var weak = hs.filter(function (x) { return x.verdict === 'WATCH'; }).length;
+    if (weak) li.push(['info', 'mut', weak + ' holding' + (weak > 1 ? 's are' : ' is') + ' weak (on watch), no action yet']);
+    return '<div class="plan"><div class="pk">Today\'s plan</div><ul>' + li.map(function (x) {
+      return '<li class="' + x[1] + '">' + ic(x[0]) + '<span>' + esc(x[2]) + '</span></li>';
+    }).join('') + '</ul></div>';
+  }
+  function movers(S) {
+    var hs = A(S.holdings).filter(function (x) { return x.dataOk !== false && N(x.dayChgPct) !== null && N(x.ltp) > 0; });
+    if (hs.length < 2) return '';
+    hs = hs.slice().sort(function (a, b) { return N(b.dayChgPct) - N(a.dayChgPct); });
+    var pick = hs.length <= 6 ? hs : hs.slice(0, 3).concat(hs.slice(-3));
+    return '<div class="sec"><h2>Your holdings today</h2></div><div class="card mv">' + pick.map(function (x) {
+      return '<button type="button" class="mvr" data-c="chart" data-id="' + esc(T(x.sym)) + '"><b>' + tx(x.sym) + '</b><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + pc(x.dayChgPct, true, true) + '</span></button>';
+    }).join('') + '</div>';
+  }
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
-    var h = banner(ui) + statusPanel(S, ui, now) + glance(S);
+    var h = banner(ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs);
     h += '<div class="sec"><h2>Act now</h2>' + (items.length ? '<span class="cnt">' + items.length + '</span>' : '') + '</div>';
     if (!items.length) {
       h += '<div class="empty"><div class="ei">' + ic(bs.icon) + '</div><h3>' + esc(bs.title) + '</h3><p>' + esc(bs.text) + '</p>' +
         (bs.link ? '<div class="btns">' + btn('strategies', null, bs.link, 'sm') + '</div>' : '') + '</div>';
       var ot = openTrades(S).length;
+      h += movers(S);
       if (ot) h += '<div class="hint hintpad">' + ic('check') + '<span class="t">' + ot + ' open trade' + (ot > 1 ? 's are' : ' is') + ' on HOLD. Nothing to do on ' + (ot > 1 ? 'them' : 'it') + '.</span></div>';
       return h;
     }
@@ -539,8 +586,9 @@
     var vt = nodata ? tag('neutral', 'NO DATA', 'clock') : v ? tag(v.cls, v.label, v.icon) : tag('neutral', T(h.verdict).trim().toUpperCase().slice(0, 12) || 'NO CALL', 'info');
     var rail = nodata || !v ? '' : v.cls === 'sell' ? 'k-sell' : v.cls === 'trim' ? 'k-trim' : v.cls === 'watch' ? 'k-info' : '';
     var out = '<article class="card rail hold ' + rail + (nodata ? ' nodata' : '') + '"><div class="cb">' +
-      '<div class="hd"><div class="who"><div class="sym">' + vt + '<b>' + tx(h.sym) + '</b></div>' +
-      '<div class="sub">' + qtyStr(h.qty) + ' shares · avg ' + px(h.avg) + (T(h.name).trim() && T(h.name).trim() !== sym ? ' · ' + esc(T(h.name).trim()) : '') + '</div></div>';
+      '<div class="hd"><div class="who"><div class="sym">' + vt + symBtn(h.sym) + '</div>' +
+      '<div class="sub">' + qtyStr(h.qty) + ' shares · avg ' + px(h.avg) + (T(h.name).trim() && T(h.name).trim() !== sym ? ' · ' + esc(T(h.name).trim()) : '') + '</div>' +
+      (!nodata && N(h.strength) > 0 ? '<div class="str"><span>Trend strength</span><i><b style="width:' + Math.min(100, Math.round(N(h.strength))) + '%" class="' + (N(h.strength) >= 65 ? 'g' : N(h.strength) >= 40 ? 'a' : 'r') + '"></b></i><span class="num">' + Math.round(N(h.strength)) + '</span></div>' : '') + '</div>';
     if (nodata) {
       out += '<div class="px"><div class="ltp mut">' + DASH + '</div><div class="ltpl">no price</div></div></div>' +
         '<div class="nd">' + ic('clock') + '<span>No data yet. Prices and a verdict appear after the next scan.</span></div>';
@@ -557,8 +605,35 @@
     if (rb && rb.indexOf('<ul') >= 0) out += rb.slice(rb.indexOf('<ul'));
     return out + '</div></article>';
   }
+  function overview(S) {
+    var hs = A(S.holdings).filter(function (x) { return N(x.valueRs) > 0; });
+    var total = hs.reduce(function (a, x) { return a + N(x.valueRs); }, 0);
+    if (!(total > 0) || hs.length < 2) return '';
+    var byVal = hs.slice().sort(function (a, b) { return N(b.valueRs) - N(a.valueRs); });
+    var top = byVal.slice(0, 5), rest = total - top.reduce(function (a, x) { return a + N(x.valueRs); }, 0);
+    var cols = ['#6BB3FF', '#3FD68F', '#F2B441', '#C58BFF', '#FF8F6B', '#56667A'];
+    var segs = top.map(function (x, i) { return { n: T(x.sym), w: N(x.valueRs) / total * 100, c: cols[i] }; });
+    if (rest > total * 0.005) segs.push({ n: 'Other ' + (byVal.length - top.length), w: rest / total * 100, c: cols[5] });
+    var bar = '<div class="alloc">' + segs.map(function (g) { return '<i style="width:' + Math.max(1, g.w).toFixed(2) + '%;background:' + g.c + '"></i>'; }).join('') + '</div>' +
+      '<div class="alleg">' + segs.map(function (g) { return '<span><i style="background:' + g.c + '"></i>' + esc(g.n) + ' <b class="num">' + Math.round(g.w) + '%</b></span>'; }).join('') + '</div>';
+    var w1 = segs[0].w, w3 = segs.slice(0, 3).reduce(function (a, g) { return a + (/^Other /.test(g.n) ? 0 : g.w); }, 0);
+    var warn = w1 > 20 ? segs[0].n + ' alone is ' + Math.round(w1) + '% of your portfolio. One bad result there moves everything.'
+      : w3 > 50 ? 'Your top 3 holdings are ' + Math.round(w3) + '% of the portfolio.' : '';
+    var ranked = hs.filter(function (x) { return x.dataOk !== false && N(x.avg) > 0 && N(x.pnlPct) !== null; }).sort(function (a, b) { return N(b.pnlPct) - N(a.pnlPct); });
+    var row = function (x) { return '<button type="button" class="wl" data-c="chart" data-id="' + esc(T(x.sym)) + '"><b>' + tx(x.sym) + '</b><span class="num ' + tone(x.pnlPct) + '">' + pc(x.pnlPct, true) + '</span><span class="num mut">' + rs(x.pnlRs, true) + '</span></button>'; };
+    var wl = '';
+    if (ranked.length >= 4) {
+      var k = Math.min(3, Math.floor(ranked.length / 2));
+      wl = '<div class="wlg"><div><div class="k">Best</div>' + ranked.slice(0, k).map(row).join('') + '</div><div><div class="k">Worst</div>' + ranked.slice(-k).reverse().map(row).join('') + '</div></div>';
+    }
+    var vc = { SELL: 0, TRIM: 0, WATCH: 0, HOLD: 0 };
+    A(S.holdings).forEach(function (x) { if (x.dataOk !== false && vc[x.verdict] !== undefined) vc[x.verdict]++; });
+    var health = '<div class="hl"><span class="hold">' + vc.HOLD + ' healthy</span><span class="watch">' + vc.WATCH + ' on watch</span><span class="trim">' + vc.TRIM + ' to trim</span><span class="sell">' + vc.SELL + ' to sell</span></div>';
+    return '<div class="sec"><h2>Overview</h2></div><div class="card ov">' + health + '<div class="k">Where the money is</div>' + bar +
+      (warn ? '<div class="ovw">' + ic('warn') + '<span>' + esc(warn) + '</span></div>' : '') + wl + '</div>';
+  }
   function portfolio(S, ui) {
-    var p = O(S.portfolio), hs = sortedHoldings(S);
+    var p = O(S.portfolio), hs = sortedHoldings(S, ui.sort);
     var sell = N(p.sellCount), trim = N(p.trimCount);
     var h = '';
     if (hs.length) {
@@ -573,7 +648,14 @@
       btn('pick', null, 'Import file', '', { icon: 'file', busy: pend(ui, 'importHoldings') }) +
       btn('paste', null, 'Paste', '', { icon: 'paste', disabled: pend(ui, 'importHoldings') }) + '</div>';
     if (ui.importResult) h += '<div style="margin-top:10px">' + importResult(ui.importResult) + '</div>';
+    if (hs.length >= 2) h += overview(S);
     h += '<div class="sec"><h2>Holdings</h2><span class="cnt">' + hs.length + '</span></div>';
+    if (hs.length >= 2) {
+      var sk = ui.sort || 'action';
+      h += '<div class="chips">' + [['action', 'By action'], ['strength', 'Strongest'], ['pnl', 'P&L %'], ['value', 'Value'], ['day', 'Today']].map(function (c) {
+        return '<button type="button" class="chip' + (sk === c[0] ? ' on' : '') + '" data-c="sort" data-id="' + c[0] + '">' + esc(c[1]) + '</button>';
+      }).join('') + '</div>';
+    }
     if (!hs.length) {
       h += '<div class="empty"><div class="ei">' + ic('portfolio') + '</div><h3>No holdings added</h3>' +
         '<p>Add the stocks you already own and each scan will check them: hold, watch, trim or sell, with a stop and a level to book at. Import a broker holdings file (CSV) or paste the rows.</p></div>';
@@ -695,9 +777,79 @@
     return '<button type="button" class="tog" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" data-c="tog" data-id="' + name + '">' +
       '<span class="t"><b>' + title + '</b><span>' + sub + '</span></span><span class="st">' + (on ? 'On' : 'Off') + '</span><span class="sw"></span></button>';
   }
+  function nums(v) { return Array.isArray(v) ? v.map(function (x) { var n = N(x); return n === null ? 0 : n; }) : []; }
+  function chartSvg(res) {
+    var c = nums(res.c), o = nums(res.o), hi = nums(res.h), lo = nums(res.l), d = nums(res.d), m50 = nums(res.sma50), m200 = nums(res.sma200);
+    var n = Math.min(c.length, o.length, hi.length, lo.length);
+    if (n < 5) return '<p class="lead">Not enough price history to draw a chart.</p>';
+    var Wd = 360, Ht = 230, L = 6, R = 52, Tp = 8, B = 20, pw = Wd - L - R, ph = Ht - Tp - B;
+    var mn = Infinity, mx = -Infinity, i;
+    for (i = 0; i < n; i++) { if (lo[i] > 0 && lo[i] < mn) mn = lo[i]; if (hi[i] > mx) mx = hi[i]; }
+    if (!(mx > mn)) { mx = mn * 1.01 + 1; }
+    var lv = A(res.levels).map(function (x) { return { k: T(x.kind), t: T(x.label), v: N(x.v) }; }).filter(function (x) { return x.v > 0; });
+    var span = mx - mn;
+    lv = lv.filter(function (x) { return x.v > mn - span * 0.6 && x.v < mx + span * 0.6; });
+    lv.forEach(function (x) { if (x.v < mn) mn = x.v; if (x.v > mx) mx = x.v; });
+    var pad = (mx - mn) * 0.06; mn -= pad; mx += pad;
+    var X = function (k) { return L + (k + 0.5) * pw / n; }, Y = function (v) { return Tp + (mx - v) / (mx - mn) * ph; };
+    var bw = Math.max(1, Math.min(5, pw / n * 0.62));
+    var g = '';
+    for (i = 0; i <= 3; i++) {
+      var gv = mn + (mx - mn) * i / 3, gy = Y(gv);
+      g += '<line x1="' + L + '" x2="' + (Wd - R) + '" y1="' + gy.toFixed(1) + '" y2="' + gy.toFixed(1) + '" class="grid"/><text x="' + (Wd - R + 4) + '" y="' + (gy + 3.5).toFixed(1) + '" class="ax">' + esc(pxNum(gv)) + '</text>';
+    }
+    var lastM = -1;
+    for (i = 0; i < n; i++) {
+      var t = ts(d[i]); if (t === null) continue;
+      var dt = ist(t), mo = dt.getUTCMonth();
+      if (mo !== lastM) { if (lastM !== -1 && X(i) < Wd - R - 14) g += '<text x="' + X(i).toFixed(1) + '" y="' + (Ht - 5) + '" class="ax">' + MON[mo] + '</text>'; lastM = mo; }
+    }
+    var line = function (arr, cls) {
+      var pts = [], seg = '';
+      for (var k = 0; k < n; k++) { if (arr[k] > 0) pts.push(X(k).toFixed(1) + ',' + Y(arr[k]).toFixed(1)); else if (pts.length) { seg += '<polyline class="' + cls + '" points="' + pts.join(' ') + '"/>'; pts = []; } }
+      if (pts.length > 1) seg += '<polyline class="' + cls + '" points="' + pts.join(' ') + '"/>';
+      return seg;
+    };
+    g += line(m200, 'ma200') + line(m50, 'ma50');
+    for (i = 0; i < n; i++) {
+      if (!(c[i] > 0)) continue;
+      var up = c[i] >= o[i], x = X(i), y1 = Y(Math.max(o[i], c[i])), y2 = Y(Math.min(o[i], c[i]));
+      g += '<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + Y(hi[i]).toFixed(1) + '" y2="' + Y(lo[i] > 0 ? lo[i] : c[i]).toFixed(1) + '" class="' + (up ? 'cu' : 'cd') + '"/>' +
+        '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0.8, y2 - y1).toFixed(1) + '" class="' + (up ? 'bu' : 'bd') + '"/>';
+    }
+    lv.forEach(function (x) {
+      var y = Y(x.v), cls = x.k === 'stop' ? 'lstop' : x.k === 'target' ? 'ltgt' : 'lent';
+      g += '<line x1="' + L + '" x2="' + (Wd - R) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" class="lvl ' + cls + '"/>';
+    });
+    return '<svg class="chart" viewBox="0 0 ' + Wd + ' ' + Ht + '" role="img" aria-label="Price chart">' + g + '</svg>';
+  }
+  function chartSheet(sym, ch) {
+    var res = O(ch.res), title = sym || 'Chart';
+    if (T(ch.err).trim()) return shell(title, '<p class="lead">' + esc(T(ch.err).trim()) + '</p>', btn('sheet-close', null, 'Close', ''));
+    if (!ch.res) return shell(title, '<div class="cload"><span class="spin"></span>Loading price history…</div>', btn('sheet-close', null, 'Close', ''));
+    var st = O(res.stats), nm = T(res.name).trim();
+    var lv = A(res.levels).filter(function (x) { return N(x.v) > 0; });
+    var body = (nm && nm !== sym ? '<p class="lead cname">' + esc(nm) + '</p>' : '') +
+      '<div class="cpx"><span class="big num">' + px(st.ltp) + '</span><span class="num ' + tone(st.ret5) + '">' + pc(st.ret5, true) + ' in a week</span></div>' +
+      chartSvg(res) +
+      '<div class="cleg"><span><i class="s50"></i>50-day average</span><span><i class="s200"></i>200-day average</span></div>';
+    if (lv.length) body += '<div class="clv">' + lv.map(function (x) {
+      var k = T(x.kind), cls = k === 'stop' ? 'lstop' : k === 'target' ? 'ltgt' : 'lent';
+      var diff = N(st.ltp) > 0 ? (N(x.v) / N(st.ltp) - 1) * 100 : null;
+      return '<div class="' + cls + '"><i></i><span class="t">' + tx(x.label) + '</span><b class="num">' + px(x.v) + '</b><span class="num mut">' + (diff === null ? '' : pc(diff, true)) + '</span></div>';
+    }).join('') + '</div>';
+    var cell = function (k, v, cls) { return '<div><div class="k">' + k + '</div><div class="v num ' + (cls || '') + '">' + v + '</div></div>'; };
+    var vs = function (ma) { var a = N(ma), l = N(st.ltp); return a > 0 && l > 0 ? pc((l / a - 1) * 100, true) : DASH; };
+    var vt = function (ma) { var a = N(ma), l = N(st.ltp); return a > 0 && l > 0 ? tone(l - a) : ''; };
+    body += '<div class="cst">' + cell('1 month', pc(st.ret21, true), tone(st.ret21)) + cell('3 months', pc(st.ret63, true), tone(st.ret63)) + cell('6 months', pc(st.ret126, true), tone(st.ret126)) +
+      cell('vs 50-day avg', vs(st.sma50), vt(st.sma50)) + cell('vs 200-day avg', vs(st.sma200), vt(st.sma200)) + cell('RSI (14)', N(st.rsi14) > 0 ? String(Math.round(N(st.rsi14))) : DASH) +
+      cell('52-week high', px(st.high52)) + cell('52-week low', px(st.low52)) + cell('From high', N(st.high52) > 0 && N(st.ltp) > 0 ? pc((N(st.ltp) / N(st.high52) - 1) * 100, true) : DASH) + '</div>';
+    return shell(title, body, btn('sheet-close', null, 'Close', ''));
+  }
   function sheet(kind, S, ui, data) {
     S = O(S); ui = O(ui); data = O(data);
     var id = T(data.id);
+    if (kind === 'chart') return chartSheet(id, O(ui.chart));
     if (kind === 'take') {
       var g = A(S.signals).filter(function (x) { return T(x.id) === id; })[0];
       if (!g) return shell('Buy idea', '<p class="lead">This buy idea is no longer available.</p>', btn('sheet-close', null, 'Close', ''));

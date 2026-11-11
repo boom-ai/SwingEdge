@@ -159,6 +159,7 @@ class Holding {
     var stop = 0.0; var bookAt = 0.0
     var reasons: List<String> = listOf("Added — prices load on the next scan", "Verdict appears once data is in")
     var dataOk = false
+    var strength = 0
     /** "VERDICT@day" of the last verdict notification, and the day a stop-cross was last notified. */
     var notifiedKey = ""
     var lastVerdict = ""
@@ -172,7 +173,7 @@ class Holding {
     fun toMap(): Map<String, Any?> = linkedMapOf(
         "sym" to sym, "name" to name, "qty" to qty, "avg" to Fmt.r2(avg), "ltp" to Fmt.r2(ltp), "valueRs" to Fmt.r2(valueRs()),
         "pnlRs" to Fmt.r2(pnlRs()), "pnlPct" to Fmt.r2(if (avg > 0 && ltp > 0) (ltp / avg - 1) * 100.0 else 0.0), "dayChgPct" to Fmt.r2(dayChgPct()),
-        "verdict" to verdict, "headline" to headline, "stop" to Fmt.r2(stop), "bookAt" to Fmt.r2(bookAt), "reasons" to reasons, "dataOk" to dataOk
+        "verdict" to verdict, "headline" to headline, "stop" to Fmt.r2(stop), "bookAt" to Fmt.r2(bookAt), "reasons" to reasons, "dataOk" to dataOk, "strength" to strength
     )
 
     fun persist(): Map<String, Any?> {
@@ -189,7 +190,7 @@ class Holding {
             if (h.sym.isEmpty() || !(h.qty > 0)) return null
             h.name = m.str("name", h.sym); h.ltp = m.num("ltp"); h.prevClose = m.num("prevClose")
             h.verdict = m.str("verdict", "WATCH").let { if (it in setOf("HOLD", "TRIM", "SELL", "WATCH")) it else "WATCH" }
-            h.headline = m.str("headline", h.headline); h.stop = m.num("stop"); h.bookAt = m.num("bookAt")
+            h.headline = m.str("headline", h.headline); h.stop = m.num("stop"); h.bookAt = m.num("bookAt"); h.strength = m.int("strength", 0)
             val r = m.strList("reasons")
             if (r.isNotEmpty()) h.reasons = r
             h.dataOk = m.bool("dataOk"); h.notifiedKey = m.str("notifiedKey"); h.lastVerdict = m.str("lastVerdict")

@@ -133,6 +133,9 @@ object Params {
     var CACHE_SHARDS = 16
     /** Up to this many stocks, every scan fetches a live quote for all of them; above it, only when buys are possible. */
     var FULL_QUOTE_MAX_UNIVERSE = 250
+    /** When no strategy is LIVE, still show (clearly labelled, paper-tracked) setups from enabled strategies that failed the test. */
+    var EXPERIMENTAL_ENABLED = true
+    var EXPERIMENTAL_MAX_PER_DAY = 3
     var HTTP_BATCH = 40
     var YAHOO_HOST_1 = "https://query1.finance.yahoo.com"
     var YAHOO_HOST_2 = "https://query2.finance.yahoo.com"

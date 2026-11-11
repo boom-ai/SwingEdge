@@ -355,7 +355,7 @@ class SwingApp(private val p: Platform) {
         for (t in st.trades) if (t.status == "OPEN") all.add(t.sym)
         val key = dailyKeyFor(day)
         val buyWindowNow = weekday && min >= Params.BUY_WINDOW_START_MIN && min <= Params.BUY_WINDOW_END_MIN
-        val fullQuotes = manual || (buyWindowNow && anyLive()) || universe.size <= Params.FULL_QUOTE_MAX_UNIVERSE
+        val fullQuotes = manual || (buyWindowNow && (anyLive() || Params.EXPERIMENTAL_ENABLED)) || universe.size <= Params.FULL_QUOTE_MAX_UNIVERSE
         var quoteOnly: HashSet<String>? = null
         if (!fullQuotes) {
             val q = HashSet<String>()
@@ -459,7 +459,11 @@ class SwingApp(private val p: Platform) {
     private fun sizeFor(entry: Double, sl: Double): Int = positionSize(st.settings.capital, st.settings.riskPct, st.settings.costPct, entry, sl)
 
     private fun makeSignals(now: Long, day: Int) {
-        val liveStrats = Strategies.all.filter { it.enabled() && st.strat(it.id).verdict == "LIVE" }
+        var liveStrats = Strategies.all.filter { it.enabled() && st.strat(it.id).verdict == "LIVE" }
+        // Experimental mode: when nothing is LIVE, show setups from enabled strategies that FAILED their test,
+        // clearly labelled, so the scorecard can show on paper whether they would have worked.
+        val experimental = liveStrats.isEmpty() && Params.EXPERIMENTAL_ENABLED
+        if (experimental) liveStrats = Strategies.all.filter { it.enabled() && st.strat(it.id).testedAt > 0L }
         if (liveStrats.isEmpty()) {
             if (st.noLiveWarnDay != day) {
                 st.noLiveWarnDay = day
@@ -488,6 +492,7 @@ class SwingApp(private val p: Platform) {
         if (found.isEmpty()) return
         found.sortWith(compareByDescending<Setup> { st.strat(it.strategyId).avgPct }.thenByDescending { it.rank }.thenBy { it.sym })
         var slots = st.settings.maxOpenTrades - st.trades.count { it.status == "OPEN" && !it.paper } - st.signals.count { it.status == "NEW" }
+        if (experimental) slots = minOf(slots, Params.EXPERIMENTAL_MAX_PER_DAY - st.signals.count { it.day == day })
         for (raw in found) {
             if (slots <= 0) break
             // levels are fixed to the paisa here, so the money maths uses exactly what the user is shown
@@ -502,7 +507,8 @@ class SwingApp(private val p: Platform) {
             val cost = su.entry * qty * st.settings.costPct / 100.0
             val sig = Signal()
             sig.id = "S$day-${su.sym}"
-            sig.sym = su.sym; sig.name = nameOf(su.sym); sig.strategyId = sg.id; sig.strategyLabel = sg.label
+            sig.sym = su.sym; sig.name = nameOf(su.sym); sig.strategyId = sg.id
+            sig.strategyLabel = if (experimental) "EXPERIMENTAL · " + sg.label else sg.label
             sig.createdAt = now; sig.day = day; sig.validTill = Clock.msAt(Clock.nextWeekday(day), Clock.OPEN_MIN)
             sig.ltp = su.entry; sig.entry = su.entry; sig.entryMax = Fmt.r2(su.entry * Params.ENTRY_MAX_MULT)
             sig.sl = su.sl; sig.t1 = su.t1; sig.t2 = su.t2; sig.qty = qty
@@ -511,7 +517,8 @@ class SwingApp(private val p: Platform) {
             val half = if (qty >= 2) qty / 2 else 0
             sig.rewardRs = if (su.t2 > 0) maxOf(0.0, half * (su.t1 - su.entry) + (qty - half) * (su.t2 - su.entry) - cost) else 0.0
             sig.edgeN = ss.n; sig.edgeWinPct = ss.winPct; sig.edgeAvgPct = ss.avgPct; sig.edgePf = ss.pf
-            sig.reasons = su.reasons
+            sig.reasons = if (experimental) listOf("Experimental: this rule FAILED its latest test (" + ss.n + " trades, avg " + Fmt.pct(ss.avgPct) +
+                " after charges). Tracked on paper — the scorecard will show how it does.") + su.reasons else su.reasons
             st.signals.add(sig)
             // every signal starts life as a paper trade; it is removed if the user takes the trade for real
             val pt = Trade()
@@ -522,7 +529,7 @@ class SwingApp(private val p: Platform) {
             st.trades.add(pt)
             val levels = if (su.t2 > 0) "SL " + Fmt.rs(su.sl) + " · T1 " + Fmt.rs(su.t1) + " · T2 " + Fmt.rs(su.t2)
             else "SL " + Fmt.rs(su.sl) + " · sell at close of day " + Params.HOLD_DAYS
-            post("buy", nid("buy", sig.id), "BUY " + su.sym + " " + Fmt.rs(su.entry) + "–" + Fmt.num(sig.entryMax),
+            post("buy", nid("buy", sig.id), (if (experimental) "EXPERIMENTAL (failed test) " else "BUY ") + su.sym + " " + Fmt.rs(su.entry) + "–" + Fmt.num(sig.entryMax),
                 levels + " · " + Fmt.plural(qty, "share") + " (" + Fmt.rs0(sig.investRs) + ") · " + sg.label + ": " + ss.n + " test trades, " +
                     Math.round(ss.winPct) + "% won, avg " + Fmt.pct(ss.avgPct))
             slots--

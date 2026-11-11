@@ -355,8 +355,9 @@
     var facts = '<span><b>' + qtyStr(g.qty) + '</b> shares</span><span>Invest <b>' + rs(g.investRs) + '</b></span>' +
       '<span>Hold up to <b>' + (hold !== null && hold > 0 ? cnt(hold) : DASH) + '</b> days</span>';
     if (vt !== null) facts += vt > now ? '<span>Valid till <b>' + hm(vt) + '</b></span>' : '<span class="mut">Validity passed ' + esc(rel(vt, now)) + '</span>';
-    return '<article class="card rail k-buy"><div class="cb">' +
-      '<div class="hd"><div class="who"><div class="sym">' + tag('buy', 'BUY', 'up') + '<b>' + tx(g.sym) + '</b></div>' +
+    var exp = /^EXPERIMENTAL/i.test(T(g.strategyLabel)); /* strategy failed its test: shown as a paper idea, not a buy call */
+    return '<article class="card rail ' + (exp ? 'k-trim' : 'k-buy') + '"><div class="cb">' +
+      '<div class="hd"><div class="who"><div class="sym">' + (exp ? tag('trim', 'TEST IDEA') : tag('buy', 'BUY', 'up')) + '<b>' + tx(g.sym) + '</b></div>' +
       '<div class="sub">' + tx(g.name, '') + (T(g.name).trim() && T(g.strategyLabel).trim() ? ' · ' : '') + tx(g.strategyLabel, '') + '</div></div>' +
       '<div class="px"><div class="ltp">' + px(g.ltp) + '</div><div class="ltpl">last price</div></div></div>' +
       '<div class="zone"><span class="k">Buy between</span><span class="v">' + zone + '</span></div>' +
@@ -366,7 +367,7 @@
       '<div class="facts">' + facts + '</div>' +
       rrBar(g) + edgeLine(g.edge) +
       reasonsBlock('sig:' + id, g.reasons, ui, 'Why this stock') +
-      '<div class="btns">' + btn('take', id, 'I bought it', 'pri grow', { disabled: !id || busySkip, busy: busyTake, icon: 'check' }) +
+      '<div class="btns">' + btn('take', id, exp ? 'I bought it anyway' : 'I bought it', (exp ? '' : 'pri ') + 'grow', { disabled: !id || busySkip, busy: busyTake, icon: 'check' }) +
       btn('skip', id, 'Skip', 'ghost', { disabled: !id || busyTake, busy: busySkip }) + '</div>' +
       '</div></article>';
   }

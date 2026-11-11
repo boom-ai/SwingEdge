@@ -13,7 +13,7 @@
     });
   } catch (e) { /* ignore */ }
 
-  var TABS = { today: 1, trades: 1, portfolio: 1, alerts: 1 };
+  var TABS = { today: 1, setups: 1, trades: 1, portfolio: 1, alerts: 1 };
   var S = {}, lastJson = null, lastDevJson = null;
   var ui = { tab: TABS[qs.tab] ? qs.tab : 'today', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now() };
   var cache = { top: null, view: null, tabs: null };

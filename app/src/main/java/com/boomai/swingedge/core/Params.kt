@@ -168,7 +168,9 @@ object Params {
     /** When no strategy is LIVE, still show (clearly labelled, paper-tracked) setups from enabled strategies that failed the test. */
     /** EMA watchlist: 10-day EMA within this fraction of the 20-day EMA (either side) and converging. */
     var WATCH_EMA_GAP_MAX = 0.005
-    var WATCH_MAX = 20
+    var WATCH_MAX = 40
+    /** List crosses from the latest bar (0) back to this many bars ago. */
+    var WATCH_MAX_DAYS_SINCE = 2
     var EXPERIMENTAL_ENABLED = true
     var EXPERIMENTAL_MAX_PER_DAY = 3
     /** A strategy judged on its long research test is paused if the phone's own recent test has at least this many trades and lost money. */

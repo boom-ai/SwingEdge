@@ -502,13 +502,15 @@ class SwingApp(private val p: Platform) {
     private fun sizeFor(entry: Double, sl: Double): Int = positionSize(st.settings.capital, st.settings.riskPct, st.settings.costPct, entry, sl)
 
     /**
-     * EMA watchlist: liquid stocks whose 10-day EMA is above the 50- and 200-day EMAs and is converging on the 20-day EMA
-     * (within WATCH_EMA_GAP_MAX either side and closer than 2 days ago), or has just crossed above it. A tight
-     * consolidation in an uptrend, listed for chart reading — not buy calls.
+     * EMA setups: liquid stocks whose 10-day EMA has just crossed above the 20-day EMA (day 0 = the latest bar, up to
+     * WATCH_MAX_DAYS_SINCE days ago) while the 10-day EMA is above the 50-, 100- and 200-day EMAs.
+     * A list for chart reading — not buy calls.
      */
     private fun computeWatch() {
         val out = ArrayList<Pair<Double, Map<String, Any?>>>()
-        val k10 = 2.0 / 11.0; val k20 = 2.0 / 21.0; val k50 = 2.0 / 51.0; val k200 = 2.0 / 201.0
+        val k10 = 2.0 / 11.0; val k20 = 2.0 / 21.0; val k50 = 2.0 / 51.0; val k100 = 2.0 / 101.0; val k200 = 2.0 / 201.0
+        val keep = Params.WATCH_MAX_DAYS_SINCE + 2
+        val g = DoubleArray(keep)            // g[0] = today's (EMA10 - EMA20), g[1] = yesterday's, ...
         for (sym in universe) {
             val s = live[sym] ?: continue
             val n = s.n
@@ -518,23 +520,29 @@ class SwingApp(private val p: Platform) {
             var tv = 0.0
             for (j in n - 21 until n - 1) tv += s.c[j] * s.v[j]
             if (tv / 20.0 < Params.MIN_AVG_TURNOVER_RS) continue
-            var e10 = s.c[0]; var e20 = e10; var e50 = e10; var e200 = e10
-            var g0 = 0.0; var g1 = 0.0; var g2 = 0.0   // signed (EMA10 - EMA20) / EMA20, today / 1 / 2 days ago
+            var e10 = s.c[0]; var e20 = e10; var e50 = e10; var e100 = e10; var e200 = e10
+            java.util.Arrays.fill(g, 0.0)
             for (j in 1 until n) {
                 val x = s.c[j]
-                e10 += k10 * (x - e10); e20 += k20 * (x - e20); e50 += k50 * (x - e50); e200 += k200 * (x - e200)
-                g2 = g1; g1 = g0; g0 = (e10 - e20) / e20
+                e10 += k10 * (x - e10); e20 += k20 * (x - e20); e50 += k50 * (x - e50); e100 += k100 * (x - e100); e200 += k200 * (x - e200)
+                if (j >= n - keep) { for (q in keep - 1 downTo 1) g[q] = g[q - 1]; g[0] = e10 - e20 }
             }
-            if (!(e10 > e50 && e10 > e200)) continue
-            val crossed = g0 > 0 && g1 <= 0
-            val converging = Math.abs(g0) < Params.WATCH_EMA_GAP_MAX && Math.abs(g0) < Math.abs(g2)
-            if (!crossed && !converging) continue
+            if (!(e10 > e20 && e10 > e50 && e10 > e100 && e10 > e200)) continue
+            // days since the cross: the 10 EMA has been above the 20 EMA for (since + 1) bars and was at/below it before
+            var since = -1
+            for (q in 0..Params.WATCH_MAX_DAYS_SINCE) {
+                if (!(g[q] > 0)) break
+                if (g[q + 1] <= 0) { since = q; break }
+            }
+            if (since < 0) continue
             val prev = s.c[n - 2]
+            val spark = ArrayList<Any?>(30)
+            for (j in maxOf(0, n - 30) until n) spark.add(Fmt.r2(s.c[j]))
             val m = linkedMapOf<String, Any?>("sym" to sym, "name" to nameOf(sym), "ltp" to Fmt.r2(c),
                 "dayChgPct" to Fmt.r2(if (prev > 0) (c / prev - 1) * 100.0 else 0.0), "ema10" to Fmt.r2(e10), "ema20" to Fmt.r2(e20),
-                "ema50" to Fmt.r2(e50), "ema200" to Fmt.r2(e200), "gapPct" to Fmt.r2(g0 * 100.0),
-                "status" to (if (crossed) "CROSSED" else if (g0 >= 0) "ABOVE" else "BELOW"))
-            out.add(Pair(if (crossed) -1.0 else Math.abs(g0), m))
+                "ema50" to Fmt.r2(e50), "ema100" to Fmt.r2(e100), "ema200" to Fmt.r2(e200), "gapPct" to Fmt.r2((e10 - e20) / e20 * 100.0),
+                "daysSince" to since, "barDay" to s.d[n - 1], "spark" to spark, "status" to "CROSSED")
+            out.add(Pair(since * 1000.0 - (e10 - e20) / e20 * 100.0, m))
         }
         out.sortBy { it.first }
         watchItems = out.take(Params.WATCH_MAX).map { it.second }

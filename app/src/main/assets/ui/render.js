@@ -124,6 +124,7 @@
   var IC = {
     today: '<path d="M4 13h3l2.5-7 4 13 2.5-6H20"/>',
     trades: '<path d="M4 19V9M10 19V5M16 19v-8M21 19H3"/>',
+    setups: '<path d="M3 17c4 0 5-9 9-9s4 6 9 6"/><path d="M3 9c5 0 6 7 10 7s4-5 8-5"/>',
     chart: '<path d="M4 4.5v15h16"/><path d="M7.5 14.5l3.5-4 3 2.5 4.5-6"/>',
     portfolio: '<rect x="3.5" y="7" width="17" height="12.5" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12.5h17"/>',
     alerts: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0"/>',
@@ -290,7 +291,7 @@
     }
     return h;
   }
-  var TABS = [['today', 'Today'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
+  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
   function tabbar(S, ui) {
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
@@ -450,17 +451,52 @@
       return '<button type="button" class="mvr" data-c="chart" data-id="' + esc(T(x.sym)) + '"><b>' + tx(x.sym) + '</b><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + pc(x.dayChgPct, true, true) + '</span></button>';
     }).join('') + '</div>';
   }
+  function watchItems(S) { return A(S.watch).filter(function (x) { return T(x.sym).trim() && N(x.ltp) > 0; }); }
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function barDayText(v) {
+    var n = N(v);
+    if (n === null || n < 20000101 || n > 99991231) return '';
+    var m = Math.floor(n / 100) % 100, d = n % 100;
+    return m >= 1 && m <= 12 && d >= 1 && d <= 31 ? d + ' ' + MON[m - 1] : '';
+  }
+  function spark(arr, up) {
+    var v = (Array.isArray(arr) ? arr : []).map(N).filter(function (x) { return x !== null && x > 0; });
+    if (v.length < 5) return '<span class="spk"></span>';
+    var lo = Math.min.apply(null, v), hi = Math.max.apply(null, v), W = 72, H = 28, pts = [], i;
+    if (!(hi > lo)) hi = lo + 1;
+    for (i = 0; i < v.length; i++) pts.push((i / (v.length - 1) * W).toFixed(1) + ',' + (H - 2 - (v[i] - lo) / (hi - lo) * (H - 4)).toFixed(1));
+    return '<svg class="spk ' + (up ? 'u' : 'd') + '" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true"><polyline points="' + pts.join(' ') + '"/></svg>';
+  }
   function watchList(S) {
-    var ws = A(S.watch).filter(function (x) { return T(x.sym).trim() && N(x.ltp) > 0; });
-    var h = '<div class="sec" id="watch"><h2>EMA setup watchlist</h2>' + (ws.length ? '<span class="cnt">' + ws.length + '</span>' : '') + '</div>';
-    if (!ws.length) return h + '<div class="hint hintpad">' + ic('info') + '<span class="t">No stock has its 10-day EMA converging on the 20-day while above the 50- and 200-day EMAs right now. The list refreshes with each scan.</span></div>';
-    h += '<div class="card mv">' + ws.map(function (x) {
-      var st = T(x.status), g = N(x.gapPct), gs = g === null ? '' : Math.abs(g).toFixed(2) + '% ';
-      var txt = st === 'CROSSED' ? '10 EMA crossed above 20 EMA today' : st === 'BELOW' ? '10 EMA ' + gs + 'below 20 EMA, converging' : '10 EMA ' + gs + 'above 20 EMA, converging';
-      return '<button type="button" class="mvr wt" data-c="chart" data-id="' + esc(T(x.sym)) + '"><span class="wn"><b>' + tx(x.sym) + '</b><span class="ws ' + (st === 'CROSSED' ? 'up' : '') + '">' + txt +
-        '</span></span><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + pc(x.dayChgPct, true, true) + '</span></button>';
-    }).join('') + '</div>';
-    return h + '<div class="hint hintpad">' + ic('info') + '<span class="t">10-day EMA above the 50- and 200-day EMAs and converging on the 20-day: a tight range in an uptrend. For your own chart reading, not buy calls. On 13 years of NSE data it made about +0.1% to +0.2% per trade over 6 days after charges, too little to count as an edge. Tap a row for the chart.</span></div>';
+    var ws = watchItems(S), n0 = ws.filter(function (x) { return N(x.daysSince) === 0; }).length;
+    return '<button type="button" class="card golink" data-c="tab" data-id="setups">' + ic('setups') +
+      '<span class="gt"><b>EMA setups</b><span>' + (ws.length ? (n0 ? n0 + ' crossed on the latest bar' : 'None on the latest bar') + (ws.length > n0 ? ' · ' + (ws.length - n0) + ' in the 2 days before' : '') : 'No fresh 10/20 EMA cross right now') + '</span></span>' + ic('chev') + '</button>';
+  }
+  function setupRow(x) {
+    var sv = (Array.isArray(x.spark) ? x.spark : []).map(N), up = sv.length > 1 && sv[sv.length - 1] !== null && sv[0] !== null ? sv[sv.length - 1] >= sv[0] : true;
+    var nm = T(x.name).trim(), sym = T(x.sym).trim();
+    return '<button type="button" class="srow" data-c="chart" data-id="' + esc(sym) + '">' +
+      '<span class="s1"><span class="wn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '10 EMA ' + (N(x.gapPct) === null ? '' : Math.abs(N(x.gapPct)).toFixed(2) + '% ') + 'above 20 EMA') + '</span></span>' +
+      spark(x.spark, up) + '<span class="sp"><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + pc(x.dayChgPct, true, true) + '</span></span></span>' +
+      '<span class="s2"><span>EMA 10 <b>' + px(x.ema10) + '</b></span><span>20 <b>' + px(x.ema20) + '</b></span><span>50 <b>' + px(x.ema50) + '</b></span><span>100 <b>' + px(x.ema100) + '</b></span><span>200 <b>' + px(x.ema200) + '</b></span></span></button>';
+  }
+  function setups(S, ui) {
+    var ws = watchItems(S), asof = '', h = '';
+    ws.forEach(function (x) { if (!asof) asof = barDayText(x.barDay); });
+    h += '<div class="card setuphd"><h2>Fresh EMA crossovers</h2>' +
+      '<div class="crit"><span>' + ic('check') + '10 EMA crossed above 20 EMA</span><span>' + ic('check') + '10 EMA above the 50, 100 and 200 EMA</span><span>' + ic('check') + 'Traded ₹25 crore+ a day</span></div>' +
+      (asof ? '<div class="asof">Latest bar: ' + asof + (S.marketOpen === true ? ' · today’s bar is still forming until 3:30 pm' : '') + '</div>' : '') + '</div>';
+    if (!ws.length) {
+      return h + '<div class="empty"><div class="ei">' + ic('setups') + '</div><h3>No fresh crossovers</h3><p>No liquid stock has its 10-day EMA crossing above the 20-day while above the 50, 100 and 200 right now. ' +
+        (N(S.lastScanAt) > 0 ? 'The list refreshes with each scan; tap “Scan now” on Today for live prices.' : 'Run a scan on the Today tab to fill this list.') + '</p></div>';
+    }
+    [[0, 'Day 0 · crossed on the latest bar'], [1, '1 day ago'], [2, '2 days ago']].forEach(function (grp) {
+      var it = ws.filter(function (x) { var d = N(x.daysSince); return (d === null ? 0 : d) === grp[0]; });
+      if (!it.length && grp[0] !== 0) return;
+      h += '<div class="sec"><h2>' + grp[1] + '</h2>' + (it.length ? '<span class="cnt">' + it.length + '</span>' : '') + '</div>';
+      h += it.length ? '<div class="card mv">' + it.map(setupRow).join('') + '</div>' : '<div class="hint hintpad">' + ic('info') + '<span class="t">Nothing crossed on the latest bar.</span></div>';
+    });
+    return h + '<div class="hint hintpad">' + ic('info') + '<span class="t">A screener for your own chart reading, not buy calls. On NSE data from 2013 this setup did no better than a random uptrend stock over the next 6 days; held about a month it averaged +1.2% per trade against +0.7% for a random uptrend stock, with losing years. Tap a row for the chart.</span></div>';
   }
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
@@ -735,6 +771,7 @@
     if (ui.tab === 'trades') return trades(S, ui);
     if (ui.tab === 'portfolio') return portfolio(S, ui);
     if (ui.tab === 'alerts') return alerts(S, ui);
+    if (ui.tab === 'setups') return setups(S, ui);
     return today(S, ui);
   }
 

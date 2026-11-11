@@ -166,7 +166,7 @@ class Holding {
     var belowStop = false
 
     fun valueRs(): Double = if (ltp > 0) ltp * qty else avg * qty
-    fun pnlRs(): Double = if (ltp > 0) (ltp - avg) * qty else 0.0
+    fun pnlRs(): Double = if (ltp > 0 && avg > 0) (ltp - avg) * qty else 0.0
     fun dayChgPct(): Double = if (ltp > 0 && prevClose > 0) (ltp / prevClose - 1) * 100.0 else 0.0
 
     fun toMap(): Map<String, Any?> = linkedMapOf(

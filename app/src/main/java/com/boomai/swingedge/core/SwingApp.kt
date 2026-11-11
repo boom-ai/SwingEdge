@@ -154,6 +154,16 @@ class SwingApp(private val p: Platform) {
                 val nn = HoldingsImport.normName(name)
                 if (nn.isNotEmpty() && !rev.containsKey(nn)) rev[nn] = sym
             }
+            // extra "SYMBOL,Company Name" pairs used only to recognise names in imported files (not scanned)
+            for (line in (p.asset("aliases.csv") ?: "").split('\n')) {
+                val k = line.indexOf(',')
+                if (k <= 0) continue
+                val sym = line.substring(0, k).trim().uppercase()
+                val nn = HoldingsImport.normName(line.substring(k + 1))
+                if (sym.isEmpty() || sym.contains(' ') || nn.isEmpty()) continue
+                if (!rev.containsKey(nn)) rev[nn] = sym
+                if (!nm.containsKey(sym)) nm[sym] = line.substring(k + 1).trim()
+            }
             universe = syms; names = nm; nameToSym = rev
         } catch (t: Throwable) {
             log("universe load failed: $t")
@@ -933,7 +943,7 @@ class SwingApp(private val p: Platform) {
             m["holdings"] = s.holdings.map { it.toMap() }
             var inv = 0.0; var value = 0.0; var dayPnl = 0.0
             for (h in s.holdings) {
-                inv += h.avg * h.qty; value += h.valueRs()
+                inv += if (h.avg > 0) h.avg * h.qty else h.valueRs(); value += h.valueRs()   // no buy price: counted at current value, so it adds no P&L
                 if (h.ltp > 0 && h.prevClose > 0) dayPnl += (h.ltp - h.prevClose) * h.qty
             }
             m["portfolio"] = linkedMapOf(

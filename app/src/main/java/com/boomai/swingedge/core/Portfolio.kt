@@ -277,6 +277,24 @@ object HoldingsImport {
         if (known.contains(x)) return x
         val nm = normName(cell)
         if (nm.isNotEmpty()) nameToSym[nm]?.let { return it }
+        // brokers often shorten names ("BEHARI LAL ENG", "MANIPAL HEALTH"): accept a company whose name starts
+        // with the same words (last word may be cut short), but only when exactly one company fits
+        if (nm.length >= 6 && cell.trim().contains(' ')) {
+            val toks = nm.split(' ')
+            var hit: String? = null
+            var many = false
+            for ((k, v) in nameToSym) {
+                val kt = k.split(' ')
+                if (kt.size < toks.size) continue
+                var okAll = true
+                for (i in toks.indices) {
+                    val same = if (i == toks.size - 1) kt[i].startsWith(toks[i]) else kt[i] == toks[i]
+                    if (!same) { okAll = false; break }
+                }
+                if (okAll) { if (hit != null && hit != v) many = true; hit = v }
+            }
+            if (hit != null && !many) return hit
+        }
         if (SYM_RE.matches(x) && x.any { it in 'A'..'Z' } && !ISIN_RE.matches(x)) return x
         return null
     }
@@ -398,14 +416,17 @@ object HoldingsImport {
                 when {
                     sym == null -> skipped.add("Line $lineNo: no stock symbol found — $shown")
                     qty == null || !(qty > 0) -> skipped.add("Line $lineNo: $sym — no quantity")
-                    avg == null || !(avg > 0) -> skipped.add("Line $lineNo: $sym — no average price")
-                    qty > 1e9 || avg > 1e7 -> skipped.add("Line $lineNo: $sym — numbers look wrong")
+                    qty > 1e9 || (avg != null && avg > 1e7) -> skipped.add("Line $lineNo: $sym — numbers look wrong")
                     else -> {
+                        // a missing buy price is accepted as 0: the holding is still tracked, just without P&L
+                        val av = if (avg != null && avg > 0) avg else 0.0
                         val ex = merged[sym]
-                        if (ex == null) merged[sym] = ImportRow(sym, qty, avg)
+                        if (ex == null) merged[sym] = ImportRow(sym, qty, av)
+                        else if (av <= 0) skipped.add("Line $lineNo: $sym — no average price (already listed above)")
+                        else if (ex.avg <= 0) { ex.qty = qty; ex.avg = av }
                         else {
                             val tq = ex.qty + qty
-                            ex.avg = (ex.avg * ex.qty + avg * qty) / tq
+                            ex.avg = (ex.avg * ex.qty + av * qty) / tq
                             ex.qty = tq
                         }
                     }

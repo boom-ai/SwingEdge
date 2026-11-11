@@ -282,7 +282,7 @@ class SwingApp(private val p: Platform) {
     }
 
     /** Fetches daily history (when not yet fetched under [dailyKey]) and intraday bars for [syms]; fills `live` and `quotes`. Returns symbols with a quote. */
-    private fun fetchSymbols(syms: List<String>, today: Int, dailyKey: Int, force: Boolean, pct0: Int, pct1: Int): Int {
+    private fun fetchSymbols(syms: List<String>, today: Int, dailyKey: Int, force: Boolean, pct0: Int, pct1: Int, quoteOnly: Set<String>? = null): Int {
         val needDaily = syms.filter { val k = cache.keyOf(it); k != dailyKey || (force && cache.get(it) == null) }
         val mid = if (needDaily.isEmpty()) pct0 else pct0 + (pct1 - pct0) * 6 / 10
         if (needDaily.isNotEmpty()) {
@@ -293,9 +293,13 @@ class SwingApp(private val p: Platform) {
                 else if (cache.get(sym) == null) cache.put(sym, Series(sym, 1), dailyKey) // remember the failure for today
             }
         }
-        val intr = fetchParsed(syms, { h, s -> Yahoo.intradayUrl(h, s) }, { s, t -> Yahoo.intraday(s, t) }, "Getting live prices…", mid, pct1)
+        // Live quotes for everything only when needed (buy window with a LIVE strategy, or a manual scan);
+        // otherwise just the index, holdings and open trades. History above is still kept for every stock.
+        val qsyms = if (quoteOnly == null) syms else syms.filter { quoteOnly.contains(it) }
+        val intr = fetchParsed(qsyms, { h, s -> Yahoo.intradayUrl(h, s) }, { s, t -> Yahoo.intraday(s, t) }, "Getting live prices…", mid, pct1)
+        if (quoteOnly != null) for (sym in syms) if (!quoteOnly.contains(sym) && !live.containsKey(sym)) buildLive(sym, null)?.let { live[sym] = it }
         var n = 0
-        for (sym in syms) {
+        for (sym in qsyms) {
             val q = intr[sym]
             if (q != null) { quotes[sym] = q; n++ } else quotes.remove(sym)
             val s = buildLive(sym, q)
@@ -350,9 +354,19 @@ class SwingApp(private val p: Platform) {
         for (h in st.holdings) all.add(h.sym)
         for (t in st.trades) if (t.status == "OPEN") all.add(t.sym)
         val key = dailyKeyFor(day)
-        fetchSymbols(all.toList(), day, key, manual, 3, 80)
+        val buyWindowNow = weekday && min >= Params.BUY_WINDOW_START_MIN && min <= Params.BUY_WINDOW_END_MIN
+        val fullQuotes = manual || (buyWindowNow && anyLive()) || universe.size <= Params.FULL_QUOTE_MAX_UNIVERSE
+        var quoteOnly: HashSet<String>? = null
+        if (!fullQuotes) {
+            val q = HashSet<String>()
+            q.add(idxSym)
+            for (h in st.holdings) q.add(h.sym)
+            for (t in st.trades) if (t.status == "OPEN") q.add(t.sym)
+            quoteOnly = q
+        }
+        fetchSymbols(all.toList(), day, key, manual, 3, 80, quoteOnly)
         var okCount = 0
-        for (s in universe) if (quotes.containsKey(s) && live.containsKey(s)) okCount++
+        for (s in universe) if (if (fullQuotes) quotes.containsKey(s) && live.containsKey(s) else (cache.get(s)?.n ?: 0) > 0) okCount++
         cache.retain(all)
         cache.flush()
 

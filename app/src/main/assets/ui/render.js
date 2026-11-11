@@ -262,6 +262,7 @@
   function header(S, ui) {
     var open = S.marketOpen === true, closed = S.marketOpen === false;
     var note = T(S.marketNote).trim() || (open ? 'Market open' : closed ? 'Market closed' : 'Market status unknown');
+    note = note.split(' \u00b7 ').slice(0, 2).join(' \u00b7 '); /* header keeps status + time; the rest is shown on Today */
     var issues = deviceIssues(ui.device).length;
     var h = '<div class="topbar"><div class="brand">' + ic('logo') + 'SwingEdge</div>' +
       '<div class="mkt ' + (open ? 'open' : closed ? 'closed' : '') + '"><i class="dot"></i><span class="clip">' + esc(note) + '</span></div>' +

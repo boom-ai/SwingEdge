@@ -42,6 +42,7 @@ fun main(args: Array<String>) {
     com.boomai.swingedge.core.Params.BREAKOUT_VOL_ENABLED = true
     com.boomai.swingedge.core.Params.WEEKLY_LEADERS_ENABLED = true
     com.boomai.swingedge.core.Params.DIP_RSI_MAX = 8.0
+    if (System.getenv("TIERED") == "1") com.boomai.swingedge.core.Params.FULL_QUOTE_MAX_UNIVERSE = 0
     val only = args.firstOrNull()
     if (only == "sample") {
         Sample.run()

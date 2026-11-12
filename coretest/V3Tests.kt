@@ -147,9 +147,9 @@ object V3Tests {
         T.eq(ScoreHistory.Portfolio.NIFTY_MAX_DD_PCT, nf.num("maxDrawdownPct"), "Nifty drawdown")
         // the texts carry these numbers
         val ev = ScoreTexts.evidence("BUY", ScoreHistory.band("85-100"))
-        T.eq(ev, "Score 85+ above the 50-day average is a screen, unproven. 2022–26: +1.75% per trade after 0.25% costs (about +1.5% at realistic costs), 32% winners, median trade -3%. " +
+        T.eq(ev, "Tested on NSE 2022–26 with this exact plan: +1.75% per trade after 0.25% costs (about +1.5% at realistic costs), 32% winners, median trade -3%. " +
             "A ₹1 lakh 4-slot portfolio made 3.6–10.9% a year depending on the start date (median about 6%, drawdown -53%) against the Nifty's 7.5% and about 13% for an equal-weight basket. " +
-            "Random stocks above their 50-day average with the same exits did better.", "BUY evidence wording")
+            "Random stocks above their 50-day average with the same exits did better, so size small and follow the stop.", "BUY evidence wording")
         val av = ScoreTexts.evidence("AVOID", ScoreHistory.band("0-39"))
         T.eq(av, "Scores below 55 lagged the average liquid stock by about 1 point over 60 sessions (behind in 13 of 14 years; 2022–26: -0.9). " +
             "They still averaged +2.4%, so this means likely to underperform, not likely to fall. The lag was weaker among the most liquid stocks.", "AVOID evidence wording")
@@ -335,7 +335,7 @@ object V3Tests {
             T.check(c.str("evidence").startsWith("WAIT is not a buy signal"), "WAIT evidence $where")
         } else {
             T.check(c.num("score") >= 85 && c.str("waitFor") == "", "BUY score $where")
-            T.check(c.str("evidence").contains("unproven") && c.str("evidence").contains("32% winners"), "BUY evidence $where")
+            T.check(c.str("evidence").contains("Tested on NSE") && c.str("evidence").contains("32% winners"), "BUY evidence $where")
             val q = c.int("qty")
             val want = SwingApp.positionSize(settings[0], settings[1], settings[2], hi, sl)
             T.eq(q, want, "BUY qty from the user's settings $where")

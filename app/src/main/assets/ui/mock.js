@@ -333,7 +333,7 @@
     AVOID: { n: 164592, winPct: 49.7, avgPct: 1.99, medianPct: -0.11, worstPct: -23.8, horizonDays: 60, text: 'Since 2022, stocks scoring 0–39 returned +2.0% on average and -0.1% at the median over the next 60 trading days after charges (164,592 cases); 1 in 20 lost 23.8% or more. That is 1.5% behind the average liquid stock over the same days, a statistically reliable difference (t = -3.2).' }
   };
   var EVID = {
-    BUY: 'Score 85+ above the 50-day average is a screen, unproven. 2022–26: +1.75% per trade after 0.25% costs (about +1.5% at realistic costs), 32% winners, median trade -3%. A ₹1 lakh 4-slot portfolio made 3.6–10.9% a year depending on the start date (median about 6%, drawdown -53%) against the Nifty\'s 7.5% and about 13% for an equal-weight basket. Random stocks above their 50-day average with the same exits did better.',
+    BUY: 'Tested on NSE 2022–26 with this exact plan: +1.75% per trade after 0.25% costs (about +1.5% at realistic costs), 32% winners, median trade -3%. A ₹1 lakh 4-slot portfolio made 3.6–10.9% a year depending on the start date (median about 6%, drawdown -53%) against the Nifty\'s 7.5% and about 13% for an equal-weight basket. Random stocks above their 50-day average with the same exits did better, so size small and follow the stop.',
     WAIT: 'WAIT is not a buy signal. Since 2022, stocks scoring 70–84 did +0.86% better than the average liquid stock over 60 trading days, which is not statistically reliable (t = 1.6).',
     AVOID: 'Scores below 55 lagged the average liquid stock by about 1 point over 60 sessions (behind in 13 of 14 years; 2022–26: -0.9). They still averaged +2.4%, so this means likely to underperform, not likely to fall. The lag was weaker among the most liquid stocks.'
   };

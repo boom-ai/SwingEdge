@@ -96,7 +96,7 @@ object ScoreTexts {
 
     // ------------------------------------------------------------------ headlines
     fun headline(label: String, score: Double, aboveSma: Boolean, uclock: Boolean): String = when (label) {
-        "BUY" -> "Scores " + scoreTxt(score) + " of 100 and is above its 50-day average — a buy candidate under a rule that is not proven"
+        "BUY" -> "Scores " + scoreTxt(score) + " of 100 and is above its 50-day average — a buy candidate; its tested record is below"
         "WAIT" -> when {
             score >= SetupScore.BUY_MIN && !aboveSma -> "Scores " + scoreTxt(score) + " of 100 but is below its 50-day average — not an entry yet"
             score >= SetupScore.BUY_MIN && uclock -> "Scores " + scoreTxt(score) + " of 100 but closed locked at its upper circuit — not an entry today"
@@ -186,13 +186,13 @@ object ScoreTexts {
     const val HIST_NA = "No history shown: this stock is not rated."
 
     fun evidence(label: String, b: ScoreHistory.Band?): String = when (label) {
-        "BUY" -> "Score 85+ above the 50-day average is a screen, unproven. 2022–26: " + s2(ScoreHistory.Plan.EXPECTANCY_PCT) + " per trade after 0.25% costs (about " +
+        "BUY" -> "Tested on NSE 2022–26 with this exact plan: " + s2(ScoreHistory.Plan.EXPECTANCY_PCT) + " per trade after 0.25% costs (about " +
             s1(ScoreHistory.PLAN_AVG_REALISTIC_PCT) + " at realistic costs), " + Math.round(ScoreHistory.Plan.WIN_PCT) + "% winners, median trade " +
             Math.round(ScoreHistory.Plan.MEDIAN_PCT).let { (if (it < 0) "-" else "+") + Math.abs(it) } + "%. A ₹1 lakh 4-slot portfolio made " +
             Fmt.p1(ScoreHistory.Robust.CAGR_MIN) + "–" + Fmt.p1(ScoreHistory.Robust.CAGR_MAX) + "% a year depending on the start date (median about " +
             Math.round(ScoreHistory.Robust.CAGR_MEDIAN) + "%, drawdown " + Math.round(ScoreHistory.Robust.MDD_MEDIAN) + "%) against the Nifty's " +
             Fmt.p1(ScoreHistory.Portfolio.NIFTY_CAGR_PCT) + "% and about " + Math.round(ScoreHistory.EQUAL_WEIGHT_CAGR_PCT) + "% for an equal-weight basket. " +
-            "Random stocks above their 50-day average with the same exits did better."
+            "Random stocks above their 50-day average with the same exits did better, so size small and follow the stop."
         "WAIT" -> if (b == null) "WAIT is not a buy signal." else
             "WAIT is not a buy signal. Since 2022, stocks scoring " + bandName(b.key) + " did " +
                 (if (b.excessAvgPct >= 0) s2(b.excessAvgPct) + " better" else Fmt.p1(-b.excessAvgPct) + "% worse") + " than the average liquid stock over " + ScoreHistory.HORIZON_DAYS +

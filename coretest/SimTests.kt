@@ -36,7 +36,11 @@ object SimTests {
      "ideas": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"score":0,"label":"BUY","headline":"",
                 "entryLow":0,"entryHigh":0,"stop":0,"t1":0,"t2":0,"rr":0,"horizonDays":60,"spark":[0],"barDay":0,"proven":false}],
      "targets": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"target":0,"stop":0,"note":"","setAt":0,"refPrice":0,
-                  "status":"ACTIVE","hitAt":0,"toTargetPct":0,"toStopPct":0,"progressPct":0}]
+                  "status":"ACTIVE","hitAt":0,"toTargetPct":0,"toStopPct":0,"progressPct":0}],
+     "track": {"startedDay":0,"lastDay":0,"replayDone":true,"busyReplay":false,
+       "live": {"P1":{"buy":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0},"control":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0}},"P2":{"buy":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0},"control":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0}},"avoid":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0},"avoidCtrl":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0},"edgePct":0,"edgeT":0,"upgraded":false,"needText":""},
+       "replay": {"P1":{"buy":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0},"control":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0}},"P2":{"buy":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0},"control":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0}},"avoid":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0},"avoidCtrl":{"n":0,"open":0,"closed":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"avgSessions":0},"edgePct":0,"edgeT":0,"fromDay":0,"toDay":0},
+       "recent": [{"sym":"","group":"BUY","day":0,"plan":"P1","status":"OPEN","fill":0,"exit":0,"retPct":0,"sessions":0}]}
     }""").asObj()
 
     private val ENUMS = mapOf(
@@ -44,7 +48,9 @@ object SimTests {
         "trades.status" to setOf("OPEN", "CLOSED"), "trades.action" to setOf("HOLD", "BOOK_HALF", "EXIT", "TIME_EXIT"),
         "holdings.verdict" to setOf("HOLD", "TRIM", "SELL", "WATCH"), "strategies.verdict" to setOf("LIVE", "PAUSED", "UNTESTED"),
         "feed.kind" to setOf("buy", "sell", "brief", "info", "warn"), "myWatch.stack" to setOf("BULLISH", "MIXED", "BEARISH"),
-        "ideas.label" to setOf("BUY"), "targets.status" to setOf("ACTIVE", "HIT_TARGET", "HIT_STOP")
+        "ideas.label" to setOf("BUY"), "targets.status" to setOf("ACTIVE", "HIT_TARGET", "HIT_STOP"),
+        "track.recent.group" to setOf("BUY", "CONTROL", "AVOID", "AVOID_CTRL"), "track.recent.plan" to setOf("P1", "P2"),
+        "track.recent.status" to setOf("OPEN", "CLOSED", "SKIPPED")
     )
 
     private fun shape(path: String, tpl: Any?, v: Any?, errs: ArrayList<String>) {

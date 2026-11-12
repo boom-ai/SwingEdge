@@ -326,6 +326,55 @@ document.getElementById('f').onload=async()=>{
     const t2=mkT(svg,1,x,y);tev(svg,'touchstart',[t2]);await sleep(40);tev(svg,'touchend',[],[t2]);await sleep(450);ok(!!q('.sheet.cfs'),'the tap after that expands the chart');
     await closeAll();
   });
+  await sect('track record screen',async()=>{
+    const open=async(how)=>{await how();await sleep(300);};
+    // entry 1: Setups tab row
+    click('[data-c="tab"][data-id="setups"]');await sleep(100);
+    await open(()=>click('#view .trkrow'));ok(!!q('.sheet')&&/Track record/.test(q('.sheet .sh h2').textContent),'Setups row opens the track sheet');
+    ok(qa('.trkt').length>=5&&!!q('.trkbar')&&/150/.test(q('.trkbar').textContent)&&/Needs 150/.test(q('.trkneed').textContent),'stat tables, progress bars and needText render');
+    ok(/does not count/.test(q('.sheet').textContent),'replay note present');
+    hist();await sleep(250);ok(q('#sheet-root').hidden,'Back closes the track sheet');
+    // entry 2: Alerts tab
+    click('[data-c="tab"][data-id="alerts"]');await sleep(100);
+    await open(()=>click('#view .trkrow'));ok(!!q('.sheet .trkt'),'Alerts row opens the track sheet');
+    // recent pick -> stock page, Back returns to the track sheet
+    const pk=q('.trkp');if(pk){const sy=pk.getAttribute('data-id');click(pk);await sleep(900);ok(!!q('.sheet')&&!q('.sheet .trkt'),'a recent pick opens its stock page: '+sy);hist();await sleep(300);ok(!!q('.sheet .trkt'),'Back from the stock page returns to the track sheet');}else ok(false,'recent picks listed');
+    // replay shows busy
+    click('[data-c="replay"]');await sleep(150);ok(q('[data-c="replay"]').disabled&&!!q('[data-c="replay"] .spin'),'Replay button shows busy');
+    ok(calls.filter(c=>c==='replayTrack').length===1,'replayTrack fired once');
+    await sleep(5500);ok(!q('[data-c="replay"]').disabled&&/Replay finished/.test(toasts()),'Replay re-enabled after it finishes: '+toasts());
+    // reset needs a confirm
+    const before=calls.filter(c=>c==='resetTrack').length;
+    click('[data-c="resettrack"]');await sleep(250);ok(/Reset the live record/.test(q('.sheet .sh h2').textContent)&&calls.filter(c=>c==='resetTrack').length===before,'Reset opens a confirm and does not fire yet');
+    click('#sheet-root [data-c="sheet-close"].btn');await sleep(250);ok(!!q('.sheet .trkt')&&calls.filter(c=>c==='resetTrack').length===before,'Keep it returns to the track sheet without resetting');
+    click('[data-c="resettrack"]');await sleep(250);click('[data-c="submit"]');await sleep(900);
+    ok(calls.filter(c=>c==='resetTrack').length===before+1&&!!q('.sheet .trkt'),'confirmed reset fires resetTrack once and lands back on the track sheet');
+    ok(/no closed trades|No picks/.test(q('.sheet').textContent)&&st().track.live.P1.buy.closed===0,'reset track shows the empty live record');
+    hist();await sleep(250);ok(q('#sheet-root').hidden,'Back closes the track sheet');
+    // entry 3: the verdict card of a BUY
+    await openSym('RELIANCE');
+    const vp=q('#st-vcard .vpill');ok(!!vp,'verdict card present');
+    if(vp&&/BUY/.test(vp.textContent)){const lk=q('#st-vcard .vtrk [data-c="track"]');ok(!!lk&&/Live record/.test(q('#st-vcard .vtrk').textContent),'BUY verdict card has the live-record line and link');
+      if(lk){click(lk);await sleep(300);ok(!!q('.sheet .trkt'),'verdict link opens the track sheet');hist();await sleep(250);ok(!!q('#st-vcard'),'Back returns to the stock page');}}
+    else ok(true,'POLYCAB not BUY in this scenario ('+(vp&&vp.textContent)+'), verdict link checked in the upgraded frame');
+    await closeAll();
+  });
+  await sect('upgraded label',async()=>{
+    const f2=document.createElement('iframe');f2.width=390;f2.height=844;document.body.appendChild(f2);
+    await new Promise(r=>{f2.onload=r;f2.src='file:///home/claude/SwingEdge/app/src/main/assets/ui/index.html?track=upgraded&call=buy&sheet=stock&sym=POLYCAB';});
+    await sleep(2500);const d2=f2.contentDocument,p=d2.querySelector('#st-vcard .vpill');
+    ok(!!p&&p.textContent.trim()==='BUY','upgraded: pill reads BUY: '+(p&&p.textContent));
+    ok(/Live record/.test((d2.querySelector('#st-vcard .vevid b')||{}).textContent||''),'upgraded: evidence heading reads Live record');
+    ok(!!d2.querySelector('#st-vcard .vtrk [data-c="track"]'),'upgraded: live line with link');
+    const f3=document.createElement('iframe');f3.width=390;f3.height=844;document.body.appendChild(f3);
+    await new Promise(r=>{f3.onload=r;f3.src='file:///home/claude/SwingEdge/app/src/main/assets/ui/index.html?call=buy&sheet=stock&sym=POLYCAB';});
+    await sleep(2500);const p3=f3.contentDocument.querySelector('#st-vcard .vpill');
+    ok(!!p3&&/BUY CANDIDATE/.test(p3.textContent),'not upgraded: pill reads BUY CANDIDATE');
+    const f4=document.createElement('iframe');f4.width=390;f4.height=844;document.body.appendChild(f4);
+    await new Promise(r=>{f4.onload=r;f4.src='file:///home/claude/SwingEdge/app/src/main/assets/ui/index.html?scenario=empty&sheet=track';});
+    await sleep(1500);const d4=f4.contentDocument;ok(!!d4.querySelector('.sheet .trkt')&&/no closed trades|No picks/.test(d4.querySelector('.sheet').textContent),'empty scenario: track sheet shows empty states');
+    f2.remove();f3.remove();f4.remove();
+  });
   w.onActionResult=oar;
   w.Android.action=orig;
   // malformed pushes must not throw

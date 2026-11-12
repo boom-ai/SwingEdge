@@ -80,7 +80,7 @@ object ScoreHistory {
 object ScoreTexts {
     val POINT_LABELS = listOf("6-month momentum (risk-adjusted)", "6-month return", "12-month return", "Near its 52-week high", "Above its 52-week low")
 
-    const val EXIT_RULE = "Sell if it closes below its 50-day average, or after 60 trading days. Targets are reference levels, not sell orders."
+    const val EXIT_RULE = "Buy at the next open only inside the entry zone. Stop-loss 5 ATR below your buy price; otherwise hold 60 trading days, then sell. Targets are reference levels, not sell orders."
     const val LOW_PRICE_LINE = "Priced under ₹50: scored against the 574 liquid stocks, but the tested history behind these numbers covers ₹50+ stocks only, and low-priced stocks move in bigger jumps"
     const val CAVEAT = "Rule-based and tested on past data. Losses happen; the stop limits them, it does not remove them."
 
@@ -101,9 +101,10 @@ object ScoreTexts {
         "WAIT" -> when {
             score >= SetupScore.BUY_MIN && !aboveSma -> "Scores " + scoreTxt(score) + " of 100 but is below its 50-day average — not an entry yet"
             score >= SetupScore.BUY_MIN && uclock -> "Scores " + scoreTxt(score) + " of 100 but closed locked at its upper circuit — not an entry today"
+            score < SetupScore.AVOID_BELOW -> "Scores " + scoreTxt(score) + " of 100 — weak momentum, but still above its 200-day average, so not an avoid"
             else -> "Scores " + scoreTxt(score) + " of 100 — above average, but under the 85 a buy candidate needs"
         }
-        else -> "Scores " + scoreTxt(score) + " of 100 — in the low group that has lagged the market"
+        else -> "Scores " + scoreTxt(score) + " of 100 and trades below its 200-day average — the group that has lagged the market"
     }
 
     fun naHeadline(kind: String, comp: ScoreComp): String = when (kind) {
@@ -187,20 +188,56 @@ object ScoreTexts {
     const val HIST_NA = "No history shown: this stock is not rated."
 
     fun evidence(label: String, b: ScoreHistory.Band?): String = when (label) {
-        "BUY" -> "Tested on NSE 2022–26 with this exact plan: " + s2(ScoreHistory.Plan.EXPECTANCY_PCT) + " per trade after 0.25% costs (about " +
-            s1(ScoreHistory.PLAN_AVG_REALISTIC_PCT) + " at realistic costs), " + Math.round(ScoreHistory.Plan.WIN_PCT) + "% winners, median trade " +
-            Math.round(ScoreHistory.Plan.MEDIAN_PCT).let { (if (it < 0) "-" else "+") + Math.abs(it) } + "%. A ₹1 lakh 4-slot portfolio made " +
-            Fmt.p1(ScoreHistory.Robust.CAGR_MIN) + "–" + Fmt.p1(ScoreHistory.Robust.CAGR_MAX) + "% a year depending on the start date (median about " +
-            Math.round(ScoreHistory.Robust.CAGR_MEDIAN) + "%, drawdown " + Math.round(ScoreHistory.Robust.MDD_MEDIAN) + "%) against the Nifty's " +
-            Fmt.p1(ScoreHistory.Portfolio.NIFTY_CAGR_PCT) + "% and about " + Math.round(ScoreHistory.EQUAL_WEIGHT_CAGR_PCT) + "% for an equal-weight basket. " +
-            "Random stocks above their 50-day average with the same exits did better, so size small and follow the stop."
+        "BUY" -> R5.BUY_EVIDENCE
         "WAIT" -> if (b == null) "WAIT is not a buy signal." else
             "WAIT is not a buy signal. Since 2022, stocks scoring " + bandName(b.key) + " did " +
                 (if (b.excessAvgPct >= 0) s2(b.excessAvgPct) + " better" else Fmt.p1(-b.excessAvgPct) + "% worse") + " than the average liquid stock over " + ScoreHistory.HORIZON_DAYS +
                 " trading days, " + (if (reliable(b.excessT)) "a statistically reliable difference" else "which is not statistically reliable") + " (t = " + t1(b.excessT) + ")."
-        "AVOID" -> "Scores below 55 lagged the average liquid stock by about " + Math.round(ScoreHistory.LOW_LAG_PTS) + " point over " + ScoreHistory.HORIZON_DAYS +
-            " sessions (behind in " + ScoreHistory.LAG_YEARS_NEG + " of " + ScoreHistory.LAG_YEARS + " years; 2022–26: " + Fmt.p1(ScoreHistory.LOW_LAG_OOS_PTS) + "). " +
-            "They still averaged " + s1(ScoreHistory.LOW_RAW_AVG_PCT) + ", so this means likely to underperform, not likely to fall. The lag was weaker among the most liquid stocks."
+        "AVOID" -> R5.AVOID_EVIDENCE
         else -> "Not rated, so there is no tested record to show."
     }
+
+    // ------------------------------------------------------------------ live track record (SPEC4)
+    const val REPLAY_BUSY = "Replaying the last year…"
+    const val REPLAY_NO_HISTORY = "Not enough price history yet to replay — needs about 15 months of daily bars for most stocks. Try again after a few scans."
+
+    private fun dateTxt(day: Int): String = try {
+        val d = java.time.LocalDate.ofEpochDay(day.toLong())
+        d.dayOfMonth.toString() + " " + MONTHS[d.monthValue - 1] + " " + d.year
+    } catch (t: Throwable) { "" }
+    private val MONTHS = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+    /** Progress toward the upgrade rule (state `track.live.needText`). */
+    fun trackNeedText(p: TrackProof): String {
+        val need = TrackEngine.UPGRADE_MIN_TRADES
+        return when {
+            p.upgraded -> "Met: " + p.buyN + " and " + p.ctrlN + " closed trades; BUY beat the random picks by " + s2(p.edge) +
+                " a trade (t = " + Fmt.p1(p.t) + " over " + p.days + " signal days)."
+            p.buyN < need || p.ctrlN < need -> "Needs " + need + " closed trades in each group (now " + p.buyN + " and " + p.ctrlN + ") and an edge with t ≥ 2."
+            else -> "Has " + need + "+ closed trades in each group; the edge is " + s2(p.edge) + " a trade with t = " + t1(p.t) + " over " + p.days +
+                " signal days (needs t ≥ 2 over at least " + TrackEngine.UPGRADE_MIN_DAYS + " days, and a positive BUY average)."
+        }
+    }
+
+    /** `call.evidence` for BUY once the live record has met the upgrade rule. */
+    fun liveEvidence(p: TrackProof): String =
+        "Live record on this phone since " + dateTxt(p.startedDay) + ": " + Fmt.group(p.buyN.toLong()) + " closed BUY trades with this plan averaged " +
+            s2(p.buyAvg) + " after costs (median " + s2(p.buyMedian) + ", " + Math.round(p.buyWin) + "% winners), against " + s2(p.ctrlAvg) +
+            " for " + Fmt.group(p.ctrlN.toLong()) + " random stocks above their 50-day average picked on the same days — " + s2(p.edge) +
+            " a trade better, t = " + Fmt.p1(p.t) + " over " + p.days + " signal days. Past results can fail to repeat; size small and follow the stop."
+}
+
+/**
+ * Round 5 figures (research/out_r5/app_numbers.json; pre-registered in out_r5/PREREG.md). Out-of-sample window
+ * 2022-01-03 .. 2025-01-29 (signals touching the 2025 data hole excluded), 0.50% round-trip costs unless stated.
+ */
+object R5 {
+    const val BUY_EVIDENCE = "Tested on NSE 2022–Jan 2025 with this exact plan, at realistic 0.5% costs: 937 trades, 50% won, " +
+        "+3.6% average, +0.1% median, 1 in 20 lost 28% or more, about 51 trading days held. A ₹1 lakh 4-stock account made a median 27% a year " +
+        "(6% to 56% depending on the start date, drawdown about 35%), against 10.3% for the Nifty and 19.8% for an equal-weight basket of liquid stocks. " +
+        "Random uptrend stocks with the same exits averaged +3.8% per trade, so the score itself showed no proven edge; and this plan was picked as the best of 11. " +
+        "Size small, follow the stop, and check the live record."
+    const val AVOID_EVIDENCE = "Score below 55 and price below the 200-day average: since 2022 such stocks lagged the average liquid stock by 1.6 points over the next " +
+        "60 trading days (behind in 3 of 4 years; 2013–2025: 1.7 points, 11 of 13 years). Against the biggest stocks the lag was smaller (1.0 point). " +
+        "They still rose 1.7% on average, so this means likely to lag, not likely to fall."
 }

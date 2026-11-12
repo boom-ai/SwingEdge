@@ -530,7 +530,7 @@
     return h + '<div class="card mv">' + rows.map(function (x) { return wrow(x, edit, ui); }).join('') + '</div>';
   }
   function setups(S, ui) {
-    var ws = watchItems(S), asof = '', h = ideasBlock(S, 'setups') + myWatchSection(S, ui);
+    var ws = watchItems(S), asof = '', h = trackRow(S) + ideasBlock(S, 'setups') + myWatchSection(S, ui);
     ws.forEach(function (x) { if (!asof) asof = barDayText(x.barDay); });
     h += '<div class="card setuphd"><h2>Fresh EMA crossovers</h2>' +
       '<div class="crit"><span>' + ic('check') + '10 EMA crossed above 20 EMA</span><span>' + ic('check') + '10 EMA above the 50, 100 and 200 EMA</span><span>' + ic('check') + 'Traded ₹25 crore+ a day</span></div>' +
@@ -814,7 +814,7 @@
       '<div class="hint" style="padding-top:10px">' + ic('clock') + '<span class="t">A re-test downloads about two years of prices and takes a few minutes. You can leave this screen.</span></div>';
     return h;
   }
-  function alerts(S, ui) { return feed(S, ui) + strategies(S, ui); }
+  function alerts(S, ui) { return feed(S, ui) + strategies(S, ui) + '<div class="sec"><h2>Track record</h2></div>' + trackRow(S); }
 
   /* =====================================================================================================
      v3 (SPEC3): buy verdict card, user targets, ranked ideas, full-screen chart chrome + readouts
@@ -870,7 +870,7 @@
     return '<div class="vhist"><div class="vhh">' + ic('flask') + '<b>What happened before</b>' + (d ? '<span>over ' + cnt(d) + ' trading days</span>' : '') + '</div>' +
       (txt ? '<p class="vhx">' + esc(txt) + '</p>' : '') +
       (hasStats ? '<div class="vts">' + tile('Gained', win !== null && win > 0 ? pc(win) : DASH) + tile('Average', avg !== null ? pc(avg, true) : DASH, avg === null ? '' : tone(avg)) +
-        tile('Median', med !== null ? pc(med, true) : DASH, med === null ? '' : tone(med)) + tile('Worst case', wor !== null ? pc(wor, true) : DASH, wor === null ? '' : tone(wor)) + '</div>' +
+        tile('Median', med !== null ? pc(med, true) : DASH, med === null ? '' : tone(med)) + tile('Worst', wor !== null ? pc(wor, true) : DASH, wor === null ? '' : tone(wor)) + '</div>' +
         '<div class="vhn">' + cnt(n) + ' past cases in the same score band, after charges</div>' : '') + '</div>';
   }
   function pointsBlock(pts) {
@@ -878,7 +878,7 @@
     if (!rows.length) return '';
     return '<div class="vpts">' + rows.map(function (p) {
       var v = N(p.pts), mx = N(p.max) > 0 ? N(p.max) : 20, w = v === null ? 0 : Math.max(0, Math.min(100, v / mx * 100));
-      return '<div class="vpt"><span class="l">' + esc(T(p.label).trim()) + '</span><i><b style="width:' + w.toFixed(0) + '%"></b></i><span class="num">' + (v === null ? DASH : v.toFixed(1)) + '<small>/' + mx + '</small></span></div>';
+      return '<div class="vpt"><span class="l">' + esc(shortPt(p.label)) + '</span><i><b style="width:' + w.toFixed(0) + '%"></b></i><span class="num">' + (v === null ? DASH : v.toFixed(1)) + '<small>/' + mx + '</small></span></div>';
     }).join('') + '</div>';
   }
   function verdictCard(S, ui) {
@@ -891,10 +891,11 @@
     var head = T(c.headline).trim(), reasons = texts(c.reasons).slice(0, 8);
     var pillText = lab === 'BUY' && c.proven !== true ? 'BUY CANDIDATE' : lab === 'NA' ? 'NOT RATED' : lab;
     var h = '<section class="card rail ' + k.rail + ' vd vd-' + k.cls + '" id="st-vcard" aria-label="' + esc('SwingEdge call for ' + (sym || 'this stock') + ': ' + lab) + '"><div class="vdb">' +
-      '<div class="vtop"><div class="vl"><div class="vk">Rule-based call' + (T(c.band).trim() ? ' · score band ' + esc(T(c.band).trim()) : '') + '</div><span class="vpill ' + k.cls + '">' + ic(k.icon) + pillText + '</span></div>' +
+      '<div class="vtop"><div class="vl"><div class="vk">Rule-based call</div>' + bandLine(c.band) + '<span class="vpill ' + k.cls + '">' + ic(k.icon) + pillText + '</span></div>' +
       (lab === 'NA' ? '' : '<div class="vscore">' + scoreRing(c.score, k.cls, 60) + '<span class="vsl">setup score</span></div>') + '</div>' +
       (head ? '<p class="vhead">' + esc(head) + '</p>' : '') +
-      (T(c.evidence).trim() && lab !== 'NA' ? '<div class="vevid ' + (c.proven === true ? 'ok' : 'warn') + '">' + ic(c.proven === true ? 'check' : 'info') + '<div><b>' + (c.proven === true ? 'What the test showed' : 'Tested record, 2022–26') + '</b><span>' + esc(T(c.evidence).trim()) + '</span></div></div>' : '') +
+      (T(c.evidence).trim() && lab !== 'NA' ? '<div class="vevid ' + (c.proven === true ? 'ok' : 'warn') + '">' + ic(c.proven === true ? 'check' : 'info') + '<div><b>' + (c.proven === true ? 'Live record' : 'Tested record, 2022–Jan 2025') + '</b><span>' + esc(T(c.evidence).trim()) + '</span></div></div>' : '') +
+      (lab === 'BUY' ? trackLine(S) : '') +
       (lab === 'NA' ? '' : pointsBlock(c.points));
     var lo = N(c.entryLow), hi = N(c.entryHigh), stp = N(c.stop), t1 = N(c.t1), t2 = N(c.t2);
     var levels = lab !== 'AVOID' && ((lo > 0 && hi > 0) || stp > 0 || t1 > 0 || t2 > 0);
@@ -1042,7 +1043,7 @@
       '<span class="s1"><span class="rk num">' + (i + 1) + '</span><span class="wn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
       spark(x.spark, up) + '<span class="sp"><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + (N(x.dayChgPct) === null ? '' : pc(x.dayChgPct, true, true)) + '</span></span></span>' +
       '<span class="s2 idz">' + scoreRing(x.score, k.cls, 36) + '<span class="idt"><span class="vpill sm ' + k.cls + '">' + esc(lab.slice(0, 5)) + '</span></span>' +
-      '<span class="idc"><i>Entry zone</i><b class="num">' + zone + '</b></span><span class="idc"><i>Stop</i><b class="num">' + emaNum(x.stop) + '</b></span><span class="idc"><i>Target 1</i><b class="num">' + emaNum(x.t1) + '</b></span></span>' +
+      '<span class="idc idw"><i>Entry zone</i><b class="num">' + zone + '</b></span><span class="idc"><i>Stop</i><b class="num">' + emaNum(x.stop) + '</b></span><span class="idc"><i>Target 1</i><b class="num">' + emaNum(x.t1) + '</b></span></span>' +
       (full && (T(x.headline).trim() || (rr !== null && rr > 0) || hz > 0) ? '<span class="s3 clip">' + ((rr !== null && rr > 0) ? 'Reward : risk 1 : ' + (rr > 99 ? '>99' : rr.toFixed(1)) : '') + (hz > 0 ? ((rr !== null && rr > 0) ? ' · ' : '') + 'about ' + cnt(hz) + ' trading days' : '') + '</span>' : '') +
       '</button>';
   }
@@ -1107,7 +1108,7 @@
       '<div class="cfstage" id="cf-stage"><canvas id="cf-canvas" class="cfcv" role="img" aria-label="' + esc((sym || 'Stock') + ' price chart. Pinch to zoom, drag to pan, press and hold for a crosshair.') + '"></canvas>' +
       '<div class="cfro" id="cf-ro" hidden></div><div class="cfmsg" id="cf-msg"' + (msg ? '' : ' hidden') + '>' + msg + '</div></div>' +
       '<div class="cftog" id="cf-tog">' + cfToggles(ui) + '</div>' +
-      '<p class="cfhint">Pinch to zoom · drag to pan · press and hold for a crosshair · double-tap to reset</p></section>';
+      '<p class="cfhint">Pinch zoom · drag pan · hold for crosshair · double-tap reset</p></section>';
   }
   /* readout for one bar (b = CM.barInfo result) */
   function dateFull(t) { var n = ts(t); if (n === null) return DASH; var d = ist(n); return WD[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + MON[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); }
@@ -1589,6 +1590,104 @@
       '<div class="sb" id="sr-body">' + searchBody(S, ui) + '</div></section>';
   }
 
+  /* =====================================================================================================
+     v4 (SPEC4): live track record of the score's calls
+     ===================================================================================================== */
+  var TRK_N = 150;
+  function bandLine(b) {
+    var t = T(b).trim().replace(/(\d)\s*[-–—]\s*(\d)/g, '$1–$2');
+    return t ? '<div class="vk vk2">Score band <span class="nw">' + esc(t) + '</span></div>' : '';
+  }
+  function shortPt(l) {
+    return T(l).trim().replace(/-month/g, '-mo').replace(/-week/g, '-wk').replace(/risk-adjusted/g, 'risk-adj.').replace(/^(Near|Above) its /, '$1 ');
+  }
+  function dayNum(v) {
+    var n = N(v); if (n === null) return null;
+    var y = Math.floor(n / 10000), m = Math.floor(n / 100) % 100, d = n % 100;
+    return (y >= 2000 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) ? { y: y, m: m, d: d } : null;
+  }
+  function dayTxt(v, noYear) { var o = dayNum(v); return o ? o.d + ' ' + MON[o.m - 1] + (noYear ? '' : ' ' + o.y) : DASH; }
+  function trk(S) { var t = O(O(S).track); return Object.keys(t).length ? t : null; }
+  function gC(g) { var n = N(O(g).closed); return n !== null && n > 0 ? n : 0; }
+  function trackSummary(S) {
+    var t = trk(S); if (!t) return '';
+    var L = O(t.live), p1 = O(L.P1), b = O(p1.buy), c = O(p1.control), n = gC(b);
+    if (L.upgraded === true) return 'Upgraded: BUY beat random stocks in live trading';
+    if (!n) return dayNum(t.startedDay) ? 'Live record since ' + dayTxt(t.startedDay) + ': no closed trades yet' : 'No live trades recorded yet';
+    return 'Live since ' + dayTxt(t.startedDay, true) + ': ' + cnt(n) + ' closed, BUY avg ' + pc(b.avgPct, true) + ' vs random ' + pc(c.avgPct, true);
+  }
+  function trackLine(S) {
+    var t = trk(S); if (!t) return '';
+    var L = O(t.live), b = O(O(L.P1).buy), c = O(O(L.P1).control), n = gC(b), since = dayNum(t.startedDay) ? ' since ' + dayTxt(t.startedDay) : '';
+    return '<div class="vtrk">' + ic('flask') + '<span class="t">Live record' + since + ': ' + (n ? cnt(n) + ' closed, BUY avg <b class="num ' + tone(b.avgPct) + '">' + pc(b.avgPct, true) + '</b> vs random <b class="num ' + tone(c.avgPct) + '">' + pc(c.avgPct, true) + '</b>' : 'no closed trades yet') +
+      '. <button type="button" class="linkbtn inl" data-c="track">See the live record</button></span></div>';
+  }
+  function trackRow(S) {
+    var sum = trackSummary(S);
+    return '<button type="button" class="card trkrow" data-c="track" aria-label="Open the track record">' + ic('flask') + '<span class="tx"><b>Track record of the buy calls</b><span>' + (sum ? esc(sum) : 'Live results of the score, checked after each close') + '</span></span>' + ic('chev') + '</button>';
+  }
+  function trkCell(v, fn) { return '<span class="num ' + (fn || '') + '">' + v + '</span>'; }
+  function statTable(a, b, la, lb) {
+    a = O(a); b = O(b);
+    var ca = gC(a), cb = gC(b);
+    var row = function (k, fa, fb, tn) {
+      return '<div class="tr"><span class="k">' + k + '</span>' + trkCell(ca ? fa : DASH, ca && tn ? tone(a[tn]) : '') + trkCell(cb ? fb : DASH, cb && tn ? tone(b[tn]) : '') + '</div>';
+    };
+    var sess = function (g) { var n = N(g.avgSessions); return n !== null && n > 0 ? n.toFixed(1) : DASH; };
+    return '<div class="trkt"><div class="tr th"><span class="k"></span><span>' + esc(la) + '</span><span>' + esc(lb) + '</span></div>' +
+      '<div class="tr"><span class="k">Closed / open</span>' + trkCell(cnt(ca) + ' / ' + cnt(N(a.open) > 0 ? N(a.open) : 0)) + trkCell(cnt(cb) + ' / ' + cnt(N(b.open) > 0 ? N(b.open) : 0)) + '</div>' +
+      row('Win rate', pc(a.winPct), pc(b.winPct)) + row('Average', pc(a.avgPct, true), pc(b.avgPct, true), 'avgPct') + row('Median', pc(a.medianPct, true), pc(b.medianPct, true), 'medianPct') +
+      row('Worst 5%', pc(a.worstPct, true), pc(b.worstPct, true), 'worstPct') + '<div class="tr"><span class="k">Avg sessions</span>' + trkCell(ca ? sess(a) : DASH) + trkCell(cb ? sess(b) : DASH) + '</div></div>';
+  }
+  function edgeBox(e, tt) {
+    var n = N(e), t = N(tt);
+    if (n === null) return '';
+    return '<div class="trkedge"><span>BUY minus CONTROL, per trade</span><b class="num ' + tone(n) + '">' + pc(n, true) + '</b><span class="tt">t = <b class="num">' + (t === null ? DASH : t.toFixed(1)) + '</b></span></div>';
+  }
+  function trkBar(label, n) {
+    var c = Math.max(0, n || 0), w = Math.min(100, c / TRK_N * 100);
+    return '<div class="prog trkbar' + (c >= TRK_N ? ' done' : '') + '"><div class="pl"><span>' + esc(label) + '</span><span class="num">' + cnt(c) + ' / ' + TRK_N + '</span></div><div class="pb"><i style="width:' + (c > 0 ? Math.max(2, w) : 0).toFixed(0) + '%"></i></div></div>';
+  }
+  function recentPick(x) {
+    var sym = T(x.sym).trim(); if (!sym) return '';
+    var g = T(x.group).trim().toUpperCase(), st = T(x.status).trim().toUpperCase(), ret = N(x.retPct), ss = N(x.sessions);
+    var r = st === 'CLOSED' ? (ret === null ? DASH : pc(ret, true)) : st === 'SKIPPED' ? 'skipped' : 'open' + (ss !== null && ss >= 0 ? ' · d' + Math.round(ss) : '');
+    var gc = g === 'BUY' ? 'buy' : g === 'AVOID' ? 'sell' : 'neutral';
+    return '<button type="button" class="wl trkp" data-c="stock" data-id="' + esc(sym) + '" data-name=""><b>' + esc(sym) + '</b><span class="tag plain ' + gc + '">' + esc(g || '—') + '</span><span class="pd">' + dayTxt(x.day, true) + ' · ' + esc(T(x.plan).trim() || DASH) + '</span><span class="num ' + (st === 'CLOSED' ? tone(ret) : 'mut') + '">' + r + '</span></button>';
+  }
+  function trackSheet(S, ui) {
+    S = O(S); ui = O(ui);
+    var t = trk(S), busy = isBusy(S) || pend(ui, 'replayTrack') || (t && t.busyReplay === true);
+    var foot = btn('sheet-close', null, 'Close', '');
+    var h = '<p class="lead">Live results of the buy calls. After each close the app records every BUY and as many random uptrend stocks (CONTROL), and follows them for up to 60 sessions. All after charges.</p>';
+    var L = O(t && t.live), R = O(t && t.replay), anyLive = t && (gC(O(L.P1).buy) || gC(O(L.P1).control) || gC(O(L.P2).buy) || gC(O(L.P2).control) || gC(L.avoid) || A(t.recent).length);
+    if (!t) {
+      h += '<div class="empty"><div class="ei">' + ic('flask') + '</div><h3>No record yet</h3><p>The record starts after the first full scan following a market close. Nothing is recorded or shown until then.</p></div>';
+    } else {
+      h += '<h3>Live record' + (dayNum(t.startedDay) ? ' <small>since ' + dayTxt(t.startedDay) + '</small>' : '') + '</h3>';
+      if (L.upgraded === true) h += '<div class="vevid ok">' + ic('check') + '<div><b>Upgraded to BUY</b><span>BUY beat the random control in live trading, so the label no longer says candidate.</span></div></div>';
+      if (!anyLive) h += '<div class="hint hintpad">' + ic('info') + '<span class="t">No picks have closed yet. A pick closes at its exit or after 60 sessions, so the first results take a few weeks.</span></div>';
+      h += '<div class="trkh">P1 · earlier plan <small>stop 3 × ATR, exit on a close below the 50-day average</small></div>' + statTable(O(L.P1).buy, O(L.P1).control, 'BUY', 'CONTROL') + (false ? edgeBox(L.edgePct, L.edgeT) : '') +
+        '<div class="trkh">P2 · the app’s plan <small>5 × ATR stop, otherwise hold 60 trading days</small></div>' + statTable(O(L.P2).buy, O(L.P2).control, 'BUY', 'CONTROL') + (gC(O(L.P2).buy) && gC(O(L.P2).control) ? edgeBox(L.edgePct, L.edgeT) : '');
+      h += '<h3>Progress to the upgrade</h3>' + trkBar('BUY, closed P2 trades', gC(O(L.P2).buy)) + trkBar('CONTROL, closed P2 trades', gC(O(L.P2).control)) +
+        (T(L.needText).trim() ? '<p class="trkneed">' + esc(T(L.needText).trim()) + '</p>' : '');
+      h += '<h3>AVOID calls <small>should do worse than random</small></h3>' + statTable(L.avoid, L.avoidCtrl, 'AVOID', 'CONTROL');
+      var rec = A(t.recent).filter(function (x) { return T(x.sym).trim(); }).slice(0, 20);
+      h += '<h3>Recent picks</h3>' + (rec.length ? '<div class="card mv trkl">' + rec.map(recentPick).join('') + '</div>' : '<div class="hint hintpad">' + ic('info') + '<span class="t">No picks recorded yet.</span></div>');
+      var hasR = gC(O(R.P1).buy) || gC(O(R.P1).control) || gC(O(R.P2).buy);
+      h += '<h3>Replay <small>' + (dayNum(R.fromDay) && dayNum(R.toDay) ? dayTxt(R.fromDay, true) + ' to ' + dayTxt(R.toDay) : 'past 12–18 months') + '</small></h3>' +
+        '<div class="hint hintpad">' + ic('warn') + '<span class="t">The replay covers the same period used to design the score, so it does not count toward the upgrade. Only the live record does.</span></div>';
+      if (hasR) h += '<div class="trkh">P1 · earlier plan</div>' + statTable(O(R.P1).buy, O(R.P1).control, 'BUY', 'CONTROL') +
+        '<div class="trkh">P2 · the app’s plan</div>' + statTable(O(R.P2).buy, O(R.P2).control, 'BUY', 'CONTROL') + (gC(O(R.P2).buy) && gC(O(R.P2).control) ? edgeBox(R.edgePct, R.edgeT) : '') +
+        '<div class="trkh">AVOID</div>' + statTable(R.avoid, R.avoidCtrl, 'AVOID', 'CONTROL');
+      else h += '<div class="hint hintpad">' + ic('info') + '<span class="t">' + (t.replayDone === true ? 'The replay found no completed picks.' : 'The replay has not run yet.') + '</span></div>';
+      if (busy && isBusy(S)) h += '<div class="card"><div class="cb" style="padding-top:2px">' + progress(S.busy) + '</div></div>';
+      h += '<div class="btns">' + btn('replay', null, busy ? 'Replaying' : 'Replay', 'grow', { busy: busy, icon: 'refresh' }) +
+        btn('resettrack', null, 'Reset live record', 'grow ghost dan', { disabled: busy, icon: 'reset' }) + '</div>';
+    }
+    return shell('Track record', h, foot);
+  }
+
   function sheet(kind, S, ui, data) {
     S = O(S); ui = O(ui); data = O(data);
     var id = T(data.id);
@@ -1597,6 +1696,9 @@
     if (kind === 'chartfull') return cfSheet(S, ui, data);
     if (kind === 'target') return targetSheet(S, ui, data);
     if (kind === 'search') return searchSheet(S, ui);
+    if (kind === 'track') return trackSheet(S, ui);
+    if (kind === 'resettrack') return shell('Reset the live record?', '<p class="lead">All picks recorded on this phone since the live record began will be deleted and the count starts again from zero. The replay is kept. Trades, holdings and strategies are not affected.</p>',
+        btn('sheet-close', null, 'Keep it', 'ghost') + btn('submit', null, 'Reset record', 'dan'));
     if (kind === 'take') {
       var g = A(S.signals).filter(function (x) { return T(x.id) === id; })[0];
       if (!g) return shell('Buy idea', '<p class="lead">This buy idea is no longer available.</p>', btn('sheet-close', null, 'Close', ''));
@@ -1673,7 +1775,7 @@
 
   var api = {
     N: N, T: T, O: O, A: A, esc: esc, rs: rs, px: px, pc: pc, cnt: cnt, hm: hm, dm: dm, rel: rel, ts: ts, ic: ic, volTxt: volTxt, pxBare: pxBare,
-    cfReadout: cfReadout, croHtml: croHtml, cfRangeChips: cfRangeChips, cfToggles: cfToggles, cfHead: function (S, ui, sym) { return cfHead(O(S), O(ui), sym); }, cfMsg: function (ui) { return cfMsg(O(ui)); },
+    trackSummary: trackSummary, cfReadout: cfReadout, croHtml: croHtml, cfRangeChips: cfRangeChips, cfToggles: cfToggles, cfHead: function (S, ui, sym) { return cfHead(O(S), O(ui), sym); }, cfMsg: function (ui) { return cfMsg(O(ui)); },
     targetCalc: targetCalc, targetOf: function (S, sym) { return targetOf(S, sym); }, myTarget: function (S, ui) { return myTarget(O(S), O(ui)); }, scoreRing: scoreRing,
     header: function (S, ui) { return header(O(S), O(ui)); },
     tabbar: function (S, ui) { return tabbar(O(S), O(ui)); },

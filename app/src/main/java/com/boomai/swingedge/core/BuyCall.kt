@@ -9,13 +9,13 @@ object BuyCall {
      * latest bar (to say when the score is from an older scan bar). [settings] = capital, riskPct, costPct.
      */
     fun call(e: ScoreEntry?, comp: ScoreComp, naKind: String?, ltp: Double, pageClose: Double, ratedInTable: Int,
-             capital: Double, riskPct: Double, costPct: Double): Map<String, Any?> {
+             capital: Double, riskPct: Double, costPct: Double, proof: TrackProof? = null): Map<String, Any?> {
         try {
             if (e == null || !e.rated || naKind != null) {
                 val kind = naKind ?: comp.naKind() ?: ScoreTexts.NA_NO_TABLE
                 return na(comp, kind, ratedInTable)
             }
-            return rated(e, ltp, pageClose, capital, riskPct, costPct)
+            return rated(e, ltp, pageClose, capital, riskPct, costPct, proof)
         } catch (t: Throwable) {
             return na(comp, ScoreTexts.NA_NO_TABLE, ratedInTable)
         }
@@ -71,7 +71,7 @@ object BuyCall {
         return out
     }
 
-    private fun rated(e: ScoreEntry, ltp: Double, pageClose: Double, capital: Double, riskPct: Double, costPct: Double): Map<String, Any?> {
+    private fun rated(e: ScoreEntry, ltp: Double, pageClose: Double, capital: Double, riskPct: Double, costPct: Double, proof: TrackProof?): Map<String, Any?> {
         val c = e.comp
         val stale = pageClose > 0 && Math.abs(pageClose - c.close) >= 0.005
         val m = base(e.label, Fmt.r1(e.score), ScoreTexts.headline(e.label, e.score, c.close > c.sma50, c.uclock), reasons(e, stale))
@@ -96,8 +96,10 @@ object BuyCall {
         m["hist"] = hist(b)
         m["waitFor"] = ScoreTexts.waitFor(e)
         m["caveat"] = ScoreTexts.CAVEAT
-        m["proven"] = e.label == "AVOID"
-        m["evidence"] = ScoreTexts.evidence(e.label, b)
+        // SPEC4: a BUY is proven only once the phone's own forward record has met the upgrade rule
+        val upgraded = e.label == "BUY" && proof != null && proof.upgraded
+        m["proven"] = e.label == "AVOID" || upgraded
+        m["evidence"] = if (upgraded) ScoreTexts.liveEvidence(proof!!) else ScoreTexts.evidence(e.label, b)
         m["band"] = e.band
         m["points"] = points(e.p)
         m["exitRule"] = if (e.label == "AVOID") "" else ScoreTexts.EXIT_RULE
@@ -105,7 +107,7 @@ object BuyCall {
     }
 
     /** One `ideas` row (SPEC3 §2 + v3.1). [s] = the series the entry was scored on (for spark and day change). */
-    fun idea(e: ScoreEntry, name: String, s: Series?): Map<String, Any?> {
+    fun idea(e: ScoreEntry, name: String, s: Series?, proven: Boolean = false): Map<String, Any?> {
         val c = e.comp
         val lv = levels(e)
         val spark = ArrayList<Any?>(30)
@@ -115,7 +117,7 @@ object BuyCall {
             "dayChgPct" to (if (c.prevClose > 0) Fmt.r2((c.close / c.prevClose - 1) * 100.0) else 0.0),
             "score" to Fmt.r1(e.score), "label" to e.label, "headline" to ScoreTexts.headline(e.label, e.score, c.close > c.sma50, c.uclock),
             "entryLow" to lv[0], "entryHigh" to lv[1], "stop" to lv[2], "t1" to lv[3], "t2" to lv[4], "rr" to rr(lv[0], lv[2], lv[3]),
-            "horizonDays" to SetupScore.HORIZON_DAYS, "spark" to spark, "barDay" to (if (c.day > 0) StockPage.yyyymmdd(c.day) else 0), "proven" to false
+            "horizonDays" to SetupScore.HORIZON_DAYS, "spark" to spark, "barDay" to (if (c.day > 0) StockPage.yyyymmdd(c.day) else 0), "proven" to proven
         )
     }
 }

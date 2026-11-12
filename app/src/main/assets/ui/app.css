@@ -952,7 +952,7 @@ svg.chart .xd { fill: var(--text); stroke: var(--bg); stroke-width: 1.5; }
 .cfp svg { width: 16px; height: 16px; margin-right: 6px; }
 .cfp.on { background: var(--raised); color: var(--text); border-color: var(--text-2); }
 .cfe:active, .cfp:active { filter: brightness(1.25); }
-.cfhint { flex: none; margin: 2px var(--pad) 0; padding-bottom: var(--safe-b); font-size: 11.5px; color: var(--muted); text-align: center; line-height: 1.3; }
+.cfhint { flex: none; margin: 2px var(--pad) 0; padding-bottom: var(--safe-b); font-size: 11px; color: var(--muted); text-align: center; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (orientation: landscape) and (max-height: 480px) {
   .cfhint { display: none; } .cfh .iconbtn { width: 44px; height: 44px; }
   .cfid b { font-size: 17px; } .cfpx .big { font-size: 17px; }
@@ -979,3 +979,36 @@ svg.chart .xd { fill: var(--text); stroke: var(--bg); stroke-width: 1.5; }
 .vpt i { width: 84px; height: 5px; border-radius: 3px; background: var(--well); margin: 0 9px; overflow: hidden; flex: none; }
 .vpt i b { display: block; height: 100%; background: var(--blue); }
 .vpt .num { min-width: 46px; text-align: right; color: var(--text); font-family: var(--cond); } .vpt small { color: var(--muted); }
+
+/* ---------- v4: track record ---------- */
+.vk2 { margin: -4px 0 8px; } .nw { white-space: nowrap; }
+.vtrk { display: flex; align-items: flex-start; margin: 8px 0 0; font-size: 13px; line-height: 1.4; color: var(--text-2); }
+.vtrk svg { width: 16px; height: 16px; flex: none; margin: 1px 8px 0 0; color: var(--blue); } .vtrk .t { min-width: 0; } .vtrk b { color: var(--text); font-family: var(--cond); font-weight: 600; }
+.trkrow { display: flex; align-items: center; width: 100%; text-align: left; padding: 12px 14px; margin: 10px 0 0; min-height: 56px; }
+.trkrow > svg:first-child { width: 20px; height: 20px; flex: none; margin-right: 12px; color: var(--blue); }
+.trkrow > svg:last-child { width: 16px; height: 16px; flex: none; margin-left: 8px; color: var(--muted); }
+.trkrow .tx { flex: 1; min-width: 0; display: block; } .trkrow .tx b { display: block; font-size: 14.5px; font-weight: 600; } .trkrow .tx span { display: block; font-size: 12.5px; color: var(--text-2); line-height: 1.35; margin-top: 2px; overflow-wrap: anywhere; }
+.sheet h3 small { font: 400 12.5px/1 var(--sans); color: var(--muted); margin-left: 6px; }
+.trkh { font: 600 13px/1.3 var(--sans); margin: 14px 0 6px; } .trkh small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.trkt { background: var(--well); border: 1px solid var(--line); border-radius: var(--r-s); padding: 2px 12px; }
+.trkt .tr { display: grid; grid-template-columns: minmax(0, 1fr) 76px 76px; column-gap: 10px; align-items: center; min-height: 30px; font-size: 13px; border-top: 1px solid var(--line); }
+.trkt .tr:first-child { border-top: 0; }
+.trkt .tr > :not(.k) { text-align: right; font-family: var(--cond); font-size: 13.5px; white-space: nowrap; }
+.trkt .th { min-height: 28px; color: var(--muted); font: 700 10.5px/1 var(--cond); letter-spacing: .02em; } .trkt .th > :not(.k) { font-size: 10.5px; }
+.trkt .k { color: var(--text-2); font-family: var(--sans); font-size: 12.5px; }
+.trkedge { display: flex; align-items: baseline; flex-wrap: wrap; margin-top: 8px; font-size: 13px; color: var(--text-2); }
+.trkedge b { margin-left: 8px; font-size: 15px; } .trkedge .tt { margin-left: auto; } .trkedge .tt b { margin-left: 2px; font-size: 13.5px; color: var(--text); }
+.trkbar { margin: 0 0 10px; } .trkbar.done .pb i { background: var(--green); }
+.trkneed { font-size: 13px; line-height: 1.4; color: var(--text-2); margin-top: 2px; }
+.trkl { padding: 0; } .trkp { display: flex; align-items: center; width: 100%; padding: 0 14px; } .trkp b { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trkp .tag { margin-left: 8px; height: 19px; font-size: 10.5px; } .trkp .pd { flex: 1; min-width: 0; margin-left: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trkp .num { margin-left: 8px; flex: none; } .trkp .num.mut { display: inline; font-size: 12.5px; color: var(--muted); }
+@media (max-width: 380px) { .vpt i { width: 56px; margin: 0 7px; } .trkt .tr { grid-template-columns: minmax(0, 1fr) 70px 70px; column-gap: 8px; } }
+
+.vpill { white-space: nowrap; max-width: 100%; } .vl { min-width: 0; }
+@media (max-width: 380px) { .vpill:not(.sm) { font-size: 21px; padding: 0 12px 0 10px; height: 38px; letter-spacing: .04em; } .vpill:not(.sm) svg { width: 19px; height: 19px; margin-right: 5px; } }
+.idz .idc.idw { flex: 1.9 1 0; }
+@media (max-width: 380px) { .idz .idt { margin: 0 7px 0 6px; } .idz .idc b { font-size: 13px; } }
+.symbtn { max-width: 100%; min-width: 0; } .symbtn b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 380px) { .vt { padding: 8px 4px 9px 8px; } .vt .v { font-size: 14.5px; } .mr .mv { width: 84px; } .mr .ml { width: 60px; } }
+@media (max-width: 380px) { .vt { padding: 8px 2px 9px 6px; } .vt .v { font-size: 14px; letter-spacing: -.01em; } .vt .k { font-size: 10.5px; } .btn.grow { min-width: 0; } .btn.grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }

@@ -1,0 +1,107 @@
+{
+ "generated": "2026-11-12",
+ "source": "research/out_r5 (round 5, pre-registered in out_r5/PREREG.md)",
+ "descriptiveOnly": true,
+ "provenForRealMoney": false,
+ "oosWindow": {
+  "from": "2022-01-03",
+  "to": "2025-01-29",
+  "note": "signals touching the 2025-05-05..2025-06-20 data hole excluded; ~3.1 years"
+ },
+ "avoid": {
+  "rule": "S < 55 AND C < SMA200",
+  "horizonSessions": 60,
+  "lagVsEqualWeightPct": -1.62,
+  "tVsEqualWeight": -2.3,
+  "lagVsTurnoverWeightedPct": -0.97,
+  "tVsTurnoverWeighted": -1.2,
+  "yearsNegativeVsEqualWeight": [
+   3,
+   4
+  ],
+  "yearsNegativeVsTurnoverWeighted": [
+   4,
+   4
+  ],
+  "flaggedSharePct": 25.0,
+  "rawAvgPct": 1.69,
+  "rawMedianPct": 0.49,
+  "full2013to2025": {
+   "lagVsEqualWeightPct": -1.7,
+   "t": -4.0,
+   "lagVsTurnoverWeightedPct": -1.05,
+   "tTW": -2.3,
+   "yearsNegativeEW": [
+    11,
+    13
+   ],
+   "yearsNegativeTW": [
+    11,
+    13
+   ]
+  }
+ },
+ "buyPlan": {
+  "id": "P2",
+  "name": "next-open entry within 0.5 ATR, fixed 5-ATR disaster stop, hold 60 sessions",
+  "perTradeOOS": {
+   "cost0.50": {
+    "n": 937,
+    "winPct": 50.27,
+    "avgPct": 3.62,
+    "medianPct": 0.13,
+    "p05": -27.81,
+    "avgSessions": 51.42,
+    "profitFactor": 1.45
+   },
+   "cost0.25": {
+    "n": 937,
+    "winPct": 50.59,
+    "avgPct": 3.87,
+    "medianPct": 0.38,
+    "p05": -27.56,
+    "avgSessions": 51.42,
+    "profitFactor": 1.49
+   }
+  },
+  "matchedNullPerTradeAvgPctAt050": 3.77,
+  "portfolio4SlotOOS": {
+   "cagrMedianPct": 26.7,
+   "cagrRangePct": [
+    6.4,
+    55.5
+   ],
+   "cagrMedianPctAt025": 28.0,
+   "maxDrawdownPctMedian": -34.5,
+   "maxDrawdownPctWorst": -42.5,
+   "percentileVsMatchedNull": 81.0,
+   "matchedNullCagrMedianPct": 15.9
+  },
+  "portfolio8SlotOOS": {
+   "cagrMedianPct": 22.4,
+   "cagrRangePct": [
+    8.1,
+    43.7
+   ],
+   "cagrMedianPctAt025": 23.7,
+   "maxDrawdownPctMedian": -30.7,
+   "maxDrawdownPctWorst": -39.9,
+   "percentileVsMatchedNull": 74.0,
+   "matchedNullCagrMedianPct": 16.8
+  },
+  "niftyCagrPct": 10.3,
+  "niftyMaxDrawdownPct": -15.3,
+  "equalWeightCagrPct": 19.8,
+  "equalWeightMaxDrawdownPct": -20.7,
+  "contaminationNote": "Plan chosen after round 4 saw 2022-26 among 11 variants; best-of-11 random variants median null percentile ~94, so OOS percentiles below ~94 are consistent with no edge."
+ },
+ "selection": {
+  "rule": "highest score first; ties symbol ascending",
+  "changedFromREPORT4": false
+ },
+ "exposure": {
+  "rule": "none (all slots usable regardless of breadth)",
+  "testedAndRejected": "slots full if breadth50>=0.50, half if 0.30-0.50, none below 0.30"
+ },
+ "costAssumptionRoundTripPct": 0.5
+}

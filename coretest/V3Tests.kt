@@ -79,7 +79,8 @@ object V3Tests {
             val cols = Array(5) { k -> SetupScore.column(DoubleArray(others.size) { uni.num(others[it], comps[k]) }) }
             val tbl = ScoreTable(0L, emptyMap(), cols, emptyList(), others.size)
             val e = SetupScore.insert(tbl, sym, comp)
-            val want = fx.get(f, "label").let { if (it == "NOT_RATED") "NA" else it }
+            // round 5: a low score above the 200-day average is WAIT, not AVOID
+            val want = fx.get(f, "label").let { if (it == "NOT_RATED") "NA" else it }.let { if (it == "AVOID" && !comp.sma200.isNaN() && !(comp.close < comp.sma200)) "WAIT" else it }
             T.eq(e.label, want, "$tag label")
             labels[want] = (labels[want] ?: 0) + 1
             if (want != "NA") {
@@ -95,7 +96,8 @@ object V3Tests {
                 if (fx.get(f, "entry_max").isNotEmpty()) {
                     val lv = SetupScore.levels(comp.close, comp.atr14)
                     relNear(lv[0], fx.num(f, "entry_max"), 1e-6, "$tag entry_max")
-                    relNear(lv[1], fx.num(f, "stop_est"), 1e-6, "$tag stop_est")
+                    relNear(lv[1], comp.close - SetupScore.STOP_ATR * fx.num(f, "atr14"), 1e-6, "$tag stop (round 5: 5 ATR)")
+                    relNear(comp.close - 3 * comp.atr14, fx.num(f, "stop_est"), 1e-6, "$tag R4 stop_est")
                     relNear(lv[2], fx.num(f, "t1_est"), 1e-6, "$tag t1_est")
                     relNear(lv[3], fx.num(f, "t2_est"), 1e-6, "$tag t2_est")
                 }
@@ -147,12 +149,10 @@ object V3Tests {
         T.eq(ScoreHistory.Portfolio.NIFTY_MAX_DD_PCT, nf.num("maxDrawdownPct"), "Nifty drawdown")
         // the texts carry these numbers
         val ev = ScoreTexts.evidence("BUY", ScoreHistory.band("85-100"))
-        T.eq(ev, "Tested on NSE 2022–26 with this exact plan: +1.75% per trade after 0.25% costs (about +1.5% at realistic costs), 32% winners, median trade -3%. " +
-            "A ₹1 lakh 4-slot portfolio made 3.6–10.9% a year depending on the start date (median about 6%, drawdown -53%) against the Nifty's 7.5% and about 13% for an equal-weight basket. " +
-            "Random stocks above their 50-day average with the same exits did better, so size small and follow the stop.", "BUY evidence wording")
+        T.eq(ev, R5.BUY_EVIDENCE, "BUY evidence wording")
         val av = ScoreTexts.evidence("AVOID", ScoreHistory.band("0-39"))
-        T.eq(av, "Scores below 55 lagged the average liquid stock by about 1 point over 60 sessions (behind in 13 of 14 years; 2022–26: -0.9). " +
-            "They still averaged +2.4%, so this means likely to underperform, not likely to fall. The lag was weaker among the most liquid stocks.", "AVOID evidence wording")
+        T.eq(av, R5.AVOID_EVIDENCE, "AVOID evidence wording")
+        T.check(!R5.BUY_EVIDENCE.contains("guarantee") && R5.BUY_EVIDENCE.contains("no proven edge"), "BUY evidence stays honest")
         val rb = j.obj("portfolioRobustness").list("rows").map { r -> r.asObj() }
             .first { it.str("plan") == "X10" && it.str("period") == "OOS" && it.int("slots") == 4 }
         T.eq(ScoreHistory.Robust.CAGR_MIN, rb.num("score_min"), "robust min"); T.eq(ScoreHistory.Robust.CAGR_MAX, rb.num("score_max"), "robust max")
@@ -211,6 +211,8 @@ object V3Tests {
         T.eq(SetupScore.label(90.0, 101.0, 100.0, true), "WAIT", "upper-circuit lock -> WAIT")
         T.eq(SetupScore.label(54.9, 101.0, 100.0, false), "AVOID", "54.9 -> AVOID")
         T.eq(SetupScore.label(55.0, 90.0, 100.0, false), "WAIT", "55 -> WAIT")
+        T.eq(SetupScore.label(40.0, 101.0, 100.0, false, 100.0), "WAIT", "round 5: low score above SMA200 -> WAIT")
+        T.eq(SetupScore.label(40.0, 99.0, 100.0, false, 100.0), "AVOID", "round 5: low score below SMA200 -> AVOID")
         // upper-circuit detection and windows on a synthetic series
         val n = 300
         val c = DoubleArray(n) { 100.0 + it * 0.1 }
@@ -320,13 +322,13 @@ object V3Tests {
         T.check(c.obj("hist").str("text").contains("statistically reliable"), "hist text speaks to reliability $where")
         if (lab == "AVOID") {
             T.check(listOf("entryLow", "entryHigh", "stop", "t1", "t2", "stopPct", "t1Pct", "t2Pct", "rr", "investRs", "riskRs").all { c.num(it) == 0.0 } && c.int("qty") == 0, "AVOID: no levels $where")
-            T.check(c.str("evidence").contains("13 of 14") && c.num("score") < 55, "AVOID evidence and score $where")
+            T.check(c.str("evidence").contains("200-day average") && c.num("score") < 55, "AVOID evidence and score $where")
             return
         }
         val lo = c.num("entryLow"); val hi = c.num("entryHigh"); val sl = c.num("stop"); val t1 = c.num("t1"); val t2 = c.num("t2")
         T.check(sl > 0 && sl < lo && lo < hi && hi < t1 && t1 < t2, "levels ordered $where: $sl $lo $hi $t1 $t2")
         val atr = (t2 - lo) / 9
-        T.check(Math.abs((hi - lo) - 0.5 * atr) < 0.02 && Math.abs((lo - sl) - 3 * atr) < 0.02 && Math.abs((t1 - lo) - 6 * atr) < 0.02, "levels = C + 0.5/-3/+6/+9 ATR $where")
+        T.check(Math.abs((hi - lo) - 0.5 * atr) < 0.02 && Math.abs((lo - sl) - SetupScore.STOP_ATR * atr) < 0.02 && Math.abs((t1 - lo) - 6 * atr) < 0.02, "levels = C + 0.5/-5/+6/+9 ATR $where")
         T.near(c.num("stopPct"), Fmt.r2((sl / ltp - 1) * 100), 0.006, "stopPct from ltp $where")
         T.near(c.num("t1Pct"), Fmt.r2((t1 / ltp - 1) * 100), 0.006, "t1Pct from ltp $where")
         if (ltp > sl && t1 > ltp) T.near(c.num("rr"), Fmt.r2((t1 - ltp) / (ltp - sl)), 0.006, "rr $where")
@@ -336,7 +338,7 @@ object V3Tests {
             T.check(c.str("evidence").startsWith("WAIT is not a buy signal"), "WAIT evidence $where")
         } else {
             T.check(c.num("score") >= 85 && c.str("waitFor") == "", "BUY score $where")
-            T.check(c.str("evidence").contains("Tested on NSE") && c.str("evidence").contains("32% winners"), "BUY evidence $where")
+            T.check(c.str("evidence") == R5.BUY_EVIDENCE, "BUY evidence $where")
             val q = c.int("qty")
             val want = SwingApp.positionSize(settings[0], settings[1], settings[2], hi, sl)
             T.eq(q, want, "BUY qty from the user's settings $where")
@@ -371,7 +373,7 @@ object V3Tests {
         for (e in t.ranked) {
             for (k in 0 until 5) if (e.p[k] != naiveP(members.map { it.comp.x(k) }, e.comp.x(k))) bad++
             if (e.score != Math.rint((100.0 * (e.p[0] + e.p[1] + e.p[2] + e.p[3] + e.p[4])) / 5.0 * 10.0) / 10.0) bad++
-            if (e.label != SetupScore.label(e.score, e.comp.close, e.comp.sma50, e.comp.uclock)) bad++
+            if (e.label != SetupScore.label(e.score, e.comp.close, e.comp.sma50, e.comp.uclock, e.comp.sma200)) bad++
         }
         T.eq(bad, 0, "table percentiles/scores/labels = naive recomputation over ${t.rated} stocks")
         val a = t.entries["TWINA"]!!; val b = t.entries["TWINB"]!!
@@ -402,7 +404,7 @@ object V3Tests {
             val lv = BuyCall.levels(e)
             T.check(x.num("entryLow") == lv[0] && x.num("entryHigh") == lv[1] && x.num("stop") == lv[2] && x.num("t1") == lv[3] && x.num("t2") == lv[4], "idea levels ${x.str("sym")}")
             T.check(x.list("spark").size == 30 && x.int("barDay") == StockPage.yyyymmdd(d0) && x.num("ltp") == Fmt.r2(e.comp.close) && x.str("headline").isNotBlank() && x.str("name").isNotBlank(), "idea content ${x.str("sym")}")
-            T.near(x.num("rr"), 2.0, 0.011, "rr from the close = 6/3")
+            T.near(x.num("rr"), 1.2, 0.011, "rr from the close = 6/5 (5-ATR stop)")
         }
         // stockInfo for every universe stock: the call matches its table entry; all four labels appear
         val settings = doubleArrayOf(Params.DEF_CAPITAL, Params.DEF_RISK_PCT, Params.DEF_COST_PCT)
@@ -443,7 +445,7 @@ object V3Tests {
         val ps = DoubleArray(5) { k -> naiveP(members.map { it.comp.x(k) } + xc.x(k), xc.x(k)) }
         val sc = Math.rint((100.0 * (ps[0] + ps[1] + ps[2] + ps[3] + ps[4])) / 5.0 * 10.0) / 10.0
         T.eq(c.num("score"), sc, "XTRA1 score = naive percentile with it added to M")
-        T.eq(c.str("label"), SetupScore.label(sc, xc.close, xc.sma50, xc.uclock), "XTRA1 label")
+        T.eq(c.str("label"), SetupScore.label(sc, xc.close, xc.sma50, xc.uclock, xc.sma200), "XTRA1 label")
         T.check(c.list("points").map { it.asObj().num("pts") } == ps.map { Fmt.r1(20 * it) }, "XTRA1 points = 20 x percentile")
         checkCall(c, r.num("ltp"), doubleArrayOf(500000.0, 1.0, 0.5), "XTRA1")
         T.check(!t.entries.containsKey("XTRA1"), "XTRA1 is not part of the universe table")

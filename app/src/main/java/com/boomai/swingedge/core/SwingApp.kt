@@ -67,6 +67,15 @@ class SwingApp(private val p: Platform) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Looked>?): Boolean = size > LRU_MAX
     }
 
+    /** SPEC4 track record: written under [lock] only; readers see the published [trackView] / [trackProof]. */
+    private val track = TrackStore()
+    @Volatile private var trackView: Map<String, Any?> = emptyMap()
+    @Volatile private var trackProof: TrackProof? = null
+    @Volatile private var replaying = false
+    private var trackRev = 0
+    private var viewKey = ""
+    private var replayTriedDay = 0
+
     init {
         try {
             val text = try { p.read(STATE_FILE) } catch (t: Throwable) { null }
@@ -78,6 +87,8 @@ class SwingApp(private val p: Platform) {
         } catch (t: Throwable) {
             st = AppState()
         }
+        try { track.loadLive(p.read(FORWARD_FILE)) } catch (t: Throwable) { log("forward.json unreadable: $t") }
+        try { track.loadReplay(p.read(REPLAY_FILE)) } catch (t: Throwable) { log("replay.json unreadable: $t") }
         publish()
     }
 
@@ -92,6 +103,7 @@ class SwingApp(private val p: Platform) {
             m["marketNote"] = marketNote(now)
             m["nextScanAt"] = Clock.nextWake(now)
             m["busy"] = busy
+            if (replaying) { val tv = LinkedHashMap(trackView); tv["busyReplay"] = true; m["track"] = tv }
             return Json.stringify(m)
         } catch (t: Throwable) {
             return try {
@@ -453,6 +465,7 @@ class SwingApp(private val p: Platform) {
         try { computeWatch() } catch (e: Throwable) { p.log("watch: " + e) }
         try { scanCtx = buildScanCtx() ?: scanCtx } catch (e: Throwable) { log("scan context: $e") }
         try { buildScores(now) } catch (e: Throwable) { log("score table: $e") }
+        try { trackStep(day, min) } catch (e: Throwable) { log("track: $e") }
 
         st.lastScanAt = now
         st.lastScanStatus = when {
@@ -623,10 +636,99 @@ class SwingApp(private val p: Platform) {
             bySym[x.sym] = x
         }
         val t = SetupScore.buildTable(items, now)
-        val rows = SetupScore.topBuys(t, Params.IDEAS_MAX).map { BuyCall.idea(it, nameOf(it.sym), bySym[it.sym]) }
+        val proven = trackProof?.upgraded == true
+        val rows = SetupScore.topBuys(t, Params.IDEAS_MAX).map { BuyCall.idea(it, nameOf(it.sym), bySym[it.sym], proven) }
         scoreTable = t
         ideaItems = rows
     }
+
+    // =========================================================================================== track record (SPEC4)
+
+    /** Completed daily bars of [sym]: the cache plus any finished newer day from the latest quote (never a partial day). */
+    private fun completedSeries(sym: String, day: Int, min: Int): Series? {
+        val base = cache.get(sym)
+        val lv = live[sym]
+        val from = base?.lastDay() ?: Int.MIN_VALUE
+        if (lv == null || lv.n == 0 || lv.lastDay() <= from) return base
+        val done = { d: Int -> d < day || (d == day && min >= Clock.CLOSE_MIN) }
+        var extra = 0
+        for (k in 0 until lv.n) if (lv.d[k] > from && done(lv.d[k])) extra++
+        if (extra == 0) return base
+        val s = Series(sym, (base?.n ?: 0) + extra)
+        if (base != null) for (k in 0 until base.n) s.add(base.d[k], base.o[k], base.h[k], base.l[k], base.c[k], base.v[k])
+        for (k in 0 until lv.n) if (lv.d[k] > from && done(lv.d[k])) s.add(lv.d[k], lv.o[k], lv.h[k], lv.l[k], lv.c[k], lv.v[k])
+        return if (s.n > 0) s else base
+    }
+
+    /**
+     * After each scan: records the cohort of the latest completed bar day once (idempotent per bar day), re-evaluates open live
+     * picks from the bars, and runs the one-time replay when the cache is deep enough.
+     */
+    private fun trackStep(day: Int, min: Int) {
+        val ser = HashMap<String, Series>()
+        for (sym in universe) completedSeries(sym, day, min)?.let { if (it.n > 0) ser[sym] = it }
+        if (ser.isEmpty()) return
+        val cal = Cal.of(ser.values)
+        var changed = false
+        val count = HashMap<Int, Int>()
+        for (x in ser.values) count[x.lastDay()] = (count[x.lastDay()] ?: 0) + 1
+        val d = count.entries.maxWith(compareBy<Map.Entry<Int, Int>> { it.value }.thenBy { it.key }).key
+        if (d > track.lastDay) {
+            val t = TrackEngine.tableAt(ser.values, d)
+            if (t.usable) {
+                track.addCohort(d, TrackEngine.cohorts(t, d))
+                changed = true
+            }
+        }
+        val smas = HashMap<String, DoubleArray>()
+        for (pk in track.live) {
+            if (pk.done()) continue
+            val s = ser[pk.sym] ?: completedSeries(pk.sym, day, min)
+            val a = if (s == null) null else smas.getOrPut(pk.sym) { TrackEngine.smaArray(s) }
+            if (TrackEngine.evaluate(pk, s, a, cal)) changed = true
+        }
+        if (changed) { trackRev++; saveForward() }
+        if (!track.replayDone && replayTriedDay != day) {
+            val deep = universe.count { (cache.get(it)?.n ?: 0) >= TrackEngine.REPLAY_MIN_BARS }
+            if (universe.isNotEmpty() && deep * 2 > universe.size) { replayTriedDay = day; runReplay(day) }
+        }
+    }
+
+    /** Replays the cached history (cache bars are completed days only). Returns the number of signal days covered. */
+    private fun runReplay(day: Int): Int {
+        replaying = true
+        try {
+            setBusy(ScoreTexts.REPLAY_BUSY, 0)
+            val ser = ArrayList<Series>()
+            for (sym in universe) cache.get(sym)?.let { if (it.n > 0) ser.add(it) }
+            val out = TrackEngine.replay(ser) { pct -> setBusy(ScoreTexts.REPLAY_BUSY, pct) }
+            if (out.days > 0) {
+                track.setReplay(out)
+                trackRev++
+                try { p.write(REPLAY_FILE, track.encodeReplay()) } catch (t: Throwable) { log("replay.json write: $t") }
+            }
+            return out.days
+        } finally {
+            replaying = false
+        }
+    }
+
+    private fun saveForward() {
+        try { p.write(FORWARD_FILE, track.encodeLive()) } catch (t: Throwable) { log("forward.json write: $t") }
+    }
+
+    private fun refreshTrackView() {
+        val cost = st.settings.costPct
+        val key = "$trackRev/$cost"
+        if (key == viewKey && trackView.isNotEmpty()) return
+        trackView = TrackEngine.view(track, cost, false)
+        trackProof = TrackEngine.proof(track.live, cost, track.startedDay)
+        viewKey = key
+    }
+
+    /** For tests. */
+    internal fun debugTrack(): TrackStore = track
+    internal fun debugTrackChanged() { lock.lock(); try { trackRev++; saveForward(); publish() } finally { lock.unlock() } }
 
     /** For tests: the table the last scan published. */
     internal fun debugScoreTable(): ScoreTable? = scoreTable
@@ -644,7 +746,7 @@ class SwingApp(private val p: Platform) {
         }
         val z = r.sizing
         val px = if (s.n > 0) s.c[s.n - 1] else 0.0
-        return BuyCall.call(e, comp, kind, px, px, t?.rated ?: 0, z[0], z[1], z[2])
+        return BuyCall.call(e, comp, kind, px, px, t?.rated ?: 0, z[0], z[1], z[2], trackProof)
     }
 
     // =========================================================================================== user targets
@@ -1024,6 +1126,18 @@ class SwingApp(private val p: Platform) {
             "scanNow" -> {
                 val okScan = scan(now, true)
                 return if (okScan) ok("status" to st.lastScanStatus) else err(st.lastScanStatus)
+            }
+            "replayTrack" -> {
+                loadUniverse()
+                cache.ensureLoaded()
+                val n = runReplay(day)
+                return if (n > 0) ok("days" to n) else err(ScoreTexts.REPLAY_NO_HISTORY)
+            }
+            "resetTrack" -> {
+                track.resetLive()
+                trackRev++
+                saveForward()
+                return ok()
             }
             "runBacktest" -> {
                 loadUniverse()
@@ -1491,6 +1605,7 @@ class SwingApp(private val p: Platform) {
             m["myWatch"] = myWatch(s, now)
             m["ideas"] = ideaItems
             m["targets"] = s.targets.map { it.toMap() }
+            m["track"] = if (trackView.isEmpty()) TrackEngine.view(TrackStore(), s.settings.costPct, false) else trackView
             return m
         }
     }
@@ -1499,6 +1614,7 @@ class SwingApp(private val p: Platform) {
         vHolidayDay = st.holidayDay
         vAnyLive = anyLive()
         vTested = Strategies.all.any { st.strat(it.id).testedAt != 0L }
+        try { refreshTrackView() } catch (t: Throwable) { log("track view: $t") }
         snapshot = buildSnapshot(st)
         try { refs = buildRefs() } catch (t: Throwable) { log("refs: $t") }
     }
@@ -1521,6 +1637,8 @@ class SwingApp(private val p: Platform) {
 
     companion object {
         const val STATE_FILE = "state.json"
+        const val FORWARD_FILE = "forward.json"
+        const val REPLAY_FILE = "replay.json"
         const val NID_BRIEF = 1001
         const val NID_EOD = 1002
         private val SYM_RE = Regex("^[A-Z0-9&][A-Z0-9&\\-]*$")

@@ -333,9 +333,9 @@
     AVOID: { n: 164592, winPct: 49.7, avgPct: 1.99, medianPct: -0.11, worstPct: -23.8, horizonDays: 60, text: 'Since 2022, stocks scoring 0–39 returned +2.0% on average and -0.1% at the median over the next 60 trading days after charges (164,592 cases); 1 in 20 lost 23.8% or more. That is 1.5% behind the average liquid stock over the same days, a statistically reliable difference (t = -3.2).' }
   };
   var EVID = {
-    BUY: 'Tested on NSE 2022–26 with this exact plan: +1.75% per trade after 0.25% costs (about +1.5% at realistic costs), 32% winners, median trade -3%. A ₹1 lakh 4-slot portfolio made 3.6–10.9% a year depending on the start date (median about 6%, drawdown -53%) against the Nifty\'s 7.5% and about 13% for an equal-weight basket. Random stocks above their 50-day average with the same exits did better, so size small and follow the stop.',
+    BUY: 'Tested on NSE 2022–Jan 2025 with this exact plan, at realistic 0.5% costs: 937 trades, 50% won, +3.6% average, +0.1% median, 1 in 20 lost 28% or more, about 51 trading days held. A ₹1 lakh 4-stock account made a median 27% a year (6% to 56% depending on the start date, drawdown about 35%), against 10.3% for the Nifty and 19.8% for an equal-weight basket of liquid stocks. Random uptrend stocks with the same exits averaged +3.8% per trade, so the score itself showed no proven edge; and this plan was picked as the best of 11. Size small, follow the stop, and check the live record.',
     WAIT: 'WAIT is not a buy signal. Since 2022, stocks scoring 70–84 did +0.86% better than the average liquid stock over 60 trading days, which is not statistically reliable (t = 1.6).',
-    AVOID: 'Scores below 55 lagged the average liquid stock by about 1 point over 60 sessions (behind in 13 of 14 years; 2022–26: -0.9). They still averaged +2.4%, so this means likely to underperform, not likely to fall. The lag was weaker among the most liquid stocks.'
+    AVOID: 'Score below 55 and price below the 200-day average: since 2022 such stocks lagged the average liquid stock by 1.6 points over the next 60 trading days (behind in 3 of 4 years; 2013–2025: 1.7 points, 11 of 13 years). Against the biggest stocks the lag was smaller (1.0 point). They still rose 1.7% on average, so this means likely to lag, not likely to fall.'
   };
   function ptsOf(score, h) {
     var labs = ['6-month momentum (risk-adjusted)', '6-month return', '12-month return', 'Near its 52-week high', 'Above its 52-week low'], out = [], i;
@@ -351,7 +351,7 @@
     else if (i.stack.label === 'BULLISH' && i.rsi14 < 72) lab = 'BUY';
     else lab = 'WAIT';
     var score = lab === 'BUY' ? Math.min(97, 85 + h % 12) : lab === 'WAIT' ? 55 + h % 30 : Math.max(8, Math.min(54, Math.round(i.strength * 0.4) + h % 15));
-    var hz = 60, c = { label: lab, proven: lab === 'AVOID', evidence: EVID[lab] || '', band: '', points: [], exitRule: lab === 'AVOID' ? '' : 'Sell if it closes below its 50-day average, or after 60 trading days. Targets are reference levels, not sell orders.', score: score, headline: '', reasons: [], entryLow: 0, entryHigh: 0, stop: 0, t1: 0, t2: 0, stopPct: 0, t1Pct: 0, t2Pct: 0, rr: 0, horizonDays: hz,
+    var hz = 60, c = { label: lab, proven: lab === 'AVOID' || (lab === 'BUY' && qs.track === 'upgraded'), evidence: (lab === 'BUY' && qs.track === 'upgraded') ? 'Live since 12 Nov 2026: 163 closed BUY trades averaged +1.9% against +0.6% for random uptrend stocks (edge +1.3%, t = 2.4).' : (EVID[lab] || ''), band: '', points: [], exitRule: lab === 'AVOID' ? '' : 'Buy at the next open only inside the entry zone. Stop-loss 5 ATR below your buy price; otherwise hold 60 trading days, then sell. Targets are reference levels, not sell orders.', score: score, headline: '', reasons: [], entryLow: 0, entryHigh: 0, stop: 0, t1: 0, t2: 0, stopPct: 0, t1Pct: 0, t2Pct: 0, rr: 0, horizonDays: hz,
       qty: 0, investRs: 0, riskRs: 0, hist: JSON.parse(JSON.stringify(HIST[lab])), waitFor: '', caveat: 'Rule-based and tested on past data. Losses happen; the stop limits them, it does not remove them.' };
     c.hist.horizonDays = hz;
     var near = -i.fromHighPct;
@@ -451,6 +451,33 @@
     };
   }
 
+  function G(n, open, win, avg, med, worst, sess) { return { n: n + open, open: open, closed: n, winPct: win, avgPct: avg, medianPct: med, worstPct: worst, avgSessions: sess }; }
+  function emptyG() { return G(0, 0, 0, 0, 0, 0, 0); }
+  function emptyTrack() {
+    return { startedDay: 0, lastDay: 0, replayDone: false, busyReplay: false,
+      live: { P1: { buy: emptyG(), control: emptyG() }, P2: { buy: emptyG(), control: emptyG() }, avoid: emptyG(), avoidCtrl: emptyG(), edgePct: 0, edgeT: 0, upgraded: false,
+        needText: 'Needs 150 closed trades in each group (now 0 and 0) and an edge with t ≥ 2.' },
+      replay: { P1: { buy: emptyG(), control: emptyG() }, P2: { buy: emptyG(), control: emptyG() }, avoid: emptyG(), avoidCtrl: emptyG(), edgePct: 0, edgeT: 0, fromDay: 0, toDay: 0 }, recent: [] };
+  }
+  function trackData() {
+    var up = qs.track === 'upgraded', recent = [], syms = ['POLYCAB', 'TRENT', 'DIXON', 'BSE', 'CGPOWER', 'KPITTECH', 'HAL', 'PERSISTENT'], i;
+    for (i = 0; i < 14; i++) {
+      var closed = i > 4, grp = i % 5 === 4 ? 'AVOID' : (i % 2 ? 'CONTROL' : 'BUY');
+      recent.push({ sym: syms[i % syms.length], group: grp, day: [20261112, 20261111, 20261110, 20261109, 20261106, 20261105, 20261104, 20261103, 20261102, 20261030, 20261029, 20261028, 20261027, 20261026][i], plan: i % 3 === 2 ? 'P2' : 'P1',
+        status: i === 3 ? 'SKIPPED' : closed ? 'CLOSED' : 'OPEN', fill: 100 + i * 7, exit: closed ? 104 + i * 7 : 0, retPct: closed ? r2((i % 4 - 1.2) * 2.1) : 0, sessions: closed ? 12 + i : i });
+    }
+    var t = {
+      startedDay: up ? 20260105 : 20261012, lastDay: 20261112, replayDone: true, busyReplay: false,
+      live: up ? { P1: { buy: G(163, 9, 54.6, 1.9, 1.1, -7.8, 22.4), control: G(163, 9, 49.1, 0.6, 0.3, -9.1, 24.0) }, P2: { buy: G(120, 41, 56.7, 2.8, 1.9, -12.3, 60), control: G(120, 41, 50.8, 1.1, 0.6, -13.5, 60) },
+          avoid: G(150, 30, 44.0, -0.4, -0.9, -15.2, 60), avoidCtrl: G(150, 30, 52.0, 1.0, 0.6, -12.0, 60), edgePct: 1.3, edgeT: 2.4, upgraded: true, needText: 'Upgrade rule met: 163 and 163 closed trades, edge +1.3% per trade, t = 2.4.' }
+        : { P1: { buy: G(12, 21, 58.3, 1.4, 0.9, -5.2, 14.1), control: G(12, 21, 50.0, 0.5, 0.2, -6.4, 15.5) }, P2: { buy: G(0, 33, 0, 0, 0, 0, 0), control: G(0, 33, 0, 0, 0, 0, 0) },
+          avoid: G(0, 30, 0, 0, 0, 0, 0), avoidCtrl: G(0, 30, 0, 0, 0, 0, 0), edgePct: 0.9, edgeT: 0.6, upgraded: false, needText: 'Needs 150 closed trades in each group (now 12 and 12) and an edge with t ≥ 2.' },
+      replay: { P1: { buy: G(1184, 0, 52.3, 1.1, 0.7, -8.6, 21.2), control: G(1184, 0, 48.9, 0.5, 0.3, -9.4, 23.0) }, P2: { buy: G(1320, 0, 54.0, 2.1, 1.4, -13.1, 60), control: G(1320, 0, 51.2, 1.2, 0.8, -13.9, 60) },
+        avoid: G(2310, 0, 47.1, 0.3, -0.2, -14.8, 60), avoidCtrl: G(2310, 0, 51.5, 1.1, 0.7, -12.9, 60), edgePct: 0.6, edgeT: 1.7, fromDay: 20250501, toDay: 20260815 },
+      recent: recent };
+    return t;
+  }
+
   function build() {
     var s = baseState();
     s.watch = [{"sym": "POLYCAB", "name": "Polycab India", "ltp": 7421.5, "dayChgPct": 0.84, "ema10": 7310.18, "ema20": 7287.91, "ema50": 7050.42, "ema100": 6753.57, "ema200": 6234.06, "gapPct": 0.31, "daysSince": 0, "barDay": 20261111, "spark": [6793.67, 6831.83, 6881.61, 6954.13, 7047.55, 7023.8, 7049.12, 7034.39, 7113.22, 7064.86, 7013.98, 7045.74, 7137.69, 7131.28, 7199.21, 7258.65, 7341.03, 7304.14, 7394.78, 7488.31, 7564.42, 7669.29, 7598.78, 7540.88, 7630.58, 7723.86, 7834.68, 7790.09, 7868.05, 7966.51], "status": "CROSSED"}, {"sym": "CUMMINSIND", "name": "Cummins India", "ltp": 3980.1, "dayChgPct": 1.92, "ema10": 3920.4, "ema20": 3908.46, "ema50": 3781.09, "ema100": 3621.89, "ema200": 3343.28, "gapPct": 0.31, "daysSince": 0, "barDay": 20261111, "spark": [3639.8, 3687.02, 3737.32, 3724.68, 3720.53, 3745.94, 3713.11, 3681.23, 3723.49, 3706.23, 3727.53, 3701.36, 3702.01, 3698.98, 3670.37, 3683.35, 3726.91, 3747.97, 3776.0, 3778.39, 3791.95, 3787.94, 3823.6, 3876.73, 3931.37, 3902.19, 3946.06, 3956.24, 3922.06, 3908.4], "status": "CROSSED"}, {"sym": "FEDERALBNK", "name": "Federal Bank", "ltp": 212.4, "dayChgPct": -0.21, "ema10": 209.21, "ema20": 208.58, "ema50": 201.78, "ema100": 193.28, "ema200": 178.42, "gapPct": 0.31, "daysSince": 0, "barDay": 20261111, "spark": [195.44, 198.23, 199.73, 198.15, 198.96, 197.85, 196.22, 198.27, 201.11, 201.76, 202.97, 201.74, 200.29, 199.81, 198.28, 200.11, 199.02, 199.39, 197.78, 196.86, 196.64, 197.21, 196.76, 197.53, 198.55, 197.46, 198.27, 196.89, 198.15, 200.16], "status": "CROSSED"}, {"sym": "BEL", "name": "Bharat Electronics", "ltp": 412.3, "dayChgPct": 1.1, "ema10": 406.12, "ema20": 404.88, "ema50": 391.69, "ema100": 375.19, "ema200": 346.33, "gapPct": 0.31, "daysSince": 1, "barDay": 20261111, "spark": [378.39, 381.31, 378.29, 383.79, 381.26, 379.45, 377.69, 378.49, 375.61, 378.4, 378.06, 383.0, 384.12, 386.53, 385.62, 389.21, 389.31, 394.22, 393.7, 396.02, 394.42, 399.79, 402.83, 403.3, 408.73, 413.43, 410.0, 408.92, 406.58, 404.66], "status": "CROSSED"}, {"sym": "TVSMOTOR", "name": "TVS Motor Company", "ltp": 3105.0, "dayChgPct": 0.4, "ema10": 3058.43, "ema20": 3049.11, "ema50": 2949.75, "ema100": 2825.55, "ema200": 2608.2, "gapPct": 0.31, "daysSince": 2, "barDay": 20261111, "spark": [2862.71, 2847.25, 2879.3, 2855.93, 2895.02, 2913.89, 2953.09, 2941.98, 2956.18, 2954.82, 2980.74, 2985.24, 3014.99, 3046.99, 3083.29, 3097.81, 3108.35, 3142.0, 3159.08, 3187.24, 3231.81, 3278.73, 3275.25, 3293.51, 3302.84, 3292.95, 3292.89, 3314.85, 3342.59, 3363.38], "status": "CROSSED"}];
@@ -459,9 +486,9 @@
       ['ltp', 'ema10', 'ema20', 'ema50', 'ema100', 'ema200'].forEach(function (k2) { r[k2] = r2(r[k2] * f); });
       r.spark = r.spark.map(function (x) { return r2(x * f); }); r.dayChgPct = m.info.dayChgPct;
     });
-    s.myWatch = defaultWatch();
+    s.myWatch = defaultWatch(); s.track = trackData();
     s.ideas = ideasList(); s.targets = defaultTargets();
-    if (scenario === 'empty') { s.watch = []; s.myWatch = []; s.ideas = []; s.targets = []; }
+    if (scenario === 'empty') { s.watch = []; s.myWatch = []; s.ideas = []; s.targets = []; s.track = emptyTrack(); }
     if (scenario === 'empty') {
       s.signals = []; s.trades = []; s.holdings = []; s.feed = [];
       s.portfolio = portfolioOf([]);
@@ -545,6 +572,7 @@
           { sym: 'OKTGT', name: 'Fine Co', ltp: 250.5, dayChgPct: -1.2, target: 270, stop: 238, note: 'ok', setAt: T0 - DAY, refPrice: 250, status: 'ACTIVE', hitAt: 0, toTargetPct: 7.8, toStopPct: -5, progressPct: 3 },
           { sym: 'OKSTOP', name: 'Stopped Co', ltp: 90, dayChgPct: -3, target: 120, stop: 95, note: '', setAt: T0 - 2 * DAY, refPrice: 100, status: 'HIT_STOP', hitAt: T0 - HR, toTargetPct: 33, toStopPct: 5.5, progressPct: 0 }
         ],
+        track: { startedDay: 'x', live: { P1: { buy: { closed: 'NaN', avgPct: null }, control: 'junk' }, avoid: [], edgePct: 'abc', needText: 1 }, replay: null, recent: [null, 'junk', { sym: '<b>x</b>', group: null, status: 7 }, { sym: 'OK', group: 'BUY', day: 99, plan: 'P1', status: 'CLOSED', retPct: 1e12 }] },
         feed: [
           { ts: T0 - MIN, kind: 'explode', title: LONG, body: LONG + ' ' + LONG },
           { ts: 'NaN', kind: null, title: null, body: null },
@@ -635,6 +663,19 @@
         push('info', 'Backtest finished', 'Strategy verdicts updated.');
         return { ok: true };
       });
+    },
+    replayTrack: function () {
+      long('replayTrack', 'Replaying past picks…', 4000, function () {
+        if (state.track) { state.track.replayDone = true; state.track.busyReplay = false; }
+        return { ok: true };
+      });
+      if (state.track) state.track.busyReplay = true;
+    },
+    resetTrack: function () {
+      var keep = state.track && state.track.replay;
+      state.track = emptyTrack(); state.track.startedDay = 20261112; state.track.lastDay = 20261112; state.track.replayDone = true;
+      if (keep) state.track.replay = keep;
+      finish('resetTrack', { ok: true });
     },
     addHolding: function (a) {
       var sym = String(a.sym || '').toUpperCase();

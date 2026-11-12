@@ -170,8 +170,15 @@
       ctx.beginPath(); ctx.strokeStyle = COL.grid;
       for (i = 0; i < dt.length; i++) { var dx = Math.round(CM.xOf(dt[i].i, v, G.l, G.w)) + 0.5; ctx.moveTo(dx, pt); ctx.lineTo(dx, G.vb); }
       ctx.stroke();
+      var tg0 = -1, tg1 = -1;      /* the crosshair's date tag covers the axis: skip the labels under it */
+      if (st.cross >= 0 && st.cross < n) {
+        ctx.font = '700 11px ' + FONT;
+        var tdw = ctx.measureText(st.dRaw ? CM.fmtDate(st.dRaw[st.cross]) : '#' + (st.cross + 1)).width + 14, tcx = xOf(st.cross);
+        tg0 = Math.max(G.l, Math.min(G.r - tdw, tcx - tdw / 2)) - 4; tg1 = tg0 + tdw + 8;
+      }
       for (i = 0; i < dt.length; i++) {
         var tx = CM.xOf(dt[i].i, v, G.l, G.w);
+        if (tg1 > 0) { var lx = Math.max(G.l + 14, Math.min(G.r - 14, tx)), lw = ctx.measureText(dt[i].text).width / 2; if (lx + lw > tg0 && lx - lw < tg1) continue; }
         text(dt[i].text, Math.max(G.l + 14, Math.min(G.r - 14, tx)), H - 6, dt[i].major ? COL.text : COL.axis, (dt[i].major ? '700 ' : '600 ') + '11px ' + FONT, 'center');
       }
 
@@ -292,7 +299,7 @@
         items.push({ L: L, side: side, want: side === 0 ? Y(mid) : (side > 0 ? G.t + 10 : G.pb - 10) });
         ys.push(items[i].want);
       }
-      var ly = CM.dodge(ys, 16, G.t + 9, G.pb - 9);
+      var ly = CM.dodge(ys, st.w < 420 ? 19 : 17, G.t + 9, G.pb - 9);
       ctx.font = '700 10.5px ' + FONT; ctx.textAlign = 'left';
       for (i = 0; i < items.length; i++) {
         L = items[i].L;

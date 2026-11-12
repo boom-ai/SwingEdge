@@ -53,6 +53,7 @@
           }
         }
       }
+      if (sheet && sheet.kind === 'track') repaintTrack();
       if (renderFailed) { renderFailed = false; elErr.hidden = true; }
     } catch (e) {
       renderFailed = true;
@@ -92,7 +93,7 @@
     syncStock();
     if (sheet && sheet.kind === 'chartfull') cfMeta();
     // a long action is visibly running once busy is set: hand the button over to `busy`
-    if (SE.isBusy(S)) { clearPending('scanNow', true); clearPending('runBacktest', true); }
+    if (SE.isBusy(S)) { clearPending('scanNow', true); clearPending('runBacktest', true); clearPending('replayTrack', true); }
     render();
     schedule();
   }
@@ -103,15 +104,15 @@
   window.onStateChanged = function () { try { pull(); } catch (e) { /* ignore */ } };
 
   /* ---------- actions ---------- */
-  var LONG = { scanNow: 1, runBacktest: 1 };
+  var LONG = { scanNow: 1, runBacktest: 1, replayTrack: 1 };
   var DONE = {
     scanNow: 'Scan finished', runBacktest: 'Re-test finished', addHolding: 'Holding added', removeHolding: 'Holding removed',
     takeTrade: 'Trade saved. Follow-ups are on.', skipSignal: 'Skipped', closeTrade: 'Trade closed', saveSettings: 'Settings saved', clearFeed: 'Alerts cleared',
-    setTarget: 'Target saved. You will get an alert when it is reached.', clearTarget: 'Target removed'
+    setTarget: 'Target saved. You will get an alert when it is reached.', clearTarget: 'Target removed', replayTrack: 'Replay finished', resetTrack: 'Live record reset'
   };
   var NAMES = {
     scanNow: 'Scan', runBacktest: 'Re-test', addHolding: 'Add holding', removeHolding: 'Remove holding', importHoldings: 'Import',
-    takeTrade: 'Save trade', skipSignal: 'Skip', closeTrade: 'Close trade', saveSettings: 'Save settings', clearFeed: 'Clear alerts', setTarget: 'Set target', clearTarget: 'Clear target'
+    takeTrade: 'Save trade', skipSignal: 'Skip', closeTrade: 'Close trade', saveSettings: 'Save settings', clearFeed: 'Clear alerts', setTarget: 'Set target', clearTarget: 'Clear target', replayTrack: 'Replay', resetTrack: 'Reset record'
   };
   function clearPending(name, quiet) {
     var hit = false;
@@ -202,6 +203,7 @@
   function paintSheet(noFocus) {
     if (cfInst) unmountChartFull();
     elSheet.innerHTML = SE.sheet(sheet.kind, S, ui, sheet.data);
+    if (sheet.kind === 'track') trackHtml = elSheet.innerHTML;
     elSheet.hidden = false;
     if (sheet.kind === 'chartfull') { mountChartFull(); return; }
     if (noFocus) return;
@@ -221,6 +223,15 @@
       stack = []; sheet = null; elSheet.hidden = true; elSheet.innerHTML = '';
       toast('Could not open that screen', 'err');
     }
+  }
+  var trackHtml = '';
+  function repaintTrack() {
+    if (!sheet || sheet.kind !== 'track' || sheet.waiting) return;
+    var h = SE.sheet('track', S, ui, sheet.data);
+    if (h === trackHtml && elSheet.firstChild) return;
+    var sb = scrollEl(), y = sb ? sb.scrollTop : 0;
+    elSheet.innerHTML = h; trackHtml = h;
+    sb = scrollEl(); if (sb) sb.scrollTop = y;
   }
   function selfBack() {
     selfPop++;
@@ -320,6 +331,9 @@
       ui.lastTarget = { sym: tsym, target: tr.n, stop: sr.n, note: note };
       sheetBusy('setTarget');
       act('setTarget', { sym: tsym, target: tr.n, stop: sr.n, note: note }, 'setTarget:' + tsym);
+    } else if (k === 'resettrack') {
+      sheetBusy('resetTrack');
+      act('resetTrack', {}, 'resetTrack');
     } else if (k === 'clearfeed') {
       sheetBusy('clearFeed');
       act('clearFeed', {}, 'clearFeed');
@@ -845,6 +859,9 @@
       case 'add': openSheet('add'); break;
       case 'paste': openSheet('paste'); break;
       case 'clearfeed': openSheet('clearfeed'); break;
+      case 'track': if (!(sheet && sheet.kind === 'track')) openSheet('track', {}, true); break;
+      case 'replay': act('replayTrack', {}, 'replayTrack'); repaintTrack(); break;
+      case 'resettrack': openSheet('resettrack'); break;
       case 'pick':
         try { bridge().pickHoldingsFile(); } catch (e) { toast('Could not open the file picker', 'err'); }
         break;
@@ -974,7 +991,7 @@
           openChartFull();
         } else ui.afterInfo = function () { openTarget(bsym, qs.t1 ? { target: Number(qs.t1) || 0, stop: Number(qs.stop) || 0 } : null); };
       }
-      else if ({ settings: 1, add: 1, paste: 1, clearfeed: 1 }[qs.sheet]) openSheet(qs.sheet, qs.sheet === 'add' && qs.sym ? { sym: qs.sym } : {}, true);
+      else if ({ settings: 1, add: 1, paste: 1, clearfeed: 1, track: 1, resettrack: 1 }[qs.sheet]) openSheet(qs.sheet, qs.sheet === 'add' && qs.sym ? { sym: qs.sym } : {}, true);
       else if (qs.sheet === 'chart') { first = SE.A(S.holdings)[0]; openChart(qs.sym || (first ? SE.T(first.sym) : 'RELIANCE')); }
       if (qs.sheetscroll && qs.sheet !== 'stock') { var sb = elSheet.querySelector('.sb'); if (sb) sb.scrollTop = Number(qs.sheetscroll) || 0; }
     }

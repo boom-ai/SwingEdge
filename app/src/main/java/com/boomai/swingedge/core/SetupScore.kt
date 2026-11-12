@@ -16,7 +16,9 @@ class ScoreComp(
     val sma50: Double, val atr14: Double,
     val r6: Double, val r12: Double, val vol126: Double, val ram: Double,
     val hi252: Double, val lo252: Double, val prox52: Double, val low52: Double,
-    val uclock: Boolean
+    val uclock: Boolean,
+    /** SMA200 of the bar (round 5: AVOID needs score < 55 AND close below it); NaN = not enough bars */
+    val sma200: Double = Double.NaN
 ) {
     /** TO20 >= 25 cr and price >= Rs 50 (NaN fails). */
     val liquid: Boolean get() = to20 >= SetupScore.MIN_TO20_CR && rawClose >= SetupScore.MIN_PRICE
@@ -115,6 +117,7 @@ object SetupScore {
             if (i < 0 || i >= c.size || i >= h.size || i >= l.size) return empty(nbars, day)
             val to20 = if (i >= 19 && i < toCr.size) { var s = 0.0; for (k in i - 19..i) s += toCr[k]; s / 20 } else NaN
             val sma50 = if (i >= 49) { var s = 0.0; for (k in i - 49..i) s += c[k]; s / 50 } else NaN
+            val sma200 = if (i >= 199) { var s = 0.0; for (k in i - 199..i) s += c[k]; s / 200 } else NaN
             val atr14 = if (i >= 13) {
                 var s = 0.0
                 for (k in i - 13..i) {
@@ -144,7 +147,7 @@ object SetupScore {
             val r1 = if (i >= 1) c[i] / c[i - 1] - 1 else NaN
             val uclock = c[i] >= h[i] * 0.9995 && minOf(Math.abs(r1 - 0.05), Math.abs(r1 - 0.10), Math.abs(r1 - 0.20)) < 0.003
             return ScoreComp(nbars, day, c[i], if (i >= 1) c[i - 1] else 0.0, h[i], rawClose, to20, sma50, atr14,
-                norm(r6), norm(r12), vol, norm(ram), hi, lo, norm(c[i] / hi), norm(c[i] / lo), uclock)
+                norm(r6), norm(r12), vol, norm(ram), hi, lo, norm(c[i] / hi), norm(c[i] / lo), uclock, sma200 = sma200)
         } catch (t: Throwable) {
             return empty(nbars, day)
         }
@@ -207,22 +210,26 @@ object SetupScore {
         else -> "85-100"
     }
 
-    fun label(score: Double, close: Double, sma50: Double, uclock: Boolean): String = when {
-        score < AVOID_BELOW -> "AVOID"
+    /** Round 5 (research/out_r5): AVOID = score < 55 AND close below SMA200; a low score above SMA200 is WAIT. NaN SMA200 keeps the R4 rule. */
+    fun label(score: Double, close: Double, sma50: Double, uclock: Boolean, sma200: Double = Double.NaN): String = when {
+        score < AVOID_BELOW && (sma200.isNaN() || close < sma200) -> "AVOID"
+        score < AVOID_BELOW -> "WAIT"
         score >= BUY_MIN && close > sma50 && !uclock -> "BUY"
         else -> "WAIT"
     }
 
-    /** [entryHigh, stop, t1, t2] = C + 0.5 ATR, C - 3 ATR, C + 6 ATR, C + 9 ATR (simple-mean ATR14). */
+    /** Round 5 plan P2: fixed disaster stop this many ATR below the entry. */
+    const val STOP_ATR = 5.0
+    /** [entryHigh, stop, t1, t2] = C + 0.5 ATR, C - 5 ATR (plan P2), C + 6 ATR, C + 9 ATR (reference levels only). */
     fun levels(close: Double, atr14: Double): DoubleArray =
-        doubleArrayOf(close + 0.5 * atr14, close - 3 * atr14, close + 6 * atr14, close + 9 * atr14)
+        doubleArrayOf(close + 0.5 * atr14, close - STOP_ATR * atr14, close + 6 * atr14, close + 9 * atr14)
 
     private fun na(sym: String, comp: ScoreComp) = ScoreEntry(sym, comp, DoubleArray(5) { NaN }, NaN, 0.0, "NA", "", 0, 0)
 
     private fun scored(sym: String, comp: ScoreComp, p: DoubleArray, rank: Int, of: Int): ScoreEntry {
         val raw = raw(p)
         val s = round1(raw)
-        return ScoreEntry(sym, comp, p, raw, s, label(s, comp.close, comp.sma50, comp.uclock), band(s), rank, of)
+        return ScoreEntry(sym, comp, p, raw, s, label(s, comp.close, comp.sma50, comp.uclock, comp.sma200), band(s), rank, of)
     }
 
     /** Score descending, then symbol ascending (byte order for these ASCII symbols). */

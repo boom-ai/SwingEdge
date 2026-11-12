@@ -16,7 +16,8 @@
   var TABS = { today: 1, setups: 1, trades: 1, portfolio: 1, alerts: 1 };
   var S = {}, lastJson = null, lastDevJson = null;
   var ui = { tab: TABS[qs.tab] ? qs.tab : 'today', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now(),
-    recent: loadRecent(), search: { q: '', sent: null, shown: '', results: null, loading: false, err: '' }, emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, watchEdit: false, stock: null };
+    recent: loadRecent(), search: { q: '', sent: null, shown: '', results: null, loading: false, err: '' }, emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, watchEdit: false, stock: null,
+    cf: null, cfOpts: { levels: true, vol: true, rangeOn: '6M' }, confirmTarget: {}, cfBoot: null, afterInfo: null, lastTarget: null };
   var cache = { top: null, view: null, tabs: null };
   var scrollPos = {};
   var stack = [];              // open sheets, top last: {kind, data, pushed, waiting, scroll}
@@ -89,6 +90,7 @@
     else if (ok && !renderFailed) elErr.hidden = true;
     readDevice();
     syncStock();
+    if (sheet && sheet.kind === 'chartfull') cfMeta();
     // a long action is visibly running once busy is set: hand the button over to `busy`
     if (SE.isBusy(S)) { clearPending('scanNow', true); clearPending('runBacktest', true); }
     render();
@@ -104,11 +106,12 @@
   var LONG = { scanNow: 1, runBacktest: 1 };
   var DONE = {
     scanNow: 'Scan finished', runBacktest: 'Re-test finished', addHolding: 'Holding added', removeHolding: 'Holding removed',
-    takeTrade: 'Trade saved. Follow-ups are on.', skipSignal: 'Skipped', closeTrade: 'Trade closed', saveSettings: 'Settings saved', clearFeed: 'Alerts cleared'
+    takeTrade: 'Trade saved. Follow-ups are on.', skipSignal: 'Skipped', closeTrade: 'Trade closed', saveSettings: 'Settings saved', clearFeed: 'Alerts cleared',
+    setTarget: 'Target saved. You will get an alert when it is reached.', clearTarget: 'Target removed'
   };
   var NAMES = {
     scanNow: 'Scan', runBacktest: 'Re-test', addHolding: 'Add holding', removeHolding: 'Remove holding', importHoldings: 'Import',
-    takeTrade: 'Save trade', skipSignal: 'Skip', closeTrade: 'Close trade', saveSettings: 'Save settings', clearFeed: 'Clear alerts'
+    takeTrade: 'Save trade', skipSignal: 'Skip', closeTrade: 'Close trade', saveSettings: 'Save settings', clearFeed: 'Clear alerts', setTarget: 'Set target', clearTarget: 'Clear target'
   };
   function clearPending(name, quiet) {
     var hit = false;
@@ -153,8 +156,9 @@
       if (name === 'search') { onSearchResult(res, ok, err); return; }
       if (name === 'stockInfo') { onInfoResult(res, ok, err); return; }
       if (name === 'addWatch' || name === 'removeWatch') { onWatchResult(name, ok, err); return; }
-      if (name === 'getChart' && onStockChart(res, ok, err)) return;
+      if (name === 'getChart' && chartReply(res, ok, err)) return;
       clearPending(name, true);
+      if (name === 'setTarget' || name === 'clearTarget') onTargetResult(name, res, ok);
       if (name === 'getChart') {
         if (ui.chart && (!res.sym || String(res.sym) === ui.chart.sym)) {
           if (chartTimer) { clearTimeout(chartTimer); chartTimer = null; }
@@ -172,6 +176,7 @@
         } else toast('Import failed: ' + err, 'err');
       } else if (ok) toast(DONE[name] || 'Done', 'ok');
       else toast((NAMES[name] || name) + ' failed: ' + err, 'err');
+      if (name === 'setTarget' || name === 'clearTarget') ui.lastTarget = null;
       if (sheet && sheet.waiting === name) { if (ok) closeSheet(); else sheetIdle(err); }
       render();
     } catch (e) { /* never throw into the shell */ }
@@ -195,8 +200,10 @@
   function topSync() { sheet = stack.length ? stack[stack.length - 1] : null; }
   function scrollEl() { return elSheet.querySelector('.sb'); }
   function paintSheet(noFocus) {
+    if (cfInst) unmountChartFull();
     elSheet.innerHTML = SE.sheet(sheet.kind, S, ui, sheet.data);
     elSheet.hidden = false;
+    if (sheet.kind === 'chartfull') { mountChartFull(); return; }
     if (noFocus) return;
     var f = null;
     if (sheet.kind === 'add' || sheet.kind === 'paste') f = elSheet.querySelector(sheet.kind === 'add' && SE.T(sheet.data.sym) ? 'input[name="qty"]' : 'input,textarea');
@@ -223,6 +230,7 @@
   function closeSheet(fromPop) {
     if (!sheet) return;
     var gone = stack.pop();
+    if (gone && gone.kind === 'chartfull') { unmountChartFull(); ui.cf = null; }
     topSync();
     try { if (document.activeElement && elSheet.contains(document.activeElement)) document.activeElement.blur(); } catch (e) { /* ignore */ }
     if (!fromPop && gone.pushed) selfBack();
@@ -304,6 +312,14 @@
     } else if (k === 'remove' || k === 'sold') {
       sheetBusy('removeHolding');
       act('removeHolding', { sym: id }, 'removeHolding:' + id);
+    } else if (k === 'target') {
+      var tsym = SE.T(sheet.data.id).trim().toUpperCase();
+      var tr = optNum('target'), sr = optNum('stop'), none = tr.empty && sr.empty;
+      if (!check([['target', tr.ok && !none, none ? 'Enter a target price or a stop price' : 'Enter a price above 0'], ['stop', sr.ok, 'Enter a price above 0']])) return;
+      var note = val('note').trim().slice(0, 80);
+      ui.lastTarget = { sym: tsym, target: tr.n, stop: sr.n, note: note };
+      sheetBusy('setTarget');
+      act('setTarget', { sym: tsym, target: tr.n, stop: sr.n, note: note }, 'setTarget:' + tsym);
     } else if (k === 'clearfeed') {
       sheetBusy('clearFeed');
       act('clearFeed', {}, 'clearFeed');
@@ -319,10 +335,17 @@
       act('saveSettings', a, 'saveSettings');
     } else closeSheet();
   }
+  function optNum(name) {
+    var raw = val(name).trim();
+    if (!raw) return { empty: true, n: 0, ok: true };
+    var n = num(name);
+    return { empty: false, n: n === null ? 0 : n, ok: n !== null && n > 0 && n < 1e7 };
+  }
   function recalc() {
     if (!sheet) return;
     var c = $('calc'); if (!c) return;
     try {
+      if (sheet.kind === 'target') { c.innerHTML = SE.targetCalc(sheet.data.ltp, num('target'), num('stop')); return; }
       var id = SE.T(sheet.data.id);
       if (sheet.kind === 'take') c.innerHTML = SE.takeCalc(SE.A(S.signals).filter(function (x) { return SE.T(x.id) === id; })[0], num('price'), num('qty'));
       else if (sheet.kind === 'close') c.innerHTML = SE.closeCalc(SE.A(S.trades).filter(function (x) { return SE.T(x.id) === id; })[0], num('price'));
@@ -435,7 +458,7 @@
   }
 
   /* ---------- stock page ---------- */
-  var PARTS = { head: 'st-head', price: 'st-price', act: 'st-act', chart: 'st-chart', body: 'st-body' };
+  var PARTS = { head: 'st-head', price: 'st-price', act: 'st-act', verdict: 'st-verdict', chart: 'st-chart', body: 'st-body' };
   var bootScroll = null;
   function stockOpen() { return !!sheet && sheet.kind === 'stock' && !!ui.stock; }
   function paintStock(parts) {
@@ -468,25 +491,65 @@
     st.err = ''; st.info = null;
     if (st.itimer) clearTimeout(st.itimer);
     st.itimer = setTimeout(function () {
-      if (ui.stock === st && st.itok === tok && !st.info && !st.err) { st.err = 'No reply after 20 seconds. Check your connection and try again.'; paintStock(['head', 'price', 'act', 'chart', 'body']); }
+      if (ui.stock === st && st.itok === tok && !st.info && !st.err) { st.err = 'No reply after 20 seconds. Check your connection and try again.'; paintStock(['head', 'price', 'act', 'verdict', 'chart', 'body']); }
     }, 20000);
     try { bridge().action('stockInfo', JSON.stringify({ sym: st.sym })); }
     catch (e) { st.err = 'Could not reach the app. Try again.'; }
+  }
+  /* ---------- chart requests: the stock page and the full-screen chart share the bridge; replies carry no `bars`, so
+     requests for the same symbol are sent one at a time (replies for different symbols are told apart by `sym`) ---------- */
+  var chartQ = [], chartBusy = {};
+  function ckey(sym) { return String(sym || '').toUpperCase(); }
+  function chartPump() {
+    for (var i = 0; i < chartQ.length;) {
+      var j = chartQ[i], k = ckey(j.sym);
+      if (chartBusy[k]) { i++; continue; }
+      chartQ.splice(i, 1); chartBusy[k] = j;
+      chartStart(j, k);
+    }
+  }
+  function chartStart(j, k) {
+    j.timer = setTimeout(function () {
+      if (chartBusy[k] !== j) return;
+      delete chartBusy[k];
+      try { j.done(false, null, '__timeout'); } catch (e) { /* ignore */ }
+      chartPump();
+    }, 20000);
+    try { bridge().action('getChart', JSON.stringify({ sym: j.sym, bars: j.bars })); }
+    catch (e) {
+      clearTimeout(j.timer); delete chartBusy[k];
+      try { j.done(false, null, 'Could not reach the app.'); } catch (e2) { /* ignore */ }
+    }
+  }
+  function chartEnqueue(job) { chartQ.push(job); chartPump(); }
+  function chartReply(res, ok, err) {
+    var k = res && res.sym ? ckey(res.sym) : '', keys = Object.keys(chartBusy);
+    if (!k && keys.length === 1) k = keys[0];
+    var j = k ? chartBusy[k] : null;
+    if (!j) return false;
+    clearTimeout(j.timer); delete chartBusy[k];
+    try { j.done(ok && Array.isArray(res.c), res, err); } catch (e) { try { console.error('SwingEdge chart handler', e && e.stack || e); } catch (e2) { /* ignore */ } }
+    chartPump();
+    return true;
   }
   function requestChart(bars) {
     var st = ui.stock; if (!st) return;
     var tok = st.ctok = (st.ctok || 0) + 1;
     st.inflight = bars; st.chartErr = '';
-    if (st.ctimer) clearTimeout(st.ctimer);
-    st.ctimer = setTimeout(function () {
-      if (ui.stock === st && st.ctok === tok && st.inflight) {
-        st.inflight = 0;
+    chartEnqueue({ sym: st.sym, bars: bars, done: function (ok, res, err) {
+      if (ok && bars >= 500) cacheChart(st.sym, res, true);
+      if (ui.stock !== st || st.ctok !== tok) return;            // superseded or left the page
+      st.inflight = 0;
+      if (err === '__timeout') {
         if (st.chart) { st.want = st.range || 130; toast('The chart is taking too long. Try again.', 'err'); } else st.chartErr = 'The chart did not load in time.';
-        paintStock(['chart']);
+        paintStock(['chart']); return;
       }
-    }, 20000);
-    try { bridge().action('getChart', JSON.stringify({ sym: st.sym, bars: bars })); }
-    catch (e) { st.inflight = 0; st.chartErr = 'Could not reach the app.'; }
+      if (ok) { st.chart = res; st.range = bars; st.chartErr = ''; }
+      else if (st.chart) { st.want = st.range || 130; toast('Chart: ' + err, 'err'); }
+      else st.chartErr = err;
+      if (ok && st.want !== bars) requestChart(st.want);
+      paintStock(['chart']);
+    } });
   }
   function openStock(sym, name) {
     sym = String(sym || '').trim().toUpperCase();
@@ -495,6 +558,7 @@
     if (!name) { var r = (ui.recent || []).filter(function (x) { return x.sym === sym; })[0]; name = r ? r.name : ''; }
     if (!name) { var h = SE.A(S.holdings).concat(SE.A(S.myWatch), SE.A(S.watch)).filter(function (x) { return SE.T(x.sym).toUpperCase() === sym; })[0]; name = h ? SE.T(h.name) : ''; }
     ui.stock = { sym: sym, name: name, info: null, err: '', chart: null, chartErr: '', range: 0, want: 130, inflight: 0 };
+    ui.afterInfo = null;
     noteRecent(sym, name);
     if (sheet && sheet.kind === 'stock') { sheet.data = { id: sym }; paintSheet(true); }
     else openSheet('stock', { id: sym }, true);
@@ -508,26 +572,15 @@
     if (st.itimer) { clearTimeout(st.itimer); st.itimer = null; }
     if (ok) { st.info = res; st.err = ''; if (!st.name && typeof res.name === 'string') st.name = res.name; if (res.name) noteRecent(st.sym, String(res.name)); }
     else { st.info = null; st.err = err; }
-    paintStock(['head', 'price', 'act', 'chart', 'body']);
-  }
-  function onStockChart(res, ok, err) {
-    var st = ui.stock;
-    if (!st || !(st.inflight > 0)) return false;
-    if (res.sym && String(res.sym).toUpperCase() !== st.sym) return false;
-    if (st.ctimer) { clearTimeout(st.ctimer); st.ctimer = null; }
-    var bars = st.inflight; st.inflight = 0;
-    if (ok && Array.isArray(res.c)) { st.chart = res; st.range = bars; st.chartErr = ''; }
-    else if (st.chart) { st.want = st.range || 130; toast('Chart: ' + err, 'err'); }
-    else st.chartErr = err;
-    if (ok && st.want !== bars) requestChart(st.want);
-    paintStock(['chart']);
-    return true;
+    paintStock(['head', 'price', 'act', 'verdict', 'chart', 'body']);
+    if (sheet && sheet.kind === 'chartfull') cfMeta();
+    if (ok && typeof ui.afterInfo === 'function') { var fn = ui.afterInfo; ui.afterInfo = null; try { fn(); } catch (e) { /* ignore */ } }
   }
   function retryStock() {
     var st = ui.stock; if (!st) return;
     requestInfo();
     if (!st.chart && !st.inflight) requestChart(st.want || 130);
-    paintStock(['head', 'price', 'act', 'chart', 'body']);
+    paintStock(['head', 'price', 'act', 'verdict', 'chart', 'body']);
   }
 
   /* ---------- watchlist ---------- */
@@ -570,6 +623,210 @@
     if (!watchCall(name, st.sym, function () { if (st.info) st.info.inWatch = !want; })) st.info.inWatch = !want;
     paintStock(['act']);
   }
+
+  /* ---------- targets ---------- */
+  function round2(x) { return Math.round(x * 100) / 100; }
+  function targetLtp(sym) {
+    var st = ui.stock, l = st && st.sym === sym && st.info ? SE.N(st.info.ltp) : null;
+    if (l > 0) return l;
+    var t = SE.targetOf(S, sym); l = t ? SE.N(t.ltp) : null;
+    return l > 0 ? l : 0;
+  }
+  function openTarget(sym, pre) {
+    sym = String(sym || '').trim().toUpperCase();
+    if (!sym) return;
+    var data = { id: sym, ltp: targetLtp(sym) };
+    if (pre) { if (pre.target > 0) data.target = pre.target; if (pre.stop > 0) data.stop = pre.stop; if (pre.target > 0 || pre.stop > 0) data.note = ''; }
+    openSheet('target', data, true);
+    recalc();
+  }
+  function onTargetResult(name, res, ok) {
+    if (!ok) return;
+    var lt = ui.lastTarget, st = ui.stock;
+    if (name === 'setTarget' && lt && st && st.info && lt.sym === st.sym) {
+      st.info.myTarget = { target: lt.target, stop: lt.stop, note: lt.note, status: 'ACTIVE' };
+    }
+    if (name === 'clearTarget') {
+      var sym = lt ? lt.sym : (sheet && sheet.data && sheet.data.id) || '';
+      if (ui.clearing) { sym = ui.clearing; ui.clearing = null; }
+      if (st && st.info && st.sym === sym) st.info.myTarget = { target: 0, stop: 0, note: '', status: '' };
+      if (sym && Array.isArray(S.targets)) S.targets = S.targets.filter(function (x) { return !(x && String(x.sym || '').toUpperCase() === sym); });
+      if (sym) delete ui.confirmTarget[sym];
+    }
+    if (sheet && sheet.kind === 'chartfull') cfMeta();
+  }
+  function clearTargetNow(sym) {
+    sym = String(sym || '').trim().toUpperCase();
+    if (!sym) return;
+    ui.clearing = sym; ui.lastTarget = { sym: sym };
+    if (sheet && sheet.kind === 'target') sheetBusy('clearTarget');
+    if (!act('clearTarget', { sym: sym }, 'clearTarget:' + sym)) { ui.clearing = null; if (sheet && sheet.kind === 'target') sheetIdle(''); }
+  }
+
+  /* ---------- full-screen chart ---------- */
+  var cfCache = {}, cfInst = null, cfLast = 0, cfHeadHtml = '';
+  function isChartRes(r) { return !!r && typeof r === 'object' && Array.isArray(r.c) && r.c.length >= 5; }
+  function cacheChart(sym, res, full) {
+    if (!isChartRes(res)) return;
+    cfCache[ckey(sym)] = { res: res, full: !!full };
+    var keys = Object.keys(cfCache); while (keys.length > 4) delete cfCache[keys.shift()];
+  }
+  function cfEmas() { var o = {}; [10, 20, 50, 100, 200].forEach(function (k) { o[k] = !!ui.emaOn[k]; }); return o; }
+  function cfLevels() {
+    var st = ui.stock; if (!st || !ui.cf) return [];
+    try { return CM.buildLevels(st.sym === ui.cf.sym ? st.info : null, SE.myTarget(S, ui)); } catch (e) { return []; }
+  }
+  function paintCfTog() { var el = $('cf-tog'); if (el) el.innerHTML = SE.cfToggles(ui); }
+  function paintCfRange() {
+    var el = $('cf-rng'); if (!el) return;
+    var h = SE.cfRangeChips(ui.cfOpts.rangeOn);
+    if (el._h !== h) { el.innerHTML = h; el._h = h; }
+  }
+  function cfMsg() {
+    var el = $('cf-msg'); if (!el || !ui.cf) return;
+    var h = SE.cfMsg(ui);
+    el.innerHTML = h; el.hidden = !h;
+  }
+  function cfMeta() {            // header (price) and level lines follow the stock info / targets without touching the canvas
+    if (!ui.cf || !sheet || sheet.kind !== 'chartfull') return;
+    var el = $('cf-head'), h = SE.cfHead(S, ui, ui.cf.sym);
+    if (el && h !== cfHeadHtml) { el.innerHTML = h; cfHeadHtml = h; }
+    if (cfInst) cfInst.setLevels(cfLevels());
+  }
+  function onCfView(state) {
+    var on = state.ranges || [], cur = ui.cfOpts.rangeOn, key = on.indexOf(cur) >= 0 ? cur : (on[0] || '');
+    if (key !== cur) { ui.cfOpts.rangeOn = key; paintCfRange(); }
+  }
+  function applyCfBoot() {
+    var b = ui.cfBoot; ui.cfBoot = null;
+    if (!b || !cfInst) return;
+    var n = cfInst.state().n;
+    if (b.range) { ui.cfOpts.rangeOn = b.range; cfInst.setRange(b.range); }
+    else if (b.zoom > 0 || b.pan > 0) {
+      var c = b.zoom > 0 ? b.zoom : cfInst.state().c;
+      cfInst.setView({ s: n - c - (b.pan > 0 ? b.pan : 0), c: c });
+    }
+    if (b.cross !== null && b.cross !== undefined && b.cross >= 0) { cfInst.flush(); var stt = cfInst.state(); cfInst.setCrossIdx(Math.floor(stt.s + stt.c) - 1 - b.cross); }
+    if (b.levels === false) { ui.cfOpts.levels = false; cfInst.setOpts({ levels: false }); paintCfTog(); }
+    paintCfRange();
+  }
+  function mountChartFull() {
+    unmountChartFull();
+    var stage = $('cf-stage'); if (!stage || !window.SEChart || !ui.cf) return;
+    cfHeadHtml = SE.cfHead(S, ui, ui.cf.sym);
+    cfInst = SEChart.create(stage, { onView: onCfView, onReset: function () { ui.cfOpts.rangeOn = '6M'; paintCfRange(); } });
+    if (!cfInst) return;
+    cfInst.setOpts({ emas: cfEmas(), levels: ui.cfOpts.levels !== false, vol: ui.cfOpts.vol !== false });
+    cfInst.setLevels(cfLevels());
+    if (isChartRes(ui.cf.res)) cfInst.setData(ui.cf.res);
+    var el = $('cf-rng'); if (el) el._h = el.innerHTML;
+    if (ui.cf.have500 || ui.cf.err) applyCfBoot();
+    onCfView(cfInst.state());
+    cfMsg();
+  }
+  window.__seChart = function () { return cfInst; }; /* read-only handle for the in-browser integration test */
+  function unmountChartFull() { if (cfInst) { try { cfInst.destroy(); } catch (e) { /* ignore */ } cfInst = null; } }
+  function loadFull() {
+    var cf = ui.cf; if (!cf) return;
+    cf.loading = true; cf.err = ''; cfMsg();
+    chartEnqueue({ sym: cf.sym, bars: 500, done: function (ok, res, err) {
+      cf.loading = false;
+      if (ok) { cacheChart(cf.sym, res, true); cf.have500 = true; cf.res = res; }
+      else cf.err = err === '__timeout' ? 'The longer history did not load in time.' : err;
+      if (ui.cf !== cf) return;                                 // closed meanwhile: only the cache keeps it
+      if (ok && cfInst) cfInst.setData(res, { keepView: true });
+      else if (!ok && cf.res) { toast('Could not load the longer history: ' + cf.err, 'err'); cf.err = ''; }
+      if (cfInst) applyCfBoot();
+      cfMsg();
+    } });
+  }
+  function openChartFull() {
+    var st = ui.stock;
+    if (!st || (sheet && sheet.kind === 'chartfull')) return;
+    var t = Date.now(); if (t - cfLast < 400) return; cfLast = t;
+    var c = cfCache[ckey(st.sym)], res = null, full = false;
+    if (c && isChartRes(c.res)) { res = c.res; full = !!c.full; }
+    if (isChartRes(st.chart) && (!res || st.chart.c.length > res.c.length)) { res = st.chart; full = st.range === 500 || st.chart.c.length >= 500; }
+    ui.cf = { sym: st.sym, res: res, err: '', loading: false, have500: full };
+    openSheet('chartfull', { id: st.sym }, true);
+    if (!full) loadFull();
+  }
+
+  /* ---------- inline chart: press-and-hold crosshair, tap (or the corner button) to expand ----------
+     .cwrap has touch-action:pan-y, so the browser keeps vertical panning and hands us horizontal drags. We only take a touch over
+     after the 250 ms hold or a clearly horizontal drag; a vertical drag is left alone for the page to scroll. */
+  var xh = null, xhSwallow = 0;
+  function cwOf(t) { return t && t.closest ? t.closest('.cwrap.live') : null; }
+  function xhClear() {
+    var g = elSheet.querySelector('.cwrap svg.chart .xh'); if (g) g.setAttribute('class', 'xh');
+    var cro = $('st-cro'); if (cro) cro.innerHTML = SE.croHtml(null);
+  }
+  function xhShow(cx) {
+    var cw = xh && xh.cw, svg = cw && cw.querySelector('svg.chart'), res = ui.stock && ui.stock.chart;
+    if (!svg || !isChartRes(res)) return;
+    var n = Number(svg.getAttribute('data-n')), L = Number(svg.getAttribute('data-l')), pw = Number(svg.getAttribute('data-pw')), vw = Number(svg.getAttribute('data-vw'));
+    var tp = Number(svg.getAttribute('data-tp')), ph = Number(svg.getAttribute('data-ph')), mn = Number(svg.getAttribute('data-mn')), mx = Number(svg.getAttribute('data-mx'));
+    var r = svg.getBoundingClientRect(), scale = r.width / vw;
+    if (!(n > 0) || !(scale > 0) || !(pw > 0)) return;
+    var i = Math.max(0, Math.min(n - 1, Math.floor(((cx - r.left) / scale - L) / pw * n)));
+    var info = CM.barInfo(res, i, []), x = L + (i + 0.5) * pw / n;
+    var g = svg.querySelector('#xh');
+    if (g) {
+      var ln = g.querySelector('line'), dot = g.querySelector('circle');
+      ln.setAttribute('x1', x.toFixed(1)); ln.setAttribute('x2', x.toFixed(1));
+      if (info.c > 0 && mx > mn) { dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', (tp + (mx - info.c) / (mx - mn) * ph).toFixed(1)); dot.style.display = ''; } else dot.style.display = 'none';
+      g.setAttribute('class', 'xh on');
+    }
+    var cro = $('st-cro'); if (cro) cro.innerHTML = SE.croHtml(info);
+  }
+  function xhStop() { if (xh) { clearTimeout(xh.timer); xh = null; } }
+  elSheet.addEventListener('touchstart', function (e) {
+    var cw = cwOf(e.target);
+    if (!cw || e.touches.length !== 1 || (e.target.closest && e.target.closest('[data-c]'))) { xhStop(); return; }
+    var t = e.touches[0];
+    xhStop();
+    xh = { cw: cw, x0: t.clientX, y0: t.clientY, t0: Date.now(), mode: 'pending', timer: 0, mouse: false };
+    xh.timer = setTimeout(function () { if (xh && xh.mode === 'pending') { xh.mode = 'cross'; xhShow(xh.x0); } }, 250);
+  }, { passive: true });
+  elSheet.addEventListener('touchmove', function (e) {
+    if (!xh || xh.mouse) return;
+    var t = e.touches[0]; if (!t) return;
+    var dx = t.clientX - xh.x0, dy = t.clientY - xh.y0;
+    if (xh.mode === 'pending') {
+      if (Math.abs(dy) > 8 && Math.abs(dy) * 1.6 >= Math.abs(dx)) { clearTimeout(xh.timer); xh.mode = 'scroll'; return; }       // vertical: the page scrolls
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.8) { clearTimeout(xh.timer); xh.mode = 'cross'; }               // clearly horizontal
+      else return;
+    }
+    if (xh.mode === 'cross') { if (e.cancelable) e.preventDefault(); xhShow(t.clientX); }
+  }, { passive: false });
+  function xhEnd(e) {
+    if (!xh || xh.mouse) return;
+    var x = xh; xhStop();
+    if (x.mode === 'cross') { xhSwallow = Date.now(); if (e && e.cancelable) e.preventDefault(); return; }       // the readout stays until the next tap
+    if (x.mode === 'pending') {                                                                                    // a tap
+      xhSwallow = Date.now(); if (e && e.cancelable) e.preventDefault();
+      if (x.cw.querySelector('.xh.on')) xhClear(); else openChartFull();
+    }
+  }
+  elSheet.addEventListener('touchend', xhEnd, { passive: false });
+  elSheet.addEventListener('touchcancel', function () { if (xh && !xh.mouse) xhStop(); }, { passive: true });
+  elSheet.addEventListener('mousedown', function (e) {                                                                // desktop: hold or drag to scrub
+    var cw = cwOf(e.target);
+    if (e.button !== 0 || !cw || (e.target.closest && e.target.closest('[data-c]'))) return;
+    xhStop();
+    xh = { cw: cw, x0: e.clientX, y0: e.clientY, t0: Date.now(), mode: 'pending', timer: 0, mouse: true };
+    xh.timer = setTimeout(function () { if (xh && xh.mode === 'pending') { xh.mode = 'cross'; xhShow(xh.x0); } }, 250);
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!xh || !xh.mouse) return;
+    if (xh.mode === 'pending' && Math.abs(e.clientX - xh.x0) > 4) { clearTimeout(xh.timer); xh.mode = 'cross'; }
+    if (xh.mode === 'cross') xhShow(e.clientX);
+  });
+  window.addEventListener('mouseup', function () {
+    if (!xh || !xh.mouse) return;
+    var x = xh; xhStop();
+    if (x.mode === 'cross') xhSwallow = Date.now();
+  });
 
   function command(c, id, el) {
     switch (c) {
@@ -622,6 +879,32 @@
         break;
       }
       case 'ema': if (SE.N(id) !== null) { ui.emaOn[id] = !ui.emaOn[id]; paintStock(['chart']); } break;
+      case 'chartfull': openChartFull(); break;
+      case 'cf-range': if (cfInst) { ui.cfOpts.rangeOn = id; cfInst.setRange(id); paintCfRange(); } break;
+      case 'cf-ema': if (SE.N(id) !== null) { ui.emaOn[id] = !ui.emaOn[id]; var eo = {}; eo[id] = !!ui.emaOn[id]; if (cfInst) cfInst.setOpts({ emas: eo }); paintCfTog(); } break;
+      case 'cf-levels': ui.cfOpts.levels = ui.cfOpts.levels === false; if (cfInst) cfInst.setOpts({ levels: ui.cfOpts.levels }); paintCfTog(); break;
+      case 'cf-vol': ui.cfOpts.vol = ui.cfOpts.vol === false; if (cfInst) cfInst.setOpts({ vol: ui.cfOpts.vol }); paintCfTog(); break;
+      case 'cf-reset': if (cfInst) { cfInst.reset(); ui.cfOpts.rangeOn = '6M'; paintCfRange(); } break;
+      case 'cf-retry': loadFull(); break;
+      case 'target': openTarget(id); break;
+      case 'target-from-call': {
+        var ci = ui.stock && ui.stock.info && ui.stock.info.call;
+        if (ci) openTarget(id, { target: SE.N(ci.t1) > 0 ? SE.N(ci.t1) : 0, stop: SE.N(ci.stop) > 0 ? SE.N(ci.stop) : 0 });
+        break;
+      }
+      case 'tgt-pct': {
+        var kind = String(id).charAt(0), pctv = Number(String(id).slice(1)), base = sheet && sheet.kind === 'target' ? SE.N(sheet.data.ltp) : null;
+        if (base > 0 && pctv > 0) {
+          var inp = elSheet.querySelector('[name="' + (kind === 't' ? 'target' : 'stop') + '"]');
+          if (inp) { inp.value = String(round2(base * (kind === 't' ? 1 + pctv / 100 : 1 - pctv / 100))); fieldErr(inp.name, ''); recalc(); }
+        }
+        break;
+      }
+      case 'target-clear': clearTargetNow(id); break;
+      case 'targets-all': ui.targetsAll = !ui.targetsAll; render(true); break;
+      case 'target-clear-ask': ui.confirmTarget[id] = 1; render(true); break;
+      case 'target-clear-no': delete ui.confirmTarget[id]; render(true); break;
+      case 'target-clear-yes': clearTargetNow(id); break;
       case 'stock-retry': retryStock(); break;
       case 'chart-retry': if (ui.stock) { requestChart(ui.stock.want || 130); paintStock(['chart']); } break;
       case 'submit': submitSheet(); break;
@@ -635,6 +918,8 @@
     }
   }
   document.addEventListener('click', function (e) {
+    var cw = cwOf(e.target);
+    if (cw && !(e.target.closest && e.target.closest('[data-c]'))) { if (Date.now() - xhSwallow > 500) openChartFull(); return; }
     var el = e.target;
     while (el && el !== document && !(el.getAttribute && el.getAttribute('data-c'))) el = el.parentNode;
     if (!el || el === document || el.disabled) return;
@@ -678,6 +963,16 @@
         first = SE.A(S.holdings)[0];
         if (qs.sheetscroll || qs.sheetat) bootScroll = { y: Number(qs.sheetscroll) || 0, at: qs.sheetat || '' };
         openStock(qs.sym || (first ? SE.T(first.sym) : 'RELIANCE'), '');
+      }
+      else if (qs.sheet === 'chartfull' || qs.sheet === 'target') {
+        first = SE.A(S.holdings)[0];
+        var bsym = (qs.sym || (first ? SE.T(first.sym) : 'RELIANCE')).toUpperCase();
+        openStock(bsym, '');
+        if (qs.sheet === 'chartfull') {
+          var bn = function (k) { return qs[k] !== undefined && qs[k] !== '' && isFinite(Number(qs[k])) ? Number(qs[k]) : null; };
+          ui.cfBoot = { zoom: bn('zoom'), pan: bn('pan'), cross: bn('cross'), range: /^(3M|6M|1Y|2Y|All)$/.test(qs.range || '') ? qs.range : '', levels: qs.levels === '0' ? false : true };
+          openChartFull();
+        } else ui.afterInfo = function () { openTarget(bsym, qs.t1 ? { target: Number(qs.t1) || 0, stop: Number(qs.stop) || 0 } : null); };
       }
       else if ({ settings: 1, add: 1, paste: 1, clearfeed: 1 }[qs.sheet]) openSheet(qs.sheet, qs.sheet === 'add' && qs.sym ? { sym: qs.sym } : {}, true);
       else if (qs.sheet === 'chart') { first = SE.A(S.holdings)[0]; openChart(qs.sym || (first ? SE.T(first.sym) : 'RELIANCE')); }

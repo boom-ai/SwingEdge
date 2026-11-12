@@ -32,14 +32,19 @@ object SimTests {
        "recent":[{"sym":"","closedAt":0,"result":"","pnlRs":0,"pnlPct":0,"paper":false}]},
      "feed": [{"ts":0,"kind":"buy","title":"","body":""}],
      "watch": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"ema10":0,"ema20":0,"ema50":0,"ema100":0,"ema200":0,"gapPct":0,"daysSince":0,"barDay":0,"spark":[0],"status":""}],
-     "myWatch": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"spark":[0],"strength":0,"stack":"BULLISH","crossText":"","dataOk":true}]
+     "myWatch": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"spark":[0],"strength":0,"stack":"BULLISH","crossText":"","dataOk":true}],
+     "ideas": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"score":0,"label":"BUY","headline":"",
+                "entryLow":0,"entryHigh":0,"stop":0,"t1":0,"t2":0,"rr":0,"horizonDays":60,"spark":[0],"barDay":0,"proven":false}],
+     "targets": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"target":0,"stop":0,"note":"","setAt":0,"refPrice":0,
+                  "status":"ACTIVE","hitAt":0,"toTargetPct":0,"toStopPct":0,"progressPct":0}]
     }""").asObj()
 
     private val ENUMS = mapOf(
         "regime.label" to setOf("BULL", "NEUTRAL", "BEAR"), "signals.status" to setOf("NEW", "TAKEN", "SKIPPED", "EXPIRED"),
         "trades.status" to setOf("OPEN", "CLOSED"), "trades.action" to setOf("HOLD", "BOOK_HALF", "EXIT", "TIME_EXIT"),
         "holdings.verdict" to setOf("HOLD", "TRIM", "SELL", "WATCH"), "strategies.verdict" to setOf("LIVE", "PAUSED", "UNTESTED"),
-        "feed.kind" to setOf("buy", "sell", "brief", "info", "warn"), "myWatch.stack" to setOf("BULLISH", "MIXED", "BEARISH")
+        "feed.kind" to setOf("buy", "sell", "brief", "info", "warn"), "myWatch.stack" to setOf("BULLISH", "MIXED", "BEARISH"),
+        "ideas.label" to setOf("BUY"), "targets.status" to setOf("ACTIVE", "HIT_TARGET", "HIT_STOP")
     )
 
     private fun shape(path: String, tpl: Any?, v: Any?, errs: ArrayList<String>) {

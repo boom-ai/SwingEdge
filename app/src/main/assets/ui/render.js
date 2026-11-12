@@ -135,6 +135,7 @@
     scissors: '<circle cx="6.5" cy="7" r="2.5"/><circle cx="6.5" cy="17" r="2.5"/><path d="M8.6 8.4 20 17M8.6 15.6 20 7"/>',
     eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
     x: '<path d="M6 6l12 12M18 6 6 18"/>',
     chev: '<path d="M9 6l6 6-6 6"/>',
     warn: '<path d="M12 4 2.8 19.5h18.4zM12 10v4.5M12 17.2v.3"/>',
@@ -153,6 +154,10 @@
     shield: '<path d="M12 3.5 5 6v5.500c0 4.2 3 7.4 7 9 4-1.6 7-4.8 7-9V6z"/>',
     moon: '<path d="M19.5 14.500A8 8 0 0 1 9.5 4.500a8 8 0 1 0 10 10z"/>',
     minus: '<path d="M6 12h12"/>',
+    expand: '<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>',
+    target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/>',
+    reset: '<path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5M4.5 4.5v4h4"/>',
+    layers: '<path d="M4 8l8-4 8 4-8 4zM4 12.500l8 4 8-4M4 16.500l8 4 8-4"/>',
     logo: '<path d="M3 17.500l5-6 4 3.5 8.5-10" stroke="#3FD68F" stroke-width="2.4"/><path d="M15.5 5h5v5" stroke="#3FD68F" stroke-width="2.4"/><path d="M3 21h18" stroke="#2C3B4D" stroke-width="2"/>'
   };
   function ic(name) { return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + (IC[name] || IC.info) + '</svg>'; }
@@ -236,13 +241,15 @@
     ['SELL', 'TRIM'].forEach(function (v) {
       A(S.holdings).forEach(function (h) { if (h.verdict === v && h.dataOk !== false) out.push({ type: 'holding', it: h }); });
     });
+    hitTargets(S).forEach(function (t) { out.push({ type: 'target', it: t }); });
     newSignals(S).forEach(function (g) { out.push({ type: 'signal', it: g }); });
     return out;
   }
   function counts(S) {
-    var items = actItems(S), c = { sell: 0, buy: 0, tradeActs: 0, holdActs: 0 };
+    var items = actItems(S), c = { sell: 0, buy: 0, tgt: 0, tradeActs: 0, holdActs: 0 };
     items.forEach(function (x) {
-      if (x.type === 'signal') c.buy++; else { c.sell++; if (x.type === 'trade') c.tradeActs++; else c.holdActs++; }
+      if (x.type === 'target') c.tgt++;
+      else if (x.type === 'signal') c.buy++; else { c.sell++; if (x.type === 'trade') c.tradeActs++; else c.holdActs++; }
     });
     return c;
   }
@@ -299,7 +306,7 @@
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
       var badge = '';
-      if (t[0] === 'today' && (c.sell + c.buy) > 0) badge = '<span class="badge' + (c.sell ? '' : ' g') + '">' + (c.sell + c.buy) + '</span>';
+      if (t[0] === 'today' && (c.sell + c.buy + c.tgt) > 0) badge = '<span class="badge' + (c.sell ? '' : c.tgt ? ' a' : ' g') + '">' + (c.sell + c.buy + c.tgt) + '</span>';
       if (t[0] === 'trades' && c.tradeActs > 0) badge = '<span class="badge">' + c.tradeActs + '</span>';
       if (t[0] === 'portfolio' && c.holdActs > 0) badge = '<span class="badge a">' + c.holdActs + '</span>';
       var on = ui.tab === t[0];
@@ -427,17 +434,18 @@
   }
   function plan(S, items, bs) {
     var hs = A(S.holdings).filter(function (x) { return x.dataOk !== false; });
-    var sells = 0, exits = 0, buys = 0, tests = 0;
+    var sells = 0, exits = 0, buys = 0, tests = 0, tgts = 0;
     items.forEach(function (x) {
-      if (x.type === 'trade') exits++; else if (x.type === 'holding') sells++;
+      if (x.type === 'trade') exits++; else if (x.type === 'holding') sells++; else if (x.type === 'target') tgts++;
       else if (/^EXPERIMENTAL/i.test(T(x.it.strategyLabel))) tests++; else buys++;
     });
     var li = [];
     if (exits) li.push(['down', 'sell', 'Act on ' + exits + ' open trade' + (exits > 1 ? 's' : '') + ' (exit or book)']);
     if (sells) li.push(['down', 'sell', sells + ' holding' + (sells > 1 ? 's' : '') + ' flagged to sell or trim']);
+    if (tgts) li.push(['target', 'trim', tgts + ' price target' + (tgts > 1 ? 's' : '') + ' you set ' + (tgts > 1 ? 'were' : 'was') + ' reached']);
     if (buys) li.push(['up', 'buy', buys + ' buy call' + (buys > 1 ? 's' : '') + ' from a rule that passed its test']);
     if (tests) li.push(['flask', 'trim', tests + ' test idea' + (tests > 1 ? 's' : '') + ' (unproven rule, paper-tracked)']);
-    if (!exits && !sells) li.push(['check', 'ok', hs.length ? 'Nothing to sell: no holding is flagged' : 'Add your holdings to get sell calls']);
+    if (!exits && !sells && !tgts) li.push(['check', 'ok', hs.length ? 'Nothing to sell: no holding is flagged' : 'Add your holdings to get sell calls']);
     if (!buys && !tests) li.push(['clock', 'mut', bs.short]);
     var weak = hs.filter(function (x) { return x.verdict === 'WATCH'; }).length;
     if (weak) li.push(['info', 'mut', weak + ' holding' + (weak > 1 ? 's are' : ' is') + ' weak (on watch), no action yet']);
@@ -522,7 +530,7 @@
     return h + '<div class="card mv">' + rows.map(function (x) { return wrow(x, edit, ui); }).join('') + '</div>';
   }
   function setups(S, ui) {
-    var ws = watchItems(S), asof = '', h = myWatchSection(S, ui);
+    var ws = watchItems(S), asof = '', h = ideasBlock(S, 'setups') + myWatchSection(S, ui);
     ws.forEach(function (x) { if (!asof) asof = barDayText(x.barDay); });
     h += '<div class="card setuphd"><h2>Fresh EMA crossovers</h2>' +
       '<div class="crit"><span>' + ic('check') + '10 EMA crossed above 20 EMA</span><span>' + ic('check') + '10 EMA above the 50, 100 and 200 EMA</span><span>' + ic('check') + 'Traded ₹25 crore+ a day</span></div>' +
@@ -547,7 +555,7 @@
       h += '<div class="empty"><div class="ei">' + ic(bs.icon) + '</div><h3>' + esc(bs.title) + '</h3><p>' + esc(bs.text) + '</p>' +
         (bs.link ? '<div class="btns">' + btn('strategies', null, bs.link, 'sm') + '</div>' : '') + '</div>';
       var ot = openTrades(S).length;
-      h += watchList(S) + movers(S);
+      h += ideasBlock(S, 'today') + watchList(S) + movers(S);
       if (ot) h += '<div class="hint hintpad">' + ic('check') + '<span class="t">' + ot + ' open trade' + (ot > 1 ? 's are' : ' is') + ' on HOLD. Nothing to do on ' + (ot > 1 ? 'them' : 'it') + '.</span></div>';
       return h;
     }
@@ -556,13 +564,15 @@
       var c;
       if (x.type === 'trade') c = tradeActCard(x.it, ui);
       else if (x.type === 'holding') c = holdingActCard(x.it, ui);
+      else if (x.type === 'target') c = targetHitCard(x.it, ui, now);
       else c = signalCard(x.it, ui, now);
-      if (x.type === 'signal') { if (!hasBuy) c = c.replace('<article ', '<article id="first-buy" '); hasBuy = true; }
+      if (x.type === 'target') { /* no jump anchor */ }
+      else if (x.type === 'signal') { if (!hasBuy) c = c.replace('<article ', '<article id="first-buy" '); hasBuy = true; }
       else { if (!hasSell) c = c.replace('<article ', '<article id="first-sell" '); hasSell = true; }
       h += c;
     });
     if (!hasBuy) h += hintLine(bs);
-    return h + watchList(S);
+    return h + ideasBlock(S, 'today') + watchList(S);
   }
 
   /* ---------- Trades ---------- */
@@ -647,7 +657,7 @@
       return ra - rb || a.i - b.i;
     });
     var max = N(O(S.settings).maxOpenTrades);
-    var h = '<div class="sec"><h2>Open trades</h2><span class="cnt">' + open.length + (max !== null && max > 0 ? ' of ' + cnt(max) + ' max' : '') + '</span></div>';
+    var h = targetsSection(S, ui) + '<div class="sec"><h2>Open trades</h2><span class="cnt">' + open.length + (max !== null && max > 0 ? ' of ' + cnt(max) + ' max' : '') + '</span></div>';
     if (!open.length) {
       h += '<div class="empty"><div class="ei">' + ic('trades') + '</div><h3>No open trades</h3>' +
         '<p>When you tap “I bought it” on a buy idea, the trade appears here with its stop-loss, targets and a daily call to hold, book half or exit.</p></div>';
@@ -806,6 +816,324 @@
   }
   function alerts(S, ui) { return feed(S, ui) + strategies(S, ui); }
 
+  /* =====================================================================================================
+     v3 (SPEC3): buy verdict card, user targets, ranked ideas, full-screen chart chrome + readouts
+     ===================================================================================================== */
+  function symEq(a, b) { var x = T(a).trim().toUpperCase(); return !!x && x === T(b).trim().toUpperCase(); }
+  function pctOf(v, base) { var a = N(v), b = N(base); return a !== null && b !== null && a > 0 && b > 0 ? (a / b - 1) * 100 : null; }
+  function targetOf(S, sym) {
+    var list = A(O(S).targets), i;
+    for (i = 0; i < list.length; i++) if (symEq(list[i].sym, sym)) return list[i];
+    return null;
+  }
+  /* the user's own target for the stock on screen: state.targets first (source of truth), else stockInfo.myTarget */
+  function myTarget(S, ui) {
+    var st = O(O(ui).stock), sym = T(st.sym).trim(), r = sym ? targetOf(S, sym) : null, m = r || O(O(st.info).myTarget);
+    var t = N(m.target), s = N(m.stop);
+    return { target: t !== null && t > 0 ? t : 0, stop: s !== null && s > 0 ? s : 0, note: T(m.note), status: T(m.status).trim().toUpperCase() };
+  }
+  function hitTargets(S) {
+    return A(S.targets).filter(function (t) { var s = T(t.status).trim().toUpperCase(); return T(t.sym).trim() && (s === 'HIT_TARGET' || s === 'HIT_STOP'); })
+      .map(function (t, i) { return { t: t, i: i }; })
+      .sort(function (a, b) { return (N(b.t.hitAt) || 0) - (N(a.t.hitAt) || 0) || a.i - b.i; })
+      .map(function (x) { return x.t; });
+  }
+  function targetButton(S, ui, sym) {
+    var m = myTarget(S, ui), has = m.target > 0 || m.stop > 0, lab;
+    if (!has) lab = 'Set target';
+    else if (m.status === 'HIT_TARGET') lab = 'Target ' + px(m.target) + ' reached';
+    else if (m.status === 'HIT_STOP') lab = 'Stop ' + px(m.stop) + ' reached';
+    else lab = (m.target > 0 ? 'Target ' + px(m.target) + ' ✓' : 'Stop ' + px(m.stop) + ' ✓') + (m.target > 0 && m.stop > 0 ? ' · Stop ' + px(m.stop) : '');
+    return '<button type="button" class="btn tbtn' + (has ? ' on' : '') + (m.status === 'HIT_TARGET' || m.status === 'HIT_STOP' ? ' hit' : '') + '" data-c="target" data-id="' + esc(sym) + '">' + ic('target') + '<span class="clip">' + esc(lab) + '</span></button>';
+  }
+
+  /* ---------- score ring (0-100) ---------- */
+  function scoreRing(score, cls, size) {
+    var s = N(score), has = s !== null && s > 0; s = has ? Math.max(0, Math.min(100, s)) : 0;
+    var px2 = size || 56;
+    return '<span class="ring ' + esc(cls || '') + '" style="width:' + px2 + 'px;height:' + px2 + 'px;font-size:' + Math.round(px2 * 0.34) + 'px" role="img" aria-label="' + (has ? 'Score ' + Math.round(s) + ' out of 100' : 'Score not available') + '">' +
+      '<svg viewBox="0 0 36 36" aria-hidden="true"><circle class="rb" cx="18" cy="18" r="15.9155"/><circle class="rf" cx="18" cy="18" r="15.9155" stroke-dasharray="' + s.toFixed(1) + ' ' + (100 - s).toFixed(1) + '" transform="rotate(-90 18 18)"/></svg>' +
+      '<b class="num">' + (has ? Math.round(s) : DASH) + '</b></span>';
+  }
+
+  /* ---------- buy verdict card ---------- */
+  var CALLS = { BUY: { cls: 'buy', rail: 'k-buy', icon: 'up' }, WAIT: { cls: 'wait', rail: 'k-trim', icon: 'clock' }, AVOID: { cls: 'avoid', rail: 'k-sell', icon: 'x' }, NA: { cls: 'na', rail: 'k-info', icon: 'info' } };
+  var CAVEAT = 'Rule-based and tested on past data. Losses happen; the stop limits them, it does not remove them.';
+  function pcs(v) { var n = N(v); return n === null ? '' : pc(n, true, true); }
+  function histBlock(c, hz) {
+    var h = O(c.hist), n = N(h.n), txt = T(h.text).trim();
+    var hasStats = n !== null && n > 0;
+    var d = N(h.horizonDays) || N(c.horizonDays) || hz;
+    if (!hasStats && !txt) return '<div class="vhist none">' + ic('info') + '<div><b>No tested history for this call</b><p>There is not enough past data in this score band to show how it played out.</p></div></div>';
+    var tile = function (k, v, cls) { return '<div class="vt"><div class="k">' + k + '</div><div class="v num ' + (cls || '') + '">' + v + '</div></div>'; };
+    var win = N(h.winPct), avg = N(h.avgPct), med = N(h.medianPct), wor = N(h.worstPct);
+    return '<div class="vhist"><div class="vhh">' + ic('flask') + '<b>What happened before</b>' + (d ? '<span>over ' + cnt(d) + ' trading days</span>' : '') + '</div>' +
+      (txt ? '<p class="vhx">' + esc(txt) + '</p>' : '') +
+      (hasStats ? '<div class="vts">' + tile('Gained', win !== null && win > 0 ? pc(win) : DASH) + tile('Average', avg !== null ? pc(avg, true) : DASH, avg === null ? '' : tone(avg)) +
+        tile('Median', med !== null ? pc(med, true) : DASH, med === null ? '' : tone(med)) + tile('Worst case', wor !== null ? pc(wor, true) : DASH, wor === null ? '' : tone(wor)) + '</div>' +
+        '<div class="vhn">' + cnt(n) + ' past cases in the same score band, after charges</div>' : '') + '</div>';
+  }
+  function pointsBlock(pts) {
+    var rows = A(pts).filter(function (p) { return T(p.label).trim(); });
+    if (!rows.length) return '';
+    return '<div class="vpts">' + rows.map(function (p) {
+      var v = N(p.pts), mx = N(p.max) > 0 ? N(p.max) : 20, w = v === null ? 0 : Math.max(0, Math.min(100, v / mx * 100));
+      return '<div class="vpt"><span class="l">' + esc(T(p.label).trim()) + '</span><i><b style="width:' + w.toFixed(0) + '%"></b></i><span class="num">' + (v === null ? DASH : v.toFixed(1)) + '<small>/' + mx + '</small></span></div>';
+    }).join('') + '</div>';
+  }
+  function verdictCard(S, ui) {
+    var st = O(O(ui).stock), info = st.info;
+    if (!isObj(info) || !isObj(info.call)) return '';
+    var c = info.call, lab = T(c.label).trim().toUpperCase(), k = CALLS[lab];
+    if (!k) return '';
+    var ltp = N(info.ltp), sym = T(st.sym).trim();
+    var hz = N(c.horizonDays) > 0 ? N(c.horizonDays) : (N(O(c.hist).horizonDays) > 0 ? N(O(c.hist).horizonDays) : 0);
+    var head = T(c.headline).trim(), reasons = texts(c.reasons).slice(0, 8);
+    var pillText = lab === 'BUY' && c.proven !== true ? 'BUY CANDIDATE' : lab === 'NA' ? 'NOT RATED' : lab;
+    var h = '<section class="card rail ' + k.rail + ' vd vd-' + k.cls + '" id="st-vcard" aria-label="' + esc('SwingEdge call for ' + (sym || 'this stock') + ': ' + lab) + '"><div class="vdb">' +
+      '<div class="vtop"><div class="vl"><div class="vk">Rule-based call' + (T(c.band).trim() ? ' · score band ' + esc(T(c.band).trim()) : '') + '</div><span class="vpill ' + k.cls + '">' + ic(k.icon) + pillText + '</span></div>' +
+      (lab === 'NA' ? '' : '<div class="vscore">' + scoreRing(c.score, k.cls, 60) + '<span class="vsl">setup score</span></div>') + '</div>' +
+      (head ? '<p class="vhead">' + esc(head) + '</p>' : '') +
+      (T(c.evidence).trim() ? '<div class="vevid ' + (c.proven === true ? 'ok' : 'warn') + '">' + ic(c.proven === true ? 'check' : 'info') + '<div><b>' + (c.proven === true ? 'What the test showed' : 'Unproven: read this first') + '</b><span>' + esc(T(c.evidence).trim()) + '</span></div></div>' : '') +
+      pointsBlock(c.points);
+    var lo = N(c.entryLow), hi = N(c.entryHigh), stp = N(c.stop), t1 = N(c.t1), t2 = N(c.t2);
+    var levels = lab !== 'AVOID' && ((lo > 0 && hi > 0) || stp > 0 || t1 > 0 || t2 > 0);
+    if (levels) {
+      var zone = lo > 0 && hi > 0 ? (Math.round(lo * 100) === Math.round(hi * 100) ? px(lo) : px(Math.min(lo, hi)) + ' – ' + pxBare(Math.max(lo, hi))) : DASH;
+      var lc = function (kk, v, p, cls) { return '<div><div class="k">' + kk + '</div><div class="v num ' + (cls || '') + '">' + (v > 0 ? pxBare(v) : DASH) + '</div><div class="p num ' + (cls || '') + '">' + (v > 0 ? (pcs(p !== null ? p : pctOf(v, ltp)) || DASH) : '') + '</div></div>'; };
+      var rr = N(c.rr);
+      h += '<div class="vzone"><span class="k">' + (lab === 'WAIT' ? 'Entry zone if it sets up' : 'Entry zone') + '</span><span class="v num">' + zone + '</span></div>' +
+        '<div class="lv vlv">' + lc('Stop-loss', stp, N(c.stopPct), 'down') + lc('Target 1', t1, N(c.t1Pct), 'up') + lc('Target 2', t2, N(c.t2Pct), 'up') + '</div>' +
+        '<div class="vmeta"><span>Reward : risk <b class="num">' + (rr !== null && rr > 0 ? '1 : ' + (rr > 99 ? '>99' : rr.toFixed(1)) : DASH) + '</b></span>' +
+        '<span>Horizon <b>' + (hz > 0 ? 'about ' + cnt(hz) + ' trading days' : DASH) + '</b></span></div>';
+      var q = N(c.qty);
+      if (lab === 'BUY' && q !== null && q > 0) {
+        h += '<div class="vpos">' + ic('shield') + '<div><b>Position size for your settings</b><span><b class="num">' + qtyStr(q) + '</b> share' + (q === 1 ? '' : 's') + ' · invest <b class="num">' + rs(c.investRs) + '</b> · at risk <b class="num down">' + rs(c.riskRs) + '</b> if the stop hits</span></div></div>';
+      }
+    } else if (lab === 'AVOID') {
+      h += '<div class="vavoid">' + ic('x') + '<span>No entry levels are shown: this stock fails the trend and quality checks.</span></div>';
+    }
+    if ((lab === 'WAIT' || lab === 'NA') && T(c.waitFor).trim()) h += '<div class="vwait">' + ic('clock') + '<div><b>What would make it a buy candidate</b><span>' + esc(T(c.waitFor).trim()) + '</span></div></div>';
+    if (levels && T(c.exitRule).trim()) h += '<div class="vwait">' + ic('flag') + '<div><b>How the tested plan exits</b><span>' + esc(T(c.exitRule).trim()) + '</span></div></div>';
+    if (reasons.length) h += '<div class="vrh">' + (lab === 'AVOID' ? 'Why it fails' : 'Why this call') + '</div><ul class="vrs">' + reasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>';
+    h += histBlock(c, hz);
+    h += '<p class="vcav">' + ic('info') + '<span>' + esc(T(c.caveat).trim() || CAVEAT) + '</span></p>';
+    if (levels) {
+      h += '<div class="btns">' + btn('target-from-call', sym, 'Set these as my target', 'grow', { icon: 'target', disabled: !sym }) + '</div>' +
+        '<p class="vnote">SwingEdge never places orders. You trade with your own broker.</p>';
+    }
+    return h + '</div></section>';
+  }
+
+  /* ---------- targets: sheet ---------- */
+  function targetCalc(ltp, target, stop) {
+    var l = N(ltp), t = N(target), s = N(stop), ok = l !== null && l > 0;
+    var row = function (lab, v, p) { return '<div><span>' + lab + '</span><b class="' + (p === null ? '' : tone(p)) + '">' + (v > 0 && p !== null ? pc(p, true, true) + ' from the last price' : DASH) + '</b></div>'; };
+    var h = '<div><span>Last price</span><b>' + (ok ? px(l) : DASH) + '</b></div>' +
+      row('Target ' + (t > 0 ? px(t) : DASH), t, ok && t > 0 ? (t / l - 1) * 100 : null) + row('Stop ' + (s > 0 ? px(s) : DASH), s, ok && s > 0 ? (s / l - 1) * 100 : null);
+    if (ok && t > 0 && s > 0 && t > l && s < l) h += '<div><span>Reward : risk</span><b>1 : ' + (((l - s) / (t - l)) > 99 ? '>99' : ((l - s) / (t - l)).toFixed(2)) + '</b></div>';
+    else if (ok && t > 0 && s > 0 && ((t > l) === (s > l))) h += '<div><span class="mut">The target and the stop are on the same side of the last price.</span></div>';
+    return h;
+  }
+  function qchips(label, list) {
+    return '<div class="qrow"><span class="ql">' + esc(label) + '</span>' + list.map(function (x) {
+      return '<button type="button" class="qc" data-c="tgt-pct" data-id="' + x[0] + '">' + esc(x[1]) + '</button>';
+    }).join('') + '</div>';
+  }
+  function targetSheet(S, ui, data) {
+    var sym = T(data.id).trim().toUpperCase(), ltp = N(data.ltp), cur = targetOf(S, sym);
+    var has = !!cur && (N(cur.target) > 0 || N(cur.stop) > 0);
+    var tv = data.target !== undefined ? data.target : (cur ? cur.target : 0), sv = data.stop !== undefined ? data.stop : (cur ? cur.stop : 0), nv = data.note !== undefined ? data.note : (cur ? cur.note : '');
+    return shell('Target for ' + (sym || 'stock'),
+      '<p class="lead">Get an alert when <b>' + esc(sym || 'this stock') + '</b> reaches a price you choose' + (ltp > 0 ? '. Last price <b>' + px(ltp) + '</b>' : '') + '. This tracks the price only; it does not place an order.</p>' +
+      (ltp > 0 ? qchips('Target', [['t5', '+5%'], ['t10', '+10%'], ['t20', '+20%']]) : '') +
+      field('target', 'Target price', inputNum(tv), { pre: '₹', hint: 'optional if you set a stop' }) +
+      (ltp > 0 ? qchips('Stop', [['s5', '−5%'], ['s8', '−8%']]) : '') +
+      field('stop', 'Stop price', inputNum(sv), { pre: '₹', hint: 'optional if you set a target' }) +
+      field('note', 'Note', T(nv).slice(0, 80), { mode: 'text', max: 80, ph: 'e.g. book half here', enter: 'done', hint: 'optional' }) +
+      '<div class="calc" id="calc">' + targetCalc(ltp, tv, sv) + '</div><div class="formerr" id="formerr" hidden></div>' +
+      (has ? '<div class="btns"><button type="button" class="btn dan ghost grow" data-c="target-clear" data-id="' + esc(sym) + '">' + ic('trash') + 'Remove this target</button></div>' : ''),
+      btn('sheet-close', null, 'Cancel', 'ghost') + btn('submit', null, has ? 'Update target' : 'Save target', 'pri', { icon: 'check' }));
+  }
+
+  /* ---------- targets: Trades tab ---------- */
+  function targetTrack(tgt, stp, ref, ltp) {
+    var ms = [];
+    if (stp > 0) ms.push({ k: 'stop', v: stp, l: 'Stop' });
+    if (ref > 0) ms.push({ k: 'ref', v: ref, l: 'Set at' });
+    if (tgt > 0) ms.push({ k: 'tgt', v: tgt, l: 'Target' });
+    if (ms.length < 2) return '';
+    ms.sort(function (a, b) { return a.v - b.v; });
+    var lo = ms[0].v, hi = ms[ms.length - 1].v;
+    var P = function (v) { return hi > lo ? Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100)) : 50; };
+    var fill = '', now = '';
+    if (ref > 0 && ltp > 0) {
+      var a = P(ref), b = P(ltp), toward = tgt > 0 && (ltp - ref) * (tgt - ref) > 0;
+      fill = '<i class="tp-f ' + (toward ? 'g' : 'r') + '" style="left:' + Math.min(a, b).toFixed(1) + '%;width:' + Math.abs(a - b).toFixed(1) + '%"></i>';
+      now = '<i class="tp-now" style="left:' + b.toFixed(1) + '%"></i>';
+    }
+    return '<div class="tprog" role="img" aria-label="' + esc('Price now ' + (ltp > 0 ? pxBare(ltp) : 'unknown') + ', between your stop and your target') + '"><div class="tp-rail"><i class="tp-bar"></i>' + fill +
+      ms.map(function (m) { return '<i class="tp-m ' + m.k + '" style="left:' + P(m.v).toFixed(1) + '%"></i>'; }).join('') + now + '</div>' +
+      '<div class="tp-cells">' + ms.map(function (m) { return '<div class="tp-c ' + m.k + '"><span class="k">' + m.l + '</span><b class="num">' + px(m.v) + '</b></div>'; }).join('') + '</div></div>';
+  }
+  function targetRow(x, ui, now) {
+    var sym = T(x.sym).trim(), nm = T(x.name).trim(), stt = T(x.status).trim().toUpperCase();
+    var tgt = N(x.target) > 0 ? N(x.target) : 0, stp = N(x.stop) > 0 ? N(x.stop) : 0, ref = N(x.refPrice) > 0 ? N(x.refPrice) : 0, ltp = N(x.ltp) > 0 ? N(x.ltp) : 0;
+    var hitT = stt === 'HIT_TARGET', hitS = stt === 'HIT_STOP';
+    var toT = N(x.toTargetPct), toS = N(x.toStopPct), prog = N(x.progressPct);
+    if (toT === null && tgt > 0 && ltp > 0) toT = (tgt / ltp - 1) * 100;
+    if (toS === null && stp > 0 && ltp > 0) toS = (stp / ltp - 1) * 100;
+    var pill = hitT ? tag('buy', 'HIT TARGET', 'check') : hitS ? tag('sell', 'HIT STOP', 'down') : tag('info', 'ACTIVE', 'target');
+    var when = (hitT || hitS) && ts(x.hitAt) !== null ? '<span class="tw">' + esc(dm(x.hitAt, now) + ', ' + hm(x.hitAt)) + '</span>' : (ts(x.setAt) !== null ? '<span class="tw">set ' + esc(dm(x.setAt, now)) + '</span>' : '');
+    var pend1 = pend(ui, 'clearTarget:' + sym), conf = !!O(ui.confirmTarget)[sym];
+    var main = '<button type="button" class="tmain" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '" aria-label="' + esc('Open ' + sym) + '">' +
+      '<span class="th"><span class="tn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
+      '<span class="sp"><span class="num">' + px(ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + (N(x.dayChgPct) === null ? '' : pc(x.dayChgPct, true, true)) + '</span></span></span>' +
+      '<span class="tpl">' + pill + when + '</span>' + targetTrack(tgt, stp, ref, ltp) +
+      '<span class="tst">' + (hitT ? '<span class="up"><b>Target reached</b></span>' : hitS ? '<span class="down"><b>Stop reached</b></span>' : '') +
+      (!hitT && !hitS && tgt > 0 ? '<span>To target <b class="num ' + (toT !== null && toT > 0 ? 'up' : 'flat') + '">' + (toT === null ? DASH : pc(toT, true, true)) + '</b></span>' : '') +
+      (!hitT && !hitS && stp > 0 ? '<span>To stop <b class="num ' + (toS !== null && toS < 0 ? 'down' : 'flat') + '">' + (toS === null ? DASH : pc(toS, true, true)) + '</b></span>' : '') +
+      (tgt > 0 && prog !== null && !hitT && !hitS ? '<span class="mut">' + Math.round(Math.max(0, Math.min(100, prog))) + '% of the way</span>' : '') + '</span>' +
+      (T(x.note).trim() ? '<span class="tnote">' + esc(T(x.note).trim()) + '</span>' : '') + '</button>';
+    var act = conf
+      ? '<div class="tconf"><span>Remove this target?</span>' + btn('target-clear-yes', sym, 'Remove', 'sm dan', { busy: pend1, disabled: !sym }) + btn('target-clear-no', sym, 'Keep', 'sm ghost') + '</div>'
+      : '<div class="tact"><button type="button" class="tclr" data-c="target-clear-ask" data-id="' + esc(sym) + '"' + (!sym || pend1 ? ' disabled' : '') + ' aria-label="' + esc('Clear the target for ' + sym) + '">' + ic('trash') + 'Clear</button></div>';
+    return '<article class="card rail trow ' + (hitT ? 'k-hit' : hitS ? 'k-sell' : 'k-info') + '">' + main + act + '</article>';
+  }
+  function targetsSection(S, ui) {
+    var rows = A(S.targets).filter(function (x) { return T(x.sym).trim(); }), now = ui.now;
+    rows = rows.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) {
+      var ha = /^HIT_/.test(T(a.x.status)) ? 0 : 1, hb = /^HIT_/.test(T(b.x.status)) ? 0 : 1;
+      return ha - hb || (ha === 0 ? (N(b.x.hitAt) || 0) - (N(a.x.hitAt) || 0) : (N(b.x.setAt) || 0) - (N(a.x.setAt) || 0)) || a.i - b.i;
+    }).map(function (o) { return o.x; });
+    var h = '<div class="sec" id="targets"><h2>My targets</h2>' + (rows.length ? '<span class="cnt">' + rows.length + '</span>' : '') + '<span class="sp"></span>' +
+      (rows.length ? btn('search', null, 'Add', 'sm', { icon: 'plus' }) : '') + '</div>';
+    if (!rows.length) {
+      return h + '<div class="empty"><div class="ei">' + ic('target') + '</div><h3>No price targets yet</h3>' +
+        '<p>Open any stock, tap “Set target”, and enter a target price and an optional stop. SwingEdge checks it on every scan and alerts you when the price gets there.</p>' +
+        '<div class="btns">' + btn('search', null, 'Find a stock', 'sm', { icon: 'search' }) + '</div></div>';
+    }
+    var all = ui.targetsAll === true, shown = all ? rows : rows.slice(0, 3);
+    return h + shown.map(function (x) { return targetRow(x, ui, now); }).join('') +
+      (rows.length > 3 ? '<button type="button" class="linkbtn tmore" data-c="targets-all">' + (all ? 'Show fewer' : 'Show all ' + rows.length) + '</button>' : '');
+  }
+  function targetHitCard(t, ui, now) {
+    var sym = T(t.sym).trim(), stt = T(t.status).trim().toUpperCase(), hitT = stt === 'HIT_TARGET';
+    var lvl = hitT ? N(t.target) : N(t.stop);
+    return '<article class="card rail ' + (hitT ? 'k-hit' : 'k-sell') + '"><div class="cb">' +
+      '<div class="hd"><div class="who"><div class="sym">' + (hitT ? tag('buy', 'TARGET HIT', 'target') : tag('sell', 'STOP HIT', 'down')) + symBtn(t.sym, t.name) + '</div>' +
+      '<div class="sub">Your ' + (hitT ? 'target ' : 'stop ') + px(lvl) + (ts(t.hitAt) !== null ? ' · ' + esc(dm(t.hitAt, now) + ', ' + hm(t.hitAt)) : '') + '</div></div>' +
+      '<div class="px"><div class="ltp">' + px(t.ltp) + '</div><div class="ltpl num ' + tone(t.dayChgPct) + '">' + (N(t.dayChgPct) === null ? '' : pc(t.dayChgPct, true, true) + ' today') + '</div></div></div>' +
+      '<div class="note">' + esc((sym || 'This stock') + (hitT ? ' reached the target you set. Decide whether to book it, move the target or leave it.' : ' fell to the stop you set. Check the chart and decide what to do.')) + '</div>' +
+      (T(t.note).trim() ? '<div class="note sm">Your note: ' + esc(T(t.note).trim()) + '</div>' : '') +
+      '<div class="btns">' + btn('stock', sym, 'Open ' + (sym || 'stock'), 'grow', { disabled: !sym }) +
+      btn('target-clear', sym, 'Clear target', 'ghost', { disabled: !sym || pend(ui, 'clearTarget:' + sym), busy: pend(ui, 'clearTarget:' + sym) }) + '</div></div></article>';
+  }
+
+  /* ---------- ranked ideas ---------- */
+  function ideaRow(x, i, full) {
+    var sym = T(x.sym).trim(); if (!sym) return '';
+    var nm = T(x.name).trim(), lab = T(x.label).trim().toUpperCase() || 'BUY', k = CALLS[lab] || CALLS.BUY;
+    var sv = (Array.isArray(x.spark) ? x.spark : []).map(N), up = sv.length > 1 && sv[sv.length - 1] !== null && sv[0] !== null ? sv[sv.length - 1] >= sv[0] : true;
+    var lo = N(x.entryLow), hi = N(x.entryHigh);
+    var zone = lo > 0 && hi > 0 ? (Math.round(lo) === Math.round(hi) ? emaNum(lo) : emaNum(Math.min(lo, hi)) + '–' + emaNum(Math.max(lo, hi))) : DASH;
+    var rr = N(x.rr), hz = N(x.horizonDays);
+    return '<button type="button" class="srow idea" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' +
+      '<span class="s1"><span class="rk num">' + (i + 1) + '</span><span class="wn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
+      spark(x.spark, up) + '<span class="sp"><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + (N(x.dayChgPct) === null ? '' : pc(x.dayChgPct, true, true)) + '</span></span></span>' +
+      '<span class="s2 idz">' + scoreRing(x.score, k.cls, 36) + '<span class="idt"><span class="vpill sm ' + k.cls + '">' + esc(lab.slice(0, 5)) + '</span></span>' +
+      '<span class="idc"><i>Entry zone</i><b class="num">' + zone + '</b></span><span class="idc"><i>Stop</i><b class="num">' + emaNum(x.stop) + '</b></span><span class="idc"><i>Target 1</i><b class="num">' + emaNum(x.t1) + '</b></span></span>' +
+      (full && (T(x.headline).trim() || (rr !== null && rr > 0) || hz > 0) ? '<span class="s3 clip">' + ((rr !== null && rr > 0) ? 'Reward : risk 1 : ' + (rr > 99 ? '>99' : rr.toFixed(1)) : '') + (hz > 0 ? ((rr !== null && rr > 0) ? ' · ' : '') + 'about ' + cnt(hz) + ' trading days' : '') + '</span>' : '') +
+      '</button>';
+  }
+  function ideasBlock(S, where) {
+    var rows = A(S.ideas).filter(function (x) { return T(x.sym).trim(); }), today = where === 'today';
+    var show = today ? rows.slice(0, 5) : rows.slice(0, 15);
+    var hz = rows.length ? N(rows[0].horizonDays) : null;
+    var h = '<div class="sec" id="ideas"><h2>Best setups now</h2>' + (rows.length ? '<span class="cnt">' + (today && rows.length > 5 ? 'top 5 of ' + rows.length : rows.length) + '</span>' : '') + '<span class="sp"></span>' +
+      (today && rows.length ? '<button type="button" class="linkbtn" data-c="tab" data-id="setups">See all</button>' : '') + '</div>';
+    if (!rows.length) {
+      return today ? h + '<div class="hint hintpad">' + ic('layers') + '<span class="t">The ranked list fills after the next full scan (2:45 pm or Scan now).</span></div>'
+        : h + '<div class="empty"><div class="ei">' + ic('layers') + '</div><h3>No ranked setups yet</h3><p>The ranked list fills after the next full scan (2:45 pm or Scan now).</p></div>';
+    }
+    return h + '<div class="hint hintpad ideanote">' + ic('layers') + '<span class="t">Highest momentum scores today, held about ' + (hz > 0 ? cnt(hz) : 60) + ' trading days. A screen, not proven buy calls: in 2022–26 this list did not beat random uptrend stocks. Separate from the short-term strategy calls.</span></div>' +
+      '<div class="card mv">' + show.map(function (x, i) { return ideaRow(x, i, !today); }).join('') + '</div>';
+  }
+
+  /* ---------- full-screen chart chrome ---------- */
+  var CF_RANGES = ['3M', '6M', '1Y', '2Y', 'All'];
+  function cfRangeChips(on) {
+    return CF_RANGES.map(function (k) {
+      return '<button type="button" class="rchip' + (k === on ? ' on' : '') + '" data-c="cf-range" data-id="' + k + '" aria-pressed="' + (k === on) + '"><span>' + k + '</span></button>';
+    }).join('');
+  }
+  function cfToggles(ui) {
+    var on = emaOn(ui), o = O(O(ui).cfOpts), lv = o.levels !== false, vol = o.vol !== false;
+    var e = EMAS.map(function (k) {
+      return '<button type="button" class="cfe' + (on[k] ? ' on' : '') + '" data-c="cf-ema" data-id="' + k + '" aria-pressed="' + (on[k] ? 'true' : 'false') + '" style="--c:' + EMA_COL[k] + '"><i></i>' + k + '<em class="sr-only"> day EMA</em></button>';
+    }).join('');
+    return '<div class="cfrow"><span class="cfl">EMA</span>' + e + '</div>' +
+      '<div class="cfrow"><button type="button" class="cfp' + (lv ? ' on' : '') + '" data-c="cf-levels" aria-pressed="' + (lv ? 'true' : 'false') + '">' + ic('target') + 'Levels</button>' +
+      '<button type="button" class="cfp' + (vol ? ' on' : '') + '" data-c="cf-vol" aria-pressed="' + (vol ? 'true' : 'false') + '">' + ic('trades') + 'Volume</button>' +
+      '<button type="button" class="cfp" data-c="cf-reset">' + ic('reset') + 'Reset</button></div>';
+  }
+  function cfBars(res) {
+    res = O(res);
+    return Math.min(nums(res.c).length, nums(res.o).length, nums(res.h).length, nums(res.l).length);
+  }
+  function cfHead(S, ui, sym) {
+    var st = O(ui.stock), info = O(st.info), cf = O(ui.cf), res = O(cf.res), name = T(info.name).trim() || T(st.name).trim() || T(res.name).trim();
+    var ltp = N(info.ltp), pct = N(info.dayChgPct);
+    if (!(ltp > 0)) { var c = nums(res.c); if (c.length) { ltp = c[c.length - 1]; if (c.length > 1 && c[c.length - 2] > 0 && pct === null) pct = (c[c.length - 1] / c[c.length - 2] - 1) * 100; } }
+    return '<div class="cfid"><b class="clip">' + (T(sym).trim() ? esc(T(sym).trim()) : DASH) + '</b><span class="clip">' + (name && name !== T(sym).trim() ? esc(name) : '&nbsp;') + '</span></div>' +
+      '<div class="cfpx"><span class="num big">' + px(ltp) + '</span><span class="num ' + tone(pct) + '">' + (pct === null ? '' : arrow(pct) + pc(Math.abs(pct), false, true)) + '</span></div>' +
+      '<button type="button" class="iconbtn" data-c="sheet-close" aria-label="Close the full-screen chart">' + ic('x') + '</button>';
+  }
+  function cfMsg(ui) {
+    var cf = O(ui.cf), res = isObj(cf.res) ? cf.res : null;
+    if (!res) {
+      if (T(cf.err).trim()) return '<div class="cfm">' + ic('warn') + '<span>' + esc(T(cf.err).trim()) + '</span>' + btn('cf-retry', null, 'Retry', 'sm') + '</div>';
+      return '<div class="cfm"><span class="spin"></span><span>Loading price history…</span></div>';
+    }
+    if (cfBars(res) < 5) return '<div class="cfm">' + ic('info') + '<span>Not enough price history to draw a chart.</span></div>';
+    if (cf.loading === true && cf.have500 !== true) return '<div class="cfm mini"><span class="spin"></span><span>Loading the longer history…</span></div>';
+    return '';
+  }
+  function cfSheet(S, ui, data) {
+    var sym = T(data.id).trim() || T(O(ui.cf).sym).trim(), msg = cfMsg(ui);
+    return '<div class="scrim"></div><section class="sheet full cfs" role="dialog" aria-modal="true" aria-label="' + esc((sym || 'Stock') + ' full-screen chart') + '">' +
+      '<div class="sh cfh" id="cf-head">' + cfHead(S, ui, sym) + '</div>' +
+      '<div class="cfbar"><div class="rc" id="cf-rng" role="group" aria-label="Chart range">' + cfRangeChips(T(O(ui.cfOpts).rangeOn)) + '</div></div>' +
+      '<div class="cfstage" id="cf-stage"><canvas id="cf-canvas" class="cfcv" role="img" aria-label="' + esc((sym || 'Stock') + ' price chart. Pinch to zoom, drag to pan, press and hold for a crosshair.') + '"></canvas>' +
+      '<div class="cfro" id="cf-ro" hidden></div><div class="cfmsg" id="cf-msg"' + (msg ? '' : ' hidden') + '>' + msg + '</div></div>' +
+      '<div class="cftog" id="cf-tog">' + cfToggles(ui) + '</div>' +
+      '<p class="cfhint">Pinch to zoom · drag to pan · press and hold for a crosshair · double-tap to reset</p></section>';
+  }
+  /* readout for one bar (b = CM.barInfo result) */
+  function dateFull(t) { var n = ts(t); if (n === null) return DASH; var d = ist(n); return WD[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + MON[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); }
+  function cfReadout(b) {
+    b = O(b);
+    var chg = N(b.chg), v = N(b.v);
+    var h = '<div class="rh"><b>' + esc(dateFull(b.d)) + '</b></div>' +
+      '<div class="rg"><span>O</span><b class="num">' + pxBare(b.o) + '</b><span>H</span><b class="num">' + pxBare(b.h) + '</b><span>L</span><b class="num">' + pxBare(b.l) + '</b><span>C</span><b class="num">' + pxBare(b.c) + '</b></div>' +
+      '<div class="rv"><span>Change</span><b class="num ' + tone(chg) + '">' + (chg === null ? DASH : arrow(chg) + pc(Math.abs(chg), false, true)) + '</b></div>' +
+      '<div class="rv"><span>Volume</span><b class="num">' + (v !== null && v > 0 ? volTxt(v) : DASH) + '</b></div>';
+    var em = A(b.emas);
+    if (em.length) h += '<div class="re">' + em.map(function (e) {
+      var k = N(e.k), col = EMA_COL[k] || '#A9B6C4';
+      return '<div><span><i style="background:' + col + '"></i>EMA ' + (k === null ? DASH : k) + '</span><b class="num">' + pxBare(e.v) + '</b></div>';
+    }).join('') + '</div>';
+    return h;
+  }
+  /* small readout above the inline chart; null = idle hint */
+  function croHtml(b) {
+    if (!b) return '<span class="cro-i">Press and hold, then drag to read a bar</span><span class="cro-x">' + ic('expand') + 'Tap chart to expand</span>';
+    b = O(b);
+    var chg = N(b.chg), v = N(b.v);
+    return '<span class="cro-a"><b>' + esc(dateFull(b.d)) + '</b><span class="num"> C ' + pxBare(b.c) + '</span> <span class="num ' + tone(chg) + '">' + (chg === null ? '' : arrow(chg) + pc(Math.abs(chg), false, true)) + '</span></span>' +
+      '<span class="cro-b num">O ' + pxBare(b.o) + ' · H ' + pxBare(b.h) + ' · L ' + pxBare(b.l) + ' · Vol ' + (v !== null && v > 0 ? volTxt(v) : DASH) + '</span>';
+  }
+
   function view(S, ui) {
     S = O(S); ui = O(ui);
     if (ts(ui.now) === null) ui.now = Date.now();
@@ -958,7 +1286,12 @@
       }
       g += '<text x="' + (Wd - R + 4) + '" y="' + (vTop + 8) + '" class="ax">' + esc(volTxt(maxV)) + '</text><text x="' + (Wd - R + 4) + '" y="' + (vTop + vh) + '" class="ax">Volume</text>';
     }
-    return '<svg class="chart' + (o ? ' big' : '') + '" viewBox="0 0 ' + Wd + ' ' + Ht + '" role="img" aria-label="' + (useVol ? 'Price chart with volume' : 'Price chart') + '">' + g + '</svg>';
+    var geo = '', xh = '';
+    if (o) { /* geometry for the press-and-hold crosshair (app.js reads these) */
+      geo = ' data-n="' + n + '" data-l="' + L + '" data-pw="' + pw + '" data-vw="' + Wd + '" data-tp="' + Tp + '" data-ph="' + ph + '" data-mn="' + mn + '" data-mx="' + mx + '"';
+      xh = '<g class="xh" id="xh"><line class="xl" x1="0" x2="0" y1="' + Tp + '" y2="' + (Tp + ph) + '"/><circle class="xd" r="3.4" cx="0" cy="0"/></g>';
+    }
+    return '<svg class="chart' + (o ? ' big' : '') + '" viewBox="0 0 ' + Wd + ' ' + Ht + '"' + geo + ' role="img" aria-label="' + (useVol ? 'Price chart with volume' : 'Price chart') + '">' + g + xh + '</svg>';
   }
   function chartSheet(sym, ch) {
     var res = O(ch.res), title = sym || 'Chart';
@@ -1040,7 +1373,8 @@
     var held = st.info.isHolding === true || A(O(S).holdings).some(function (h) { return T(h.sym).trim().toUpperCase() === sym.toUpperCase(); });
     return '<div class="sk-act"><button type="button" class="btn grow wbtn' + (inW ? ' on' : '') + '" data-c="watch" aria-pressed="' + (inW ? 'true' : 'false') + '"' + (busy ? ' disabled' : '') + '>' +
       (inW ? 'In watchlist ✓' : ic('plus') + 'Add to watchlist') + '</button>' +
-      (held ? '<div class="inhold">' + ic('check') + 'In your portfolio</div>' : btn('stock-add', sym, 'Add to holdings', 'grow', { icon: 'portfolio' })) + '</div>';
+      (held ? '<div class="inhold">' + ic('check') + 'In your portfolio</div>' : btn('stock-add', sym, 'Add to holdings', 'grow', { icon: 'portfolio' })) +
+      targetButton(S, ui, sym) + '</div>';
   }
   function stockChartPart(ui) {
     var st = O(ui.stock), info = O(st.info), on = emaOn(ui), res = isObj(st.chart) ? st.chart : null;
@@ -1054,7 +1388,7 @@
     if (N(lv.resistance) > 0) lvls.push({ k: 'res', t: 'Resistance', v: lv.resistance });
     if (N(lv.trailStop) > 0) lvls.push({ k: 'stop', t: 'Trail stop', v: lv.trailStop });
     var body;
-    if (res) body = chartSvg(res, { emas: on, vol: true, levels: lvls });
+    if (res) body = chartSvg(res, { emas: on, vol: true, levels: lvls }) + '<button type="button" class="xpand" data-c="chartfull" aria-label="Expand the chart to full screen">' + ic('expand') + '</button>';
     else if (T(st.chartErr).trim()) body = '<div class="cerr">' + ic('warn') + '<span>' + esc(T(st.chartErr).trim()) + '</span>' + btn('chart-retry', null, 'Retry', 'sm') + '</div>';
     else body = '<div class="skel chartsk"></div>';
     var ema = EMAS.map(function (k) {
@@ -1064,7 +1398,7 @@
         '<span class="el"><i></i>EMA ' + k + '</span><span class="ev num">' + emaNum(v) + '</span></button>';
     }).join('');
     var legend = lvls.length ? '<div class="clg">' + lvls.map(function (x) { return '<span class="' + (x.k === 'stop' ? 'lstop' : x.k === 'sup' ? 'lsup' : 'lres') + '"><i></i>' + esc(x.t) + '</span>'; }).join('') + '</div>' : '';
-    return chips + '<div class="cwrap' + (loading && res ? ' loading' : '') + '">' + body + (loading && res ? '<div class="cov"><span class="spin"></span>Loading</div>' : '') + '</div>' +
+    return chips + (res ? '<div class="cro" id="st-cro" aria-live="off">' + croHtml(null) + '</div>' : '') + '<div class="cwrap' + (loading && res ? ' loading' : '') + (res ? ' live' : '') + '">' + body + (loading && res ? '<div class="cov"><span class="spin"></span>Loading</div>' : '') + '</div>' +
       '<div class="elg" role="group" aria-label="Moving averages">' + ema + '</div>' + legend;
   }
 
@@ -1195,6 +1529,7 @@
     if (part === 'head') return stockHead(sym, ui);
     if (part === 'price') return stockPrice(ui);
     if (part === 'act') return stockActions(S, ui);
+    if (part === 'verdict') return verdictCard(S, ui);
     if (part === 'chart') return stockChartPart(ui);
     return stockBody(S, ui);
   }
@@ -1202,7 +1537,7 @@
     var sym = T(O(ui.stock).sym) || T(data.id);
     return '<div class="scrim"></div><section class="sheet full stk" role="dialog" aria-modal="true" aria-label="' + esc((sym || 'Stock') + ' stock page') + '">' +
       '<div class="sh stkh" id="st-head">' + stockHead(sym, ui) + '</div>' +
-      '<div class="sb" id="st-scroll"><div id="st-price">' + stockPrice(ui) + '</div><div id="st-act">' + stockActions(S, ui) + '</div><div id="st-chart" class="st-chart">' + stockChartPart(ui) + '</div><div id="st-body">' + stockBody(S, ui) + '</div></div></section>';
+      '<div class="sb" id="st-scroll"><div id="st-price">' + stockPrice(ui) + '</div><div id="st-act">' + stockActions(S, ui) + '</div><div id="st-verdict">' + verdictCard(S, ui) + '</div><div id="st-chart" class="st-chart">' + stockChartPart(ui) + '</div><div id="st-body">' + stockBody(S, ui) + '</div></div></section>';
   }
 
   /* ---------- search sheet ---------- */
@@ -1259,6 +1594,8 @@
     var id = T(data.id);
     if (kind === 'chart') return chartSheet(id, O(ui.chart));
     if (kind === 'stock') return stockSheet(S, ui, data);
+    if (kind === 'chartfull') return cfSheet(S, ui, data);
+    if (kind === 'target') return targetSheet(S, ui, data);
     if (kind === 'search') return searchSheet(S, ui);
     if (kind === 'take') {
       var g = A(S.signals).filter(function (x) { return T(x.id) === id; })[0];
@@ -1335,7 +1672,9 @@
   }
 
   var api = {
-    N: N, T: T, O: O, A: A, esc: esc, rs: rs, px: px, pc: pc, cnt: cnt, hm: hm, dm: dm, rel: rel, ts: ts, ic: ic,
+    N: N, T: T, O: O, A: A, esc: esc, rs: rs, px: px, pc: pc, cnt: cnt, hm: hm, dm: dm, rel: rel, ts: ts, ic: ic, volTxt: volTxt, pxBare: pxBare,
+    cfReadout: cfReadout, croHtml: croHtml, cfRangeChips: cfRangeChips, cfToggles: cfToggles, cfHead: function (S, ui, sym) { return cfHead(O(S), O(ui), sym); }, cfMsg: function (ui) { return cfMsg(O(ui)); },
+    targetCalc: targetCalc, targetOf: function (S, sym) { return targetOf(S, sym); }, myTarget: function (S, ui) { return myTarget(O(S), O(ui)); }, scoreRing: scoreRing,
     header: function (S, ui) { return header(O(S), O(ui)); },
     tabbar: function (S, ui) { return tabbar(O(S), O(ui)); },
     stockPart: stockPart, searchBody: searchBody, view: view, sheet: sheet, deviceList: deviceList, deviceIssues: deviceIssues,

@@ -1,0 +1,595 @@
+{
+ "version": "r4-2026-11-12",
+ "descriptiveOnly": true,
+ "verdict": "Score bands are monotonic out-of-sample (low scores reliably lag the average liquid stock), but the top band and the BUY rule did not deliver a statistically reliable edge after costs out-of-sample, and the BUY portfolio (4 or 8 slots) did worse than the Nifty 50 in 2022-2026. Show the score and these historical numbers as descriptive context, not as a trading instruction.",
+ "horizonDays": 60,
+ "entryConvention": "next session open after the signal close (D+1 open)",
+ "costRoundTripPct": 0.25,
+ "definitions": {
+  "raw": "stock return D+1 open -> close of D+60 minus 0.25% cost",
+  "excess": "raw minus the equal-weight average return (no cost) of all rated universe stocks over the same days",
+  "n": "stock-days, overlapping (one observation per stock per signal day)",
+  "worstPct": "5th percentile",
+  "dailyAvgPct": "mean of daily cross-sectional averages",
+  "tNeweyWest": "t of dailyAvgPct, Newey-West lag 60",
+  "FULL": "signal days 2013-01-01 .. 2026-08 (last day with 60 forward sessions)",
+  "OOS": "signal days 2022-01-01 .. 2026-08"
+ },
+ "bands": {
+  "0-39": {
+   "FULL_raw": {
+    "n": 301233,
+    "winPct": 50.1,
+    "avgPct": 1.75,
+    "medianPct": 0.04,
+    "p25": -10.26,
+    "p75": 11.74,
+    "worstPct": -25.89,
+    "dailyAvgPct": 1.91,
+    "tNeweyWest": 1.46
+   },
+   "FULL_excess": {
+    "n": 301233,
+    "winPct": 41.2,
+    "avgPct": -1.64,
+    "medianPct": -3.06,
+    "p25": -11.97,
+    "p75": 6.82,
+    "worstPct": -24.95,
+    "dailyAvgPct": -1.57,
+    "tNeweyWest": -4.72
+   },
+   "OOS_raw": {
+    "n": 164592,
+    "winPct": 49.7,
+    "avgPct": 1.99,
+    "medianPct": -0.11,
+    "p25": -9.9,
+    "p75": 11.3,
+    "worstPct": -23.47,
+    "dailyAvgPct": 2.39,
+    "tNeweyWest": 1.41
+   },
+   "OOS_excess": {
+    "n": 164592,
+    "winPct": 40.7,
+    "avgPct": -1.51,
+    "medianPct": -3.22,
+    "p25": -11.83,
+    "p75": 6.6,
+    "worstPct": -23.82,
+    "dailyAvgPct": -1.47,
+    "tNeweyWest": -3.17
+   }
+  },
+  "40-54": {
+   "FULL_raw": {
+    "n": 162322,
+    "winPct": 52.2,
+    "avgPct": 2.78,
+    "medianPct": 0.84,
+    "p25": -9.29,
+    "p75": 12.42,
+    "worstPct": -24.29,
+    "dailyAvgPct": 2.72,
+    "tNeweyWest": 2.38
+   },
+   "FULL_excess": {
+    "n": 162322,
+    "winPct": 43.2,
+    "avgPct": -0.69,
+    "medianPct": -2.38,
+    "p25": -11.22,
+    "p75": 7.59,
+    "worstPct": -24.07,
+    "dailyAvgPct": -0.75,
+    "tNeweyWest": -3.91
+   },
+   "OOS_raw": {
+    "n": 86416,
+    "winPct": 51.2,
+    "avgPct": 2.9,
+    "medianPct": 0.53,
+    "p25": -9.62,
+    "p75": 12.33,
+    "worstPct": -23.61,
+    "dailyAvgPct": 3.19,
+    "tNeweyWest": 1.8
+   },
+   "OOS_excess": {
+    "n": 86416,
+    "winPct": 42.5,
+    "avgPct": -0.62,
+    "medianPct": -2.61,
+    "p25": -11.46,
+    "p75": 7.47,
+    "worstPct": -23.82,
+    "dailyAvgPct": -0.67,
+    "tNeweyWest": -2.81
+   }
+  },
+  "55-69": {
+   "FULL_raw": {
+    "n": 162336,
+    "winPct": 54.6,
+    "avgPct": 3.99,
+    "medianPct": 1.92,
+    "p25": -8.62,
+    "p75": 14.01,
+    "worstPct": -23.83,
+    "dailyAvgPct": 3.82,
+    "tNeweyWest": 3.59
+   },
+   "FULL_excess": {
+    "n": 162336,
+    "winPct": 46.5,
+    "avgPct": 0.54,
+    "medianPct": -1.26,
+    "p25": -10.79,
+    "p75": 9.3,
+    "worstPct": -23.69,
+    "dailyAvgPct": 0.34,
+    "tNeweyWest": 1.16
+   },
+   "OOS_raw": {
+    "n": 89307,
+    "winPct": 53.8,
+    "avgPct": 4.31,
+    "medianPct": 1.68,
+    "p25": -9.22,
+    "p75": 14.52,
+    "worstPct": -23.75,
+    "dailyAvgPct": 4.59,
+    "tNeweyWest": 2.39
+   },
+   "OOS_excess": {
+    "n": 89307,
+    "winPct": 46.0,
+    "avgPct": 0.74,
+    "medianPct": -1.49,
+    "p25": -11.04,
+    "p75": 9.26,
+    "worstPct": -23.38,
+    "dailyAvgPct": 0.73,
+    "tNeweyWest": 3.15
+   }
+  },
+  "70-84": {
+   "FULL_raw": {
+    "n": 145435,
+    "winPct": 54.6,
+    "avgPct": 4.56,
+    "medianPct": 2.04,
+    "p25": -9.13,
+    "p75": 15.32,
+    "worstPct": -25.17,
+    "dailyAvgPct": 4.47,
+    "tNeweyWest": 3.91
+   },
+   "FULL_excess": {
+    "n": 145435,
+    "winPct": 47.6,
+    "avgPct": 1.12,
+    "medianPct": -0.99,
+    "p25": -11.32,
+    "p75": 10.58,
+    "worstPct": -25.17,
+    "dailyAvgPct": 1.0,
+    "tNeweyWest": 2.85
+   },
+   "OOS_raw": {
+    "n": 80160,
+    "winPct": 53.5,
+    "avgPct": 4.72,
+    "medianPct": 1.66,
+    "p25": -9.84,
+    "p75": 15.95,
+    "worstPct": -25.54,
+    "dailyAvgPct": 4.72,
+    "tNeweyWest": 2.18
+   },
+   "OOS_excess": {
+    "n": 80160,
+    "winPct": 45.9,
+    "avgPct": 0.95,
+    "medianPct": -1.72,
+    "p25": -12.02,
+    "p75": 10.41,
+    "worstPct": -25.06,
+    "dailyAvgPct": 0.86,
+    "tNeweyWest": 1.64
+   }
+  },
+  "85-100": {
+   "FULL_raw": {
+    "n": 62874,
+    "winPct": 53.8,
+    "avgPct": 5.34,
+    "medianPct": 1.89,
+    "p25": -10.78,
+    "p75": 17.28,
+    "worstPct": -28.95,
+    "dailyAvgPct": 6.55,
+    "tNeweyWest": 4.14
+   },
+   "FULL_excess": {
+    "n": 62874,
+    "winPct": 48.8,
+    "avgPct": 2.36,
+    "medianPct": -0.56,
+    "p25": -12.33,
+    "p75": 13.04,
+    "worstPct": -28.83,
+    "dailyAvgPct": 3.08,
+    "tNeweyWest": 3.6
+   },
+   "OOS_raw": {
+    "n": 33334,
+    "winPct": 51.3,
+    "avgPct": 4.41,
+    "medianPct": 0.69,
+    "p25": -12.35,
+    "p75": 17.27,
+    "worstPct": -30.22,
+    "dailyAvgPct": 5.37,
+    "tNeweyWest": 2.25
+   },
+   "OOS_excess": {
+    "n": 33334,
+    "winPct": 46.5,
+    "avgPct": 1.4,
+    "medianPct": -1.71,
+    "p25": -13.94,
+    "p75": 12.57,
+    "worstPct": -29.67,
+    "dailyAvgPct": 1.51,
+    "tNeweyWest": 1.52
+   }
+  },
+  "BUY": {
+   "FULL_raw": {
+    "n": 54154,
+    "winPct": 53.2,
+    "avgPct": 5.22,
+    "medianPct": 1.63,
+    "p25": -11.09,
+    "p75": 17.02,
+    "worstPct": -28.98,
+    "dailyAvgPct": 6.29,
+    "tNeweyWest": 3.84
+   },
+   "FULL_excess": {
+    "n": 54154,
+    "winPct": 48.7,
+    "avgPct": 2.49,
+    "medianPct": -0.63,
+    "p25": -12.32,
+    "p75": 13.06,
+    "worstPct": -28.5,
+    "dailyAvgPct": 2.82,
+    "tNeweyWest": 3.04
+   },
+   "OOS_raw": {
+    "n": 28632,
+    "winPct": 50.8,
+    "avgPct": 4.06,
+    "medianPct": 0.42,
+    "p25": -12.76,
+    "p75": 16.78,
+    "worstPct": -30.49,
+    "dailyAvgPct": 5.1,
+    "tNeweyWest": 2.08
+   },
+   "OOS_excess": {
+    "n": 28632,
+    "winPct": 46.4,
+    "avgPct": 1.42,
+    "medianPct": -1.7,
+    "p25": -13.87,
+    "p75": 12.46,
+    "worstPct": -29.67,
+    "dailyAvgPct": 1.23,
+    "tNeweyWest": 1.1
+   }
+  },
+  "score>=85 & close<=SMA50": {
+   "FULL_raw": {
+    "n": 7828,
+    "winPct": 58.0,
+    "avgPct": 5.85,
+    "medianPct": 3.75,
+    "p25": -7.72,
+    "p75": 18.58,
+    "worstPct": -27.22,
+    "dailyAvgPct": 3.42,
+    "tNeweyWest": 1.68
+   },
+   "FULL_excess": {
+    "n": 7828,
+    "winPct": 49.6,
+    "avgPct": 1.05,
+    "medianPct": -0.21,
+    "p25": -12.02,
+    "p75": 12.16,
+    "worstPct": -29.92,
+    "dailyAvgPct": 1.02,
+    "tNeweyWest": 0.81
+   },
+   "OOS_raw": {
+    "n": 4182,
+    "winPct": 55.3,
+    "avgPct": 6.98,
+    "medianPct": 2.28,
+    "p25": -8.46,
+    "p75": 20.5,
+    "worstPct": -26.29,
+    "dailyAvgPct": 4.51,
+    "tNeweyWest": 1.49
+   },
+   "OOS_excess": {
+    "n": 4182,
+    "winPct": 46.7,
+    "avgPct": 1.21,
+    "medianPct": -1.71,
+    "p25": -13.78,
+    "p75": 12.4,
+    "worstPct": -28.55,
+    "dailyAvgPct": 1.77,
+    "tNeweyWest": 1.11
+   }
+  }
+ },
+ "thresholds": {
+  "NOT_RATED": "not liquid, fewer than 252 own bars, or a component undefined",
+  "AVOID": "score < 55",
+  "BUY": "score >= 85 AND close > SMA50 AND not upper-circuit-locked (no market-regime gate)",
+  "WAIT": "rated, score >= 55, not BUY"
+ },
+ "tradePlan": {
+  "rule": "entry D+1 open only if open <= C[D] + 0.5*ATR14[D]; stop = fill - 3*ATR14[D] (gap through stop exits at the open); exit at the next open after any close < SMA50; time exit at the close of D+60; t1 = fill + 6*ATR14[D], t2 = fill + 9*ATR14[D] are reference levels (touch rates shown), NOT sell orders",
+  "FULL": {
+   "trades": 3913,
+   "winPct": 32.3,
+   "expectancyPct": 2.19,
+   "medianPct": -2.77,
+   "p25": -7.51,
+   "p75": 3.14,
+   "worstPct": -15.08,
+   "worstSingleTradePct": -27.59,
+   "avgHoldDays": 23.5,
+   "profitFactor": 1.48,
+   "stopHitPct": 15.3,
+   "t1TouchedPct": 21.0,
+   "t2TouchedPct": 12.3
+  },
+  "OOS": {
+   "trades": 2144,
+   "winPct": 31.8,
+   "expectancyPct": 1.75,
+   "medianPct": -3.16,
+   "p25": -8.06,
+   "p75": 2.71,
+   "worstPct": -15.72,
+   "worstSingleTradePct": -23.92,
+   "avgHoldDays": 23.1,
+   "profitFactor": 1.36,
+   "stopHitPct": 15.0,
+   "t1TouchedPct": 21.1,
+   "t2TouchedPct": 12.8
+  },
+  "IS": {
+   "trades": 1680,
+   "winPct": 33.2,
+   "expectancyPct": 2.86,
+   "medianPct": -2.43,
+   "p25": -6.66,
+   "p75": 3.96,
+   "worstPct": -14.2,
+   "worstSingleTradePct": -27.59,
+   "avgHoldDays": 24.3,
+   "profitFactor": 1.69,
+   "stopHitPct": 15.1,
+   "t1TouchedPct": 21.2,
+   "t2TouchedPct": 11.9
+  },
+  "OOS_cost0.40": {
+   "trades": 2144,
+   "winPct": 31.2,
+   "expectancyPct": 1.6,
+   "medianPct": -3.3,
+   "p25": -8.21,
+   "p75": 2.56,
+   "worstPct": -15.87,
+   "worstSingleTradePct": -24.06,
+   "avgHoldDays": 23.1,
+   "profitFactor": 1.33,
+   "stopHitPct": 15.0,
+   "t1TouchedPct": 21.1,
+   "t2TouchedPct": 12.8
+  },
+  "OOS_closeEntry": {
+   "trades": 2191,
+   "winPct": 30.2,
+   "expectancyPct": 2.13,
+   "medianPct": -2.86,
+   "p25": -7.33,
+   "p75": 2.88,
+   "worstPct": -14.85,
+   "worstSingleTradePct": -23.71,
+   "avgHoldDays": 23.2,
+   "profitFactor": 1.47,
+   "stopHitPct": 13.4,
+   "t1TouchedPct": 21.3,
+   "t2TouchedPct": 12.8
+  }
+ },
+ "portfolio_100k": {
+  "4slots_IS": {
+   "cagrPct": 21.7,
+   "maxDrawdownPct": -63.5,
+   "worstYearPct": -34.8,
+   "tradesPerYear": 42.0
+  },
+  "4slots_OOS": {
+   "cagrPct": 3.9,
+   "maxDrawdownPct": -53.1,
+   "worstYearPct": -35.1,
+   "tradesPerYear": 39.8
+  },
+  "4slots_FULL": {
+   "cagrPct": 15.2,
+   "maxDrawdownPct": -63.5,
+   "worstYearPct": -34.8,
+   "tradesPerYear": 40.9
+  },
+  "8slots_IS": {
+   "cagrPct": 24.1,
+   "maxDrawdownPct": -42.0,
+   "worstYearPct": -26.3,
+   "tradesPerYear": 80.6
+  },
+  "8slots_OOS": {
+   "cagrPct": 3.1,
+   "maxDrawdownPct": -51.6,
+   "worstYearPct": -31.4,
+   "tradesPerYear": 81.7
+  },
+  "8slots_FULL": {
+   "cagrPct": 16.1,
+   "maxDrawdownPct": -51.6,
+   "worstYearPct": -31.4,
+   "tradesPerYear": 80.6
+  }
+ },
+ "nifty50_price": {
+  "IS": {
+   "cagrPct": 12.6,
+   "maxDrawdownPct": -38.4
+  },
+  "OOS": {
+   "cagrPct": 7.5,
+   "maxDrawdownPct": -16.5
+  },
+  "FULL": {
+   "cagrPct": 10.9,
+   "maxDrawdownPct": -38.4
+  }
+ },
+ "portfolioRobustness": {
+  "note": "CAGR % over 20 staggered start dates (SCORE) vs 100 random-stock portfolios with the same plan, slots and start jitter (entry D+1 open, cost 0.25%, no gate). Plan X10 is the recommended plan; X0 = pure 60-session hold (not selected in-sample).",
+  "rows": [
+   {
+    "plan": "X0",
+    "period": "IS",
+    "slots": 4,
+    "random_p05": 0.8,
+    "random_median": 7.8,
+    "random_p95": 19.3,
+    "random_mdd_median": -58.5,
+    "score_median_over_starts": 27.0,
+    "score_min": 11.7,
+    "score_max": 39.4,
+    "score_mdd_median": -54.1,
+    "pct_random_below_score_median": 98.0
+   },
+   {
+    "plan": "X0",
+    "period": "IS",
+    "slots": 8,
+    "random_p05": 4.6,
+    "random_median": 8.8,
+    "random_p95": 18.8,
+    "random_mdd_median": -56.3,
+    "score_median_over_starts": 29.2,
+    "score_min": 22.8,
+    "score_max": 40.1,
+    "score_mdd_median": -51.1,
+    "pct_random_below_score_median": 100.0
+   },
+   {
+    "plan": "X0",
+    "period": "OOS",
+    "slots": 4,
+    "random_p05": -1.8,
+    "random_median": 11.5,
+    "random_p95": 25.2,
+    "random_mdd_median": -35.3,
+    "score_median_over_starts": 17.7,
+    "score_min": -1.8,
+    "score_max": 48.8,
+    "score_mdd_median": -45.7,
+    "pct_random_below_score_median": 76.0
+   },
+   {
+    "plan": "X0",
+    "period": "OOS",
+    "slots": 8,
+    "random_p05": 2.3,
+    "random_median": 11.8,
+    "random_p95": 21.4,
+    "random_mdd_median": -31.0,
+    "score_median_over_starts": 18.2,
+    "score_min": 4.2,
+    "score_max": 35.1,
+    "score_mdd_median": -42.6,
+    "pct_random_below_score_median": 88.0
+   },
+   {
+    "plan": "X10",
+    "period": "IS",
+    "slots": 4,
+    "random_p05": -2.0,
+    "random_median": 5.8,
+    "random_p95": 16.4,
+    "random_mdd_median": -55.3,
+    "score_median_over_starts": 22.8,
+    "score_min": 21.0,
+    "score_max": 24.3,
+    "score_mdd_median": -63.5,
+    "pct_random_below_score_median": 99.0
+   },
+   {
+    "plan": "X10",
+    "period": "IS",
+    "slots": 8,
+    "random_p05": -0.1,
+    "random_median": 5.9,
+    "random_p95": 11.7,
+    "random_mdd_median": -52.9,
+    "score_median_over_starts": 25.6,
+    "score_min": 23.7,
+    "score_max": 27.1,
+    "score_mdd_median": -42.0,
+    "pct_random_below_score_median": 100.0
+   },
+   {
+    "plan": "X10",
+    "period": "OOS",
+    "slots": 4,
+    "random_p05": -4.8,
+    "random_median": 8.2,
+    "random_p95": 23.0,
+    "random_mdd_median": -38.4,
+    "score_median_over_starts": 6.3,
+    "score_min": 3.6,
+    "score_max": 10.9,
+    "score_mdd_median": -53.1,
+    "pct_random_below_score_median": 40.0
+   },
+   {
+    "plan": "X10",
+    "period": "OOS",
+    "slots": 8,
+    "random_p05": -1.5,
+    "random_median": 8.2,
+    "random_p95": 18.8,
+    "random_mdd_median": -36.3,
+    "score_median_over_starts": 4.6,
+    "score_min": 1.0,
+    "score_max": 8.0,
+    "score_mdd_median": -51.6,
+    "pct_random_below_score_median": 33.0
+   }
+  ]
+ }
+}

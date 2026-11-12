@@ -54,7 +54,7 @@ fun main(args: Array<String>) {
         Sample.run()
         return
     }
-    val all: List<Pair<String, () -> Unit>> = UnitTests.all() + SimTests.all() + V2Tests.all()
+    val all: List<Pair<String, () -> Unit>> = UnitTests.all() + SimTests.all() + V2Tests.all() + V3Tests.all()
     for ((name, body) in all) if (only == null || name.contains(only, true)) T.section(name, body)
     println()
     println("RESULT: ${T.pass} checks passed, ${T.fail} failed")

@@ -43,9 +43,16 @@ object V2Tests {
      "verdict":{"label":"HOLD","headline":""},
      "checks":[{"label":"","ok":true,"text":""}],
      "setups":[{"id":"EMA_CROSS","label":"","match":false,"text":""}],
-     "summary":""}""").asObj()
+     "summary":"",
+     "call":{"label":"BUY","score":0,"headline":"","reasons":[""],"entryLow":0,"entryHigh":0,"stop":0,"t1":0,"t2":0,
+       "stopPct":0,"t1Pct":0,"t2Pct":0,"rr":0,"horizonDays":60,"qty":0,"investRs":0,"riskRs":0,
+       "hist":{"n":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"horizonDays":60,"text":""},
+       "waitFor":"","caveat":"","proven":false,"evidence":"","band":"","points":[{"label":"","pts":0,"max":20}],"exitRule":""},
+     "myTarget":{"target":0,"stop":0,"note":"","status":""}}""").asObj()
     private val ENUMS = mapOf("stack.label" to setOf("BULLISH", "MIXED", "BEARISH"), "cross.state" to setOf("ABOVE", "BELOW"),
-        "golden.state" to setOf("ABOVE", "BELOW"), "verdict.label" to setOf("HOLD", "WATCH", "TRIM", "SELL"))
+        "golden.state" to setOf("ABOVE", "BELOW"), "verdict.label" to setOf("HOLD", "WATCH", "TRIM", "SELL"),
+        "call.label" to setOf("BUY", "WAIT", "AVOID", "NA"), "call.band" to setOf("", "0-39", "40-54", "55-69", "70-84", "85-100"),
+        "myTarget.status" to setOf("", "ACTIVE", "HIT_TARGET", "HIT_STOP"))
 
     private fun shape(path: String, tpl: Any?, v: Any?, errs: ArrayList<String>) {
         when (tpl) {
@@ -62,7 +69,7 @@ object V2Tests {
     }
 
     /** stockInfo with every SPEC2 check: schema, types, counts, wording. */
-    private fun info(app: SwingApp, sym: String, where: String): Map<String, Any?> {
+    fun info(app: SwingApp, sym: String, where: String): Map<String, Any?> {
         val r = act(app, "stockInfo", """{"sym":"$sym"}""")
         if (r["ok"] != true) return r
         val errs = ArrayList<String>()

@@ -260,6 +260,8 @@ class AppState {
     var offlineWarnDay = 0
     /** Personal watchlist (NSE symbols, in the order added). */
     val watch = ArrayList<String>()
+    /** The user's price targets (SPEC3 §3), one per symbol, in the order set. */
+    val targets = ArrayList<UserTarget>()
 
     fun strat(id: String): StratState = strategies.getOrPut(id) { StratState() }
 
@@ -272,7 +274,8 @@ class AppState {
         "lastTradingDay" to lastTradingDay,
         "regime" to linkedMapOf("label" to regimeLabel, "niftyLtp" to niftyLtp, "niftyChgPct" to niftyChgPct, "note" to regimeNote),
         "seq" to seq, "noLiveWarnDay" to noLiveWarnDay, "offlineWarnDay" to offlineWarnDay,
-        "watchlist" to watch.toList()
+        "watchlist" to watch.toList(),
+        "targets" to targets.map { it.persist() }
     )
 
     companion object {
@@ -313,6 +316,10 @@ class AppState {
                     if (sym.isEmpty() || sym.length > 25 || !WATCH_SYM.matches(sym) || st.watch.contains(sym) || st.watch.size >= MAX_WATCH) continue
                     st.watch.add(sym)
                 }
+                // added in v3: older files have no targets; junk rows and duplicates are dropped
+                for (x in m.list("targets")) try {
+                    UserTarget.from(x.asObj())?.let { t -> if (st.targets.none { it.sym == t.sym } && st.targets.size < UserTarget.MAX) st.targets.add(t) }
+                } catch (t: Throwable) {}
             } catch (t: Throwable) {
                 // keep whatever loaded
             }

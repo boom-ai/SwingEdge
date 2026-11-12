@@ -4,6 +4,7 @@
 const path = require('path'), fs = require('fs'), vm = require('vm');
 const UI = path.join(__dirname, '..', 'app', 'src', 'main', 'assets', 'ui');
 const SE = require(path.join(UI, 'render.js'));
+const CM = require(path.join(UI, 'chartmath.js'));
 function mockState(scenario) {
   const win = { location: { search: scenario ? '?scenario=' + scenario : '' } };
   const ctx = { window: win, setTimeout() {}, setInterval() {}, clearInterval() {}, Date, JSON, Math, String, Number, Array, Object, parseFloat, decodeURIComponent };
@@ -49,7 +50,7 @@ function mutate(v, depth) {
 const N = Number(process.argv[2] || 4000);
 const bases = ['', 'empty', 'paused', 'closed', 'broken'].map(mockState);
 const TABS = ['today', 'setups', 'trades', 'portfolio', 'alerts', undefined, 'zzz'];
-const SHEETS = ['take', 'close', 'add', 'paste', 'remove', 'sold', 'clearfeed', 'settings', 'nope'];
+const SHEETS = ['take', 'close', 'add', 'paste', 'remove', 'sold', 'clearfeed', 'settings', 'chartfull', 'target', 'nope'];
 let fails = 0, renders = 0;
 function check(what, html, info) {
   renders++;
@@ -89,10 +90,31 @@ function run(S, ui, tag) {
       recent: pick([[], [{ sym: 'ITC', name: 'ITC Ltd' }, null, { sym: EVIL, name: JUNK() }], JUNK(), mutate([{ sym: 'TCS', name: 'Tata' }], 0)]),
       emaOn: pick([{ 10: true, 20: false, 50: true, 100: true, 200: true }, JUNK(), {}, { 10: JUNK() }]), watchEdit: pick([true, false, JUNK()]) });
     check('sheet:stock', SE.sheet('stock', S, u2, { id: pick([b.sym, JUNK(), EVIL]) }), tag);
-    ['head', 'price', 'act', 'chart', 'body', 'nope'].forEach(part => check('stockPart:' + part, SE.stockPart(part, S, u2, { id: b.sym }), tag));
+    ['head', 'price', 'act', 'chart', 'verdict', 'body', 'nope'].forEach(part => check('stockPart:' + part, SE.stockPart(part, S, u2, { id: b.sym }), tag));
     check('sheet:search', SE.sheet('search', S, u2, {}), tag);
     check('searchBody', SE.searchBody(S, u2), tag);
     u2.tab = 'setups'; check('view:setups+watch', SE.view(S, u2), tag);
+    // v3: verdict card, target sheet, full-screen chart chrome, targets / ideas on every tab
+    check('stockPart:verdict', SE.stockPart('verdict', S, u2, { id: b.sym }), tag);
+    const cfu = Object.assign({}, u2, { cf: rnd() < 0.1 ? JUNK() : { sym: pick([b.sym, JUNK()]), res: rnd() < 0.8 ? mutate(rnd() < 0.5 ? b.chart : b.chart2, 0) : pick([null, JUNK()]), err: pick(['', 'boom', JUNK()]), loading: pick([true, false, JUNK()]), have500: pick([true, false, JUNK()]) },
+      cfOpts: pick([{ levels: true, vol: true, rangeOn: '6M' }, { levels: false, vol: JUNK(), rangeOn: JUNK() }, JUNK(), {}]), confirmTarget: pick([{}, { [b.sym]: true }, JUNK()]),
+      targetDraft: pick([undefined, { sym: b.sym, target: JUNK(), stop: JUNK(), note: JUNK() }, JUNK()]) });
+    check('sheet:chartfull', SE.sheet('chartfull', S, cfu, { id: pick([b.sym, JUNK(), EVIL]) }), tag);
+    check('sheet:target', SE.sheet('target', S, cfu, { id: pick([b.sym, JUNK(), EVIL]), sym: pick([b.sym, JUNK()]), target: JUNK(), stop: JUNK() }), tag);
+    check('sheet:target-prefill', SE.sheet('target', S, cfu, { id: b.sym, target: pick([950, '950', JUNK()]), stop: pick([880, JUNK()]) }), tag);
+    check('cfHead', SE.cfHead(S, cfu, pick([b.sym, JUNK()])), tag); check('cfMsg', SE.cfMsg(cfu), tag); check('cfToggles', SE.cfToggles(cfu), tag);
+    check('cfRangeChips', SE.cfRangeChips(pick(['6M', JUNK()])), tag);
+    const bi = CM.barInfo(pick([b.chart2, b.chart, JUNK(), mutate(b.chart2, 0)]), pick([0, 5, 499, -1, 1e9, JUNK()]), pick([[10, 20], JUNK(), [JUNK()], undefined]));
+    check('cfReadout', SE.cfReadout(pick([bi, null, JUNK(), mutate(bi, 0)])), tag); check('croHtml', SE.croHtml(pick([bi, null, JUNK(), mutate(bi, 0)])), tag);
+    check('targetCalc', SE.targetCalc(JUNK(), JUNK(), JUNK()), tag);
+    SE.targetOf(S, JUNK()); SE.myTarget(S, mutate(b.info, 0), JUNK()); SE.scoreRing(JUNK(), JUNK());
+    // chart maths on junk
+    const lv = CM.buildLevels(mutate(b.info, 0), pick([null, JUNK(), { target: JUNK(), stop: JUNK() }]), pick([undefined, JUNK(), { levels: true }]));
+    renders++; if (!Array.isArray(lv)) { fails++; console.log('FAIL buildLevels not array'); }
+    CM.dodge(pick([[], JUNK(), [{ y: JUNK() }, { y: 5 }, { y: 5 }]]), JUNK(), JUNK(), JUNK());
+    CM.priceRange(mutate(b.chart2, 0), JUNK(), JUNK(), JUNK(), JUNK()); CM.niceTicks(JUNK(), JUNK(), JUNK()); CM.pinchView(JUNK(), JUNK(), JUNK(), JUNK(), JUNK(), JUNK(), JUNK());
+    CM.zoomAt(JUNK(), JUNK(), JUNK(), JUNK(), JUNK()); CM.panBy(JUNK(), JUNK(), JUNK(), JUNK());
+    for (const t of ['today', 'setups', 'trades']) { u2.tab = t; check('view:' + t + '+v3', SE.view(S, u2), tag); }
   } catch (e) { if (fails++ < 5) console.log('THROW', tag, e.stack.split('\n').slice(0, 4).join('\n')); }
 }
 // unmutated states first, then junk roots, then random mutations
@@ -104,6 +126,17 @@ bases.forEach((b, i) => run(b.state, { tab: 'today', expanded: {}, pending: {}, 
   const html = SE.sheet('stock', b.state, u, { id: t.sym });
   must('stock page', html, /Tata Motors Ltd/); must('stock page', html, /10 \/ 20 EMA/); must('stock page', html, /Technical checklist/); must('stock page', html, /Setups it matches/); must('stock page', html, /aria-label="Price chart with volume"/);
   must('stock page', html, /Add to watchlist/); must('stock page', html, /In your portfolio/);
+  const hb = SE.sheet('stock', b.state, u, { id: 'RELIANCE' }); const ri = mockReply('stockInfo', { sym: 'RELIANCE' });
+  const u3 = Object.assign({}, u, { stock: { sym: 'RELIANCE', info: ri, chart: t.chart, want: 260, range: 260 } });
+  const vb = SE.stockPart('verdict', b.state, u3, { id: 'RELIANCE' });
+  must('verdict BUY', vb, /BUY/); must('verdict BUY', vb, /Set these as my target/); must('verdict hist', vb, /What happened before/);
+  must('verdict AVOID', SE.stockPart('verdict', b.state, Object.assign({}, u, { stock: { sym: 'YESBANK', info: mockReply('stockInfo', { sym: 'YESBANK' }) } }), { id: 'YESBANK' }), /AVOID/);
+  must('verdict WAIT', SE.stockPart('verdict', b.state, Object.assign({}, u, { stock: { sym: 'TATAMOTORS', info: mockReply('stockInfo', { sym: 'TATAMOTORS' }) } }), { id: 'TATAMOTORS' }), /WAIT/);
+  { const ni = JSON.parse(JSON.stringify(ri)); delete ni.call; const nv = SE.stockPart('verdict', b.state, Object.assign({}, u, { stock: { sym: 'RELIANCE', info: ni } }), { id: 'RELIANCE' }); renders++; if (/BUY|WAIT|AVOID/.test(nv)) { fails++; console.log('FAIL verdict shown without call'); } }
+  must('trades targets', SE.view(b.state, Object.assign({}, u, { tab: 'trades' })), /My targets/); must('trades targets hit', SE.view(b.state, Object.assign({}, u, { tab: 'trades' })), /TARGET HIT|STOP HIT|Target reached|Stop reached/);
+  must('today ideas', SE.view(b.state, Object.assign({}, u, { tab: 'today' })), /Best setups now/); must('setups ideas', SE.view(b.state, Object.assign({}, u, { tab: 'setups' })), /Best setups now/);
+  must('target sheet', SE.sheet('target', b.state, u3, { id: 'RELIANCE' }), /(Save|Update) target/);
+  must('chartfull sheet', SE.sheet('chartfull', b.state, u3, { id: 'RELIANCE' }), /cf-canvas/);
   must('search', SE.sheet('search', b.state, u, {}), /TATAMOTORS/); must('watchlist', SE.view(b.state, u), /My watchlist/);
   must('search-empty', SE.searchBody(b.state, Object.assign({}, u, { search: { q: 'zzqx', sent: 'zzqx', shown: 'zzqx', results: [] } })), /No NSE stock matches/);
   must('search-lookup', SE.searchBody(b.state, Object.assign({}, u, { search: { q: 'zzqx', sent: 'zzqx', shown: 'zzqx', results: [] } })), /Look up ZZQX anyway/);

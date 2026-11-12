@@ -159,6 +159,11 @@ object Params {
     var PF_MAX_WEIGHT_PCT = 20.0
     var PF_SMA50_SLOPE_BARS = 10
 
+    // ---------------------------------------------------------------- setup score (research/REPORT4.md; the score's own windows are fixed in SetupScore)
+    /** The per-scan ranking is only used when at least this many universe stocks were rated. */
+    var SCORE_MIN_RATED = 100
+    var IDEAS_MAX = 15
+
     // ---------------------------------------------------------------- data
     var DAILY_BARS_CAP = 520
     var CACHE_SHARDS = 16

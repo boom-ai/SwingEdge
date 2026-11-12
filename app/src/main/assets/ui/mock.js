@@ -1,7 +1,10 @@
 /* SwingEdge desktop mock — installed only when the real `Android` bridge is absent.
    Implements every bridge method over an in-memory state.
    URL params: ?scenario=empty|paused|closed|broken  ?busy=scan|backtest
-   Stock page: stockInfo/getChart work for any symbol; ZZ* fails, SLOW answers after 6 s, FAILWATCH cannot be added to the watchlist. */
+   Stock page: stockInfo/getChart work for any symbol; ZZ* fails, SLOW answers after 6 s, FAILWATCH cannot be added to the watchlist or targeted.
+   SPEC3: stockInfo.call + myTarget, state.ideas + state.targets, setTarget / clearTarget.
+   Screenshots: ?call=buy|wait|avoid (force the verdict on every stockInfo)  ?sheet=chartfull&sym=X[&zoom=60][&pan=0][&cross=40][&range=2Y|All|3M][&levels=0]
+                ?sheet=target&sym=X[&t1=950&stop=870]  ?sheet=stock&sym=X */
 (function () {
   'use strict';
   if (typeof window === 'undefined' || window.Android) return;
@@ -320,6 +323,94 @@
     };
     return (models[sym] = { c: c, o: o, h: h, l: l, v: v, d: d, E: E, info: info, crossText: crossText, strength: strength });
   }
+
+  /* ---------- SPEC3: the buy verdict ("call"), ideas and targets ---------- */
+  var FORCE = { RELIANCE: 'BUY', HDFCBANK: 'BUY', TCS: 'BUY', SBIN: 'BUY', LT: 'BUY', SUNPHARMA: 'BUY', TITAN: 'BUY', BHARTIARTL: 'BUY', ITC: 'BUY', MARUTI: 'BUY',
+    TATAMOTORS: 'WAIT', INFY: 'WAIT', POLYCAB: 'WAIT', HAL: 'WAIT', DIXON: 'WAIT', YESBANK: 'AVOID', ZEEL: 'AVOID', ILLIQTEXTILE: 'AVOID' };
+  var HIST = {
+    BUY: { n: 33334, winPct: 51.3, avgPct: 4.41, medianPct: 0.69, worstPct: -30.2, horizonDays: 60, text: 'Since 2022, stocks scoring 85–100 returned +4.4% on average and +0.7% at the median over the next 60 trading days after charges (33,334 cases); 1 in 20 lost 30.2% or more. That is +1.51% more than the average liquid stock over the same days, a difference that is not statistically reliable (t = 1.5).' },
+    WAIT: { n: 80160, winPct: 51.8, avgPct: 4.72, medianPct: 1.66, worstPct: -25.1, horizonDays: 60, text: 'Since 2022, stocks scoring 70–84 returned +4.7% on average and +1.7% at the median over the next 60 trading days after charges (80,160 cases); 1 in 20 lost 25.1% or more. That is +0.86% more than the average liquid stock over the same days, a difference that is not statistically reliable (t = 1.6).' },
+    AVOID: { n: 164592, winPct: 49.7, avgPct: 1.99, medianPct: -0.11, worstPct: -23.8, horizonDays: 60, text: 'Since 2022, stocks scoring 0–39 returned +2.0% on average and -0.1% at the median over the next 60 trading days after charges (164,592 cases); 1 in 20 lost 23.8% or more. That is 1.5% behind the average liquid stock over the same days, a statistically reliable difference (t = -3.2).' }
+  };
+  var EVID = {
+    BUY: 'Score 85+ above the 50-day average is a screen, unproven. 2022–26: +1.75% per trade after 0.25% costs (about +1.5% at realistic costs), 32% winners, median trade -3%. A ₹1 lakh 4-slot portfolio made 3.6–10.9% a year depending on the start date (median about 6%, drawdown -53%) against the Nifty\'s 7.5% and about 13% for an equal-weight basket. Random stocks above their 50-day average with the same exits did better.',
+    WAIT: 'WAIT is not a buy signal. Since 2022, stocks scoring 70–84 did +0.86% better than the average liquid stock over 60 trading days, which is not statistically reliable (t = 1.6).',
+    AVOID: 'Scores below 55 lagged the average liquid stock by about 1 point over 60 sessions (behind in 13 of 14 years; 2022–26: -0.9). They still averaged +2.4%, so this means likely to underperform, not likely to fall. The lag was weaker among the most liquid stocks.'
+  };
+  function ptsOf(score, h) {
+    var labs = ['6-month momentum (risk-adjusted)', '6-month return', '12-month return', 'Near its 52-week high', 'Above its 52-week low'], out = [], i;
+    for (i = 0; i < 5; i++) out.push({ label: labs[i], pts: Math.max(0, Math.min(20, Math.round((score / 5 + ((h >> i) % 7) - 3) * 10) / 10)), max: 20 });
+    return out;
+  }
+  function pTxt(x) { return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1) + '%'; }
+  function callOf(sym, force) {
+    var m = model(sym), i = m.info, ltp = i.ltp, e = i.ema, atr = i.atr, h = hash(sym), lab;
+    if (force) lab = force.toUpperCase();
+    else if (FORCE[sym]) lab = FORCE[sym];
+    else if (!i.liquid || ltp < e.e200 || i.stack.label === 'BEARISH') lab = 'AVOID';
+    else if (i.stack.label === 'BULLISH' && i.rsi14 < 72) lab = 'BUY';
+    else lab = 'WAIT';
+    var score = lab === 'BUY' ? Math.min(97, 85 + h % 12) : lab === 'WAIT' ? 55 + h % 30 : Math.max(8, Math.min(54, Math.round(i.strength * 0.4) + h % 15));
+    var hz = 60, c = { label: lab, proven: lab === 'AVOID', evidence: EVID[lab] || '', band: '', points: [], exitRule: lab === 'AVOID' ? '' : 'Sell if it closes below its 50-day average, or after 60 trading days. Targets are reference levels, not sell orders.', score: score, headline: '', reasons: [], entryLow: 0, entryHigh: 0, stop: 0, t1: 0, t2: 0, stopPct: 0, t1Pct: 0, t2Pct: 0, rr: 0, horizonDays: hz,
+      qty: 0, investRs: 0, riskRs: 0, hist: JSON.parse(JSON.stringify(HIST[lab])), waitFor: '', caveat: 'Rule-based and tested on past data. Losses happen; the stop limits them, it does not remove them.' };
+    c.hist.horizonDays = hz;
+    var near = -i.fromHighPct;
+    if (lab === 'BUY') {
+      c.headline = near < 6 ? 'Strong leader near its high — qualifies as a buy setup' : 'Steady uptrend with room to run — qualifies as a buy setup';
+      c.reasons = ['Above its 200 EMA by ' + Math.abs(i.emaDist.e200).toFixed(1) + '%: the long-term trend is up', 'The 10, 20, 50, 100 and 200 EMAs are stacked in order', 'Only ' + near.toFixed(1) + '% below its 52-week high: leaders tend to keep leading',
+        i.vsNifty.d63 > 0 ? 'Beat the Nifty by ' + i.vsNifty.d63.toFixed(1) + ' points over 3 months' : 'Kept pace with the Nifty over 3 months', 'RSI (14) is ' + Math.round(i.rsi14) + ': strong but not stretched', 'Trades about ₹' + Math.round(i.turnoverCr) + ' crore a day: easy to enter and exit'];
+    } else if (lab === 'WAIT') {
+      c.headline = 'Decent stock, but not a good entry right now';
+      c.reasons = [ltp > e.e200 ? 'Above its 200 EMA: the long-term trend has not broken' : 'Close to its 200 EMA: the trend is undecided', ltp > e.e20 * 1.04 ? 'Price is ' + (i.emaDist.e20).toFixed(1) + '% above its 20 EMA: stretched, so the risk to a stop is large' : 'Price is sitting on its 20 EMA, but the averages are not stacked in order',
+        i.rsi14 >= 65 ? 'RSI (14) is ' + Math.round(i.rsi14) + ': short-term momentum is stretched' : 'RSI (14) is ' + Math.round(i.rsi14) + ': momentum is neutral', 'Lost points because 3-month strength is only ' + pTxt(i.ret.d63)];
+      c.waitFor = 'a pullback toward ₹' + Math.round(e.e20) + ' (the 20 EMA), or a close above ₹' + Math.round(i.high20 * 1.01) + ' on above-average volume';
+    } else {
+      c.headline = 'Fails the trend and quality checks';
+      c.reasons = [ltp < e.e200 ? 'Below its 200 EMA by ' + Math.abs(i.emaDist.e200).toFixed(1) + '%: the long-term trend is down' : 'The averages are tangled, so there is no clean trend', 'Down ' + Math.abs(i.ret.d63).toFixed(1) + '% over 3 months' + (i.ret.d63 > 0 ? ' despite a bounce' : ''), i.liquid ? 'RSI (14) is ' + Math.round(i.rsi14) + ': no sign of a base yet' : 'Trades only ₹' + i.turnoverCr.toFixed(1) + ' crore a day: too thin for a clean exit'];
+    }
+    if (lab !== 'AVOID') {
+      var dist = Math.max(ltp * 0.04, Math.min(ltp * 0.09, atr * 2.4)), lo, hi;
+      if (lab === 'BUY') { lo = ltp * 0.992; hi = ltp * 1.006; } else { lo = Math.min(ltp * 0.99, e.e20 * 0.995); hi = Math.min(ltp * 0.998, e.e20 * 1.01); }
+      c.entryLow = r2(lo); c.entryHigh = r2(Math.max(hi, lo * 1.004));
+      var m1 = 1.4 + (h % 6) * 0.14; c.stop = r2(ltp - dist); c.t1 = r2(ltp + dist * m1); c.t2 = r2(ltp + dist * (m1 + 1.3));
+      c.stopPct = r2((c.stop / ltp - 1) * 100); c.t1Pct = r2((c.t1 / ltp - 1) * 100); c.t2Pct = r2((c.t2 / ltp - 1) * 100); c.rr = r2((c.t1 - ltp) / (ltp - c.stop));
+      if (lab === 'BUY') {
+        var st0 = (typeof state === 'object' && state && state.settings) || defaultSettings(), qty = Math.floor(st0.capital * st0.riskPct / 100 / (ltp - c.stop));
+        qty = Math.max(0, Math.min(qty, Math.floor(st0.capital * 0.25 / ltp)));
+        c.qty = qty; c.investRs = Math.round(qty * ltp); c.riskRs = Math.round(qty * (ltp - c.stop));
+      }
+    }
+    c.band = c.score >= 85 ? '85-100' : c.score >= 70 ? '70-84' : c.score >= 55 ? '55-69' : c.score >= 40 ? '40-54' : '0-39';
+    c.points = ptsOf(c.score, h);
+    return c;
+  }
+  function ideasList() {
+    var out = [];
+    UNI.forEach(function (u) {
+      if (u[3] !== 1) return;
+      var m = model(u[0]), c = callOf(u[0]);
+      if (c.label !== 'BUY' || !m.info.liquid) return;
+      out.push({ sym: u[0], name: u[1], ltp: m.info.ltp, dayChgPct: m.info.dayChgPct, score: c.score, label: 'BUY', headline: c.headline, entryLow: c.entryLow, entryHigh: c.entryHigh,
+        stop: c.stop, t1: c.t1, t2: c.t2, rr: c.rr, horizonDays: c.horizonDays, spark: m.c.slice(-30), barDay: m.info.barDay });
+    });
+    out.sort(function (a, b) { return b.score - a.score; });
+    return out.slice(0, 15);
+  }
+  function targetRow(sym, target, stop, note, ref, setAt, status, hitAt) {
+    var m = model(sym), i = m.info, ltp = i.ltp, prog = 0;
+    if (target > 0 && ref > 0 && target !== ref) prog = Math.max(0, Math.min(100, (ltp - ref) / (target - ref) * 100));
+    return { sym: sym, name: i.name, ltp: ltp, dayChgPct: i.dayChgPct, target: target, stop: stop, note: note || '', setAt: setAt, refPrice: ref, status: status, hitAt: hitAt || 0,
+      toTargetPct: target > 0 ? r2((target / ltp - 1) * 100) : 0, toStopPct: stop > 0 ? r2((stop / ltp - 1) * 100) : 0, progressPct: r2(prog) };
+  }
+  function defaultTargets() {
+    return [
+      targetRow('SBIN', 790, 724, 'book half here', 748, T0 - 6 * DAY, 'HIT_TARGET', T0 - 2 * HR),
+      targetRow('INFY', 1700, 1540, '', 1590, T0 - 9 * DAY, 'HIT_STOP', T0 - 27 * MIN),
+      targetRow('RELIANCE', 3150, 2790, 'next resistance', 2870, T0 - 3 * DAY, 'ACTIVE', 0),
+      targetRow('HAL', 4900, 4380, '', 4560, T0 - 2 * DAY, 'ACTIVE', 0),
+      targetRow('ITC', 440, 0, 'buy more if it falls here', 470, T0 - 4 * DAY, 'ACTIVE', 0)
+    ];
+  }
   function validSym(sym) { return /^[A-Z0-9&\-]{1,20}$/.test(sym) && !/^ZZ/.test(sym); }
   function watchRow(sym) {
     var m = model(sym), i = m.info;
@@ -369,7 +460,8 @@
       r.spark = r.spark.map(function (x) { return r2(x * f); }); r.dayChgPct = m.info.dayChgPct;
     });
     s.myWatch = defaultWatch();
-    if (scenario === 'empty') { s.watch = []; s.myWatch = []; }
+    s.ideas = ideasList(); s.targets = defaultTargets();
+    if (scenario === 'empty') { s.watch = []; s.myWatch = []; s.ideas = []; s.targets = []; }
     if (scenario === 'empty') {
       s.signals = []; s.trades = []; s.holdings = []; s.feed = [];
       s.portfolio = portfolioOf([]);
@@ -442,6 +534,16 @@
           { sym: '<img src=x onerror=alert(1)>', name: '<b>x</b>', ltp: 'abc', spark: 'no', stack: null, crossText: null },
           null, 'junk', { name: 'no symbol' },
           { sym: 'OKCO', name: 'Fine Company Ltd', ltp: 250.5, dayChgPct: -1.2, spark: [250, 251, 249, 248, 247, 246, 245], strength: 50, stack: 'MIXED', crossText: '10 EMA below 20 EMA for 4 days', dataOk: true }
+        ],
+        ideas: [
+          { sym: 'SUPERLONGSYMBOLNAME-EQ', name: LONG, ltp: 1e12, dayChgPct: 'NaN', score: 1e9, label: 'MAYBE', headline: LONG, entryLow: 'x', entryHigh: null, stop: -1, t1: 1e18, t2: 0, rr: 'lots', horizonDays: 'x', spark: [1, 'x', null], barDay: 5 },
+          null, 'junk', { name: 'no symbol' }, { sym: '<img src=x onerror=alert(1)>', name: '<b>x</b>', score: 'NaN', label: null }, { sym: 'OKIDEA', name: 'Fine Co', ltp: 250.5, dayChgPct: 1.2, score: 77, label: 'BUY', entryLow: 248, entryHigh: 252, stop: 238, t1: 270, t2: 285, rr: 1.7, horizonDays: 60, spark: [250, 251, 249, 248, 247, 246, 245], headline: 'Fine' }
+        ],
+        targets: [
+          { sym: 'SUPERLONGSYMBOLNAME-EQ', name: LONG, ltp: 1e12, dayChgPct: 'NaN', target: 1e15, stop: -3, note: LONG, setAt: 'x', refPrice: 0, status: 'HIT_TARGET', hitAt: 8.7e15, toTargetPct: 'NaN', toStopPct: null, progressPct: 1e9 },
+          null, 'junk', { name: 'no symbol' }, { sym: '<img src=x onerror=alert(1)>', name: '<b>x</b>', target: 'abc', status: 'WHATEVER' },
+          { sym: 'OKTGT', name: 'Fine Co', ltp: 250.5, dayChgPct: -1.2, target: 270, stop: 238, note: 'ok', setAt: T0 - DAY, refPrice: 250, status: 'ACTIVE', hitAt: 0, toTargetPct: 7.8, toStopPct: -5, progressPct: 3 },
+          { sym: 'OKSTOP', name: 'Stopped Co', ltp: 90, dayChgPct: -3, target: 120, stop: 95, note: '', setAt: T0 - 2 * DAY, refPrice: 100, status: 'HIT_STOP', hitAt: T0 - HR, toTargetPct: 33, toStopPct: 5.5, progressPct: 0 }
         ],
         feed: [
           { ts: T0 - MIN, kind: 'explode', title: LONG, body: LONG + ' ' + LONG },
@@ -591,6 +693,9 @@
       if (/^ZZ/.test(sym) || !/^[A-Z0-9&\-]{1,20}$/.test(sym)) return finish('stockInfo', { ok: false, sym: sym, error: 'No price data found for ' + sym + '. Check the symbol.' }, 500);
       var res = JSON.parse(JSON.stringify(model(sym).info));
       res.asOf = Date.now(); res.live = scenario !== 'closed';
+      res.call = callOf(sym, /^(buy|wait|avoid)$/.test(qs.call || '') ? qs.call : '');
+      var mt = (state.targets || []).filter(function (x) { return x && x.sym === sym; })[0];
+      res.myTarget = mt ? { target: mt.target, stop: mt.stop, note: mt.note, status: mt.status } : { target: 0, stop: 0, note: '', status: '' };
       res.isHolding = (state.holdings || []).some(function (h) { return h && h.sym === sym; });
       res.inWatch = (state.myWatch || []).some(function (w) { return w && w.sym === sym; });
       finish('stockInfo', res, sym === 'SLOW' ? 6000 : 400);
@@ -622,6 +727,23 @@
       if (state.myWatch.length >= 50) return finish('addWatch', { ok: false, error: 'Your watchlist is full (50 stocks). Remove one first.' });
       state.myWatch.push(watchRow(sym));
       finish('addWatch', { ok: true });
+    },
+    setTarget: function (a) {
+      var sym = String(a.sym || '').toUpperCase(), t = Number(a.target) || 0, sp = Number(a.stop) || 0;
+      if (!validSym(sym)) return finish('setTarget', { ok: false, error: sym + ' is not an NSE symbol I can find' });
+      if (sym === 'FAILWATCH') return finish('setTarget', { ok: false, error: 'You already have 50 targets. Remove one first.' });
+      if (!(t > 0 || sp > 0)) return finish('setTarget', { ok: false, error: 'Enter a target price or a stop price' });
+      if (t < 0 || sp < 0 || t > 1e7 || sp > 1e7) return finish('setTarget', { ok: false, error: 'Prices must be above 0' });
+      if (!Array.isArray(state.targets)) state.targets = [];
+      state.targets = state.targets.filter(function (x) { return !x || x.sym !== sym; });
+      if (state.targets.length >= 50) return finish('setTarget', { ok: false, error: 'You already have 50 targets. Remove one first.' });
+      state.targets.unshift(targetRow(sym, t, sp, String(a.note || '').slice(0, 80), model(sym).info.ltp, Date.now(), 'ACTIVE', 0));
+      finish('setTarget', { ok: true });
+    },
+    clearTarget: function (a) {
+      var sym = String(a.sym || '').toUpperCase();
+      state.targets = (state.targets || []).filter(function (x) { return !x || x.sym !== sym; });
+      finish('clearTarget', { ok: true });
     },
     removeWatch: function (a) {
       var sym = String(a.sym || '').toUpperCase();

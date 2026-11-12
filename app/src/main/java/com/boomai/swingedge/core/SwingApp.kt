@@ -15,6 +15,9 @@ import java.util.concurrent.locks.ReentrantLock
  */
 class SwingApp(private val p: Platform) {
     @Volatile private var watchItems: List<Map<String, Any?>> = emptyList()
+    /** Setup-score ranking of the scanned universe from the latest scan (immutable; replaced as a whole), and its BUY rows. */
+    @Volatile private var scoreTable: ScoreTable? = null
+    @Volatile private var ideaItems: List<Map<String, Any?>> = emptyList()
 
     private val lock = ReentrantLock()
     private var st: AppState = AppState()
@@ -46,7 +49,11 @@ class SwingApp(private val p: Platform) {
         /** sym -> [entry, sl, t1, t2] of the first NEW signal */
         val signals: Map<String, DoubleArray>,
         val regime: Int,
-        val verdicts: Map<String, String>
+        val verdicts: Map<String, String>,
+        /** sym -> stockInfo `myTarget` object */
+        val targets: Map<String, Map<String, Any?>> = emptyMap(),
+        /** capital, riskPct, costPct */
+        val sizing: DoubleArray = doubleArrayOf(Params.DEF_CAPITAL, Params.DEF_RISK_PCT, Params.DEF_COST_PCT)
     )
     @Volatile private var refs = Refs(emptyMap(), 0.0, emptySet(), emptyMap(), emptyMap(), 0, emptyMap())
     /** Cut-offs and breadth from the last full scan, for the stock page's strategy checks. */
@@ -406,6 +413,7 @@ class SwingApp(private val p: Platform) {
         for (h in st.holdings) all.add(h.sym)
         for (t in st.trades) if (t.status == "OPEN") all.add(t.sym)
         all.addAll(st.watch)
+        for (t in st.targets) all.add(t.sym)
         val key = dailyKeyFor(day)
         val buyWindowNow = weekday && min >= Params.BUY_WINDOW_START_MIN && min <= Params.BUY_WINDOW_END_MIN
         val fullQuotes = manual || (buyWindowNow && (anyLive() || Params.EXPERIMENTAL_ENABLED)) || universe.size <= Params.FULL_QUOTE_MAX_UNIVERSE
@@ -416,6 +424,7 @@ class SwingApp(private val p: Platform) {
             for (h in st.holdings) q.add(h.sym)
             for (t in st.trades) if (t.status == "OPEN") q.add(t.sym)
             q.addAll(st.watch)
+            for (t in st.targets) q.add(t.sym)
             quoteOnly = q
         }
         fetchSymbols(all.toList(), day, key, manual, 3, 80, quoteOnly)
@@ -437,11 +446,13 @@ class SwingApp(private val p: Platform) {
         val complete = { d: Int -> d < day || (d == day && min >= Clock.CLOSE_MIN) }
         followTrades(now, day, min, complete)
         checkHoldings(day, now, null, true)
+        try { checkTargets(now) } catch (e: Throwable) { log("targets: $e") }
         val inWindow = weekday && indexToday && st.holidayDay != day &&
             min >= Params.BUY_WINDOW_START_MIN && min <= Params.BUY_WINDOW_END_MIN
         if (inWindow) makeSignals(now, day)
         try { computeWatch() } catch (e: Throwable) { p.log("watch: " + e) }
         try { scanCtx = buildScanCtx() ?: scanCtx } catch (e: Throwable) { log("scan context: $e") }
+        try { buildScores(now) } catch (e: Throwable) { log("score table: $e") }
 
         st.lastScanAt = now
         st.lastScanStatus = when {
@@ -587,6 +598,118 @@ class SwingApp(private val p: Platform) {
         ctx.regime = regimeInt()
         Strategies.fillCutoffs(ctx, uni, idxArr, DoubleArray(uni.size))
         return ctx
+    }
+
+    /**
+     * Setup-score table (REPORT4) over the scanned universe, on the latest bar each stock has: today's partial bar when
+     * this or an earlier scan today quoted it, else the last completed day. Stocks whose latest bar is older than the most
+     * common latest day (suspended, failed fetch) are left out, as the research only ranks stocks that traded on day D.
+     * Data notes: the phone has no separate unadjusted series. Yahoo's daily close and volume are both split-adjusted, so
+     * close x volume is the printed turnover and the latest close is the printed price; the research's Craw / unadjusted
+     * volume are replaced by the series' own close and volume. Built once per scan and published as one immutable object.
+     */
+    private fun buildScores(now: Long) {
+        val have = ArrayList<Series>()
+        for (sym in universe) live[sym]?.let { if (it.n > 0) have.add(it) }
+        if (have.isEmpty()) return
+        val count = HashMap<Int, Int>()
+        for (x in have) count[x.lastDay()] = (count[x.lastDay()] ?: 0) + 1
+        val ref = count.entries.maxWith(compareBy<Map.Entry<Int, Int>> { it.value }.thenBy { it.key }).key
+        val items = ArrayList<Pair<String, ScoreComp>>()
+        val bySym = HashMap<String, Series>()
+        for (x in have) {
+            if (x.lastDay() < ref) continue
+            items.add(Pair(x.sym, SetupScore.compute(x)))
+            bySym[x.sym] = x
+        }
+        val t = SetupScore.buildTable(items, now)
+        val rows = SetupScore.topBuys(t, Params.IDEAS_MAX).map { BuyCall.idea(it, nameOf(it.sym), bySym[it.sym]) }
+        scoreTable = t
+        ideaItems = rows
+    }
+
+    /** For tests: the table the last scan published. */
+    internal fun debugScoreTable(): ScoreTable? = scoreTable
+
+    /** The stockInfo `call` for [s]: the scan table's entry for a universe stock, else [s] ranked into the table. */
+    private fun callFor(sym: String, s: Series, r: Refs): Map<String, Any?> {
+        val t = scoreTable
+        val own = if (universeSet.contains(sym)) t?.entries?.get(sym) else null
+        val comp = own?.comp ?: SetupScore.compute(s)
+        var kind = comp.naKind()
+        var e: ScoreEntry? = null
+        if (kind == null) {
+            if (t == null || !t.usable) kind = ScoreTexts.NA_NO_TABLE
+            else e = own ?: SetupScore.insert(t, sym, comp)
+        }
+        val z = r.sizing
+        val px = if (s.n > 0) s.c[s.n - 1] else 0.0
+        return BuyCall.call(e, comp, kind, px, px, t?.rated ?: 0, z[0], z[1], z[2])
+    }
+
+    // =========================================================================================== user targets
+
+    /**
+     * Updates every target's last price and fires each ACTIVE one at most once. Only prices newer than the moment the
+     * target was set count (a stale close cannot trigger it); a target set without a known price takes the first price
+     * seen as its reference.
+     */
+    private fun checkTargets(now: Long) {
+        for (t in st.targets) {
+            val s = live[t.sym] ?: continue
+            if (s.n == 0) continue
+            val px = s.c[s.n - 1]
+            t.ltp = px
+            if (s.n >= 2) t.prevClose = s.c[s.n - 2]
+            if (t.status != UserTarget.ACTIVE) continue
+            if (!(t.refPrice > 0)) { t.refPrice = px; continue }
+            val q = quotes[t.sym]
+            val pxAt = if (q != null && q.days.n > 0 && q.days.lastDay() == s.lastDay()) q.lastTsMs else Clock.msAt(s.lastDay(), Clock.CLOSE_MIN)
+            if (pxAt < t.setAt) continue
+            val hit = t.hitBy(px) ?: continue
+            t.status = hit
+            t.hitAt = now
+            val isT = hit == UserTarget.HIT_TARGET
+            val lvl = if (isT) t.target else t.stop
+            val title = t.sym + " hit your " + (if (isT) "target " else "stop ") + Fmt.rs(lvl)
+            val body = "Last price " + Fmt.rs(px) + ". You set this " + (if (isT) "target" else "stop") + " on " + Clock.dayLabel(Clock.epochDay(t.setAt)) +
+                " when it was " + Fmt.rs(t.refPrice) + "." + (if (t.note.isNotBlank()) " Your note: " + t.note else "")
+            post("sell", nid("target", t.sym), title, body)
+        }
+    }
+
+    /** A price argument: absent/null/"" = 0; otherwise a finite number 0..1e7, else NaN. */
+    private fun priceArg(a: Map<String, Any?>, k: String): Double {
+        val v = a[k] ?: return 0.0
+        if (v is String && v.isBlank()) return 0.0
+        val x = a.num(k, Double.NaN)
+        return if (x.isNaN() || x < 0 || x > UserTarget.PRICE_MAX) Double.NaN else x
+    }
+
+    private fun setTarget(a: Map<String, Any?>, now: Long): Map<String, Any?> {
+        loadUniverse()
+        val sym = HoldingsImport.cleanSymbol(a.str("sym"))
+        if (!validSym(sym)) return err("Enter a valid NSE symbol, e.g. RELIANCE")
+        val tg = priceArg(a, "target")
+        val sp = priceArg(a, "stop")
+        if (tg.isNaN() || sp.isNaN()) return err("Prices must be numbers above 0")
+        if (!(tg > 0 || sp > 0)) return err("Enter a target price or a stop price")
+        val idx = st.targets.indexOfFirst { it.sym == sym }
+        if (idx < 0 && st.targets.size >= UserTarget.MAX) return err("You already have " + UserTarget.MAX + " targets — clear one first")
+        // reference price: the last known price (fetched if nothing is known yet); 0 = decided at the first quote
+        val s = try { obtain(sym, false, now).first?.s } catch (t: Throwable) { null }
+        val t = UserTarget()
+        t.sym = sym; t.name = try { displayName(sym) } catch (x: Throwable) { sym }
+        t.target = tg; t.stop = sp
+        t.note = a.str("note").trim().take(UserTarget.NOTE_MAX)
+        t.setAt = now
+        if (s != null && s.n > 0) {
+            t.refPrice = s.c[s.n - 1]; t.ltp = t.refPrice
+            if (s.n >= 2) t.prevClose = s.c[s.n - 2]
+        }
+        if (idx >= 0) st.targets.removeAt(idx)
+        st.targets.add(t)
+        return ok("sym" to sym)
     }
 
     private fun makeSignals(now: Long, day: Int) {
@@ -1020,6 +1143,13 @@ class SwingApp(private val p: Platform) {
                 val sym = HoldingsImport.cleanSymbol(a.str("sym"))
                 return if (st.watch.remove(sym)) ok("sym" to sym) else err("$sym is not in your watchlist")
             }
+            "setTarget" -> return setTarget(a, now)
+            "clearTarget" -> {
+                val sym = HoldingsImport.cleanSymbol(a.str("sym"))
+                if (!validSym(sym)) return err("Enter a valid NSE symbol, e.g. RELIANCE")
+                st.targets.removeAll { it.sym == sym }
+                return ok("sym" to sym)
+            }
             else -> return err("Unknown action: $name")
         }
     }
@@ -1164,7 +1294,8 @@ class SwingApp(private val p: Platform) {
     /** True for symbols whose history belongs in the persistent cache (scanned, held, watched, traded or the index). */
     private fun member(sym: String): Boolean {
         val r = refs
-        return sym == Params.INDEX_SYMBOL || universeSet.contains(sym) || r.holdings.containsKey(sym) || r.watch.contains(sym) || r.trades.containsKey(sym)
+        return sym == Params.INDEX_SYMBOL || universeSet.contains(sym) || r.holdings.containsKey(sym) || r.watch.contains(sym) || r.trades.containsKey(sym) ||
+            r.targets.containsKey(sym)
     }
 
     /**
@@ -1230,8 +1361,11 @@ class SwingApp(private val p: Platform) {
         val r = refs
         val h = r.holdings[sym]
         val weight = if (h != null && r.holdings.size >= 2 && r.holdingsValue > 0) h[3] / r.holdingsValue * 100.0 else 0.0
-        return StockPage.build(StockInput(sym, displayName(sym), universeSet.contains(sym), h != null, r.watch.contains(sym),
-            got.s, indexSeries(), got.live, got.asOf, now, scanCtx, r.regime, weight, r.verdicts))
+        val m = LinkedHashMap(StockPage.build(StockInput(sym, displayName(sym), universeSet.contains(sym), h != null, r.watch.contains(sym),
+            got.s, indexSeries(), got.live, got.asOf, now, scanCtx, r.regime, weight, r.verdicts)))
+        m["call"] = try { callFor(sym, got.s, r) } catch (t: Throwable) { log("call $sym: $t"); BuyCall.call(null, SetupScore.empty(0, 0), ScoreTexts.NA_NO_TABLE, 0.0, 0.0, 0, 0.0, 0.0, 0.0) }
+        m["myTarget"] = r.targets[sym] ?: NO_TARGET
+        return m
     }
 
     private fun chart(a: Map<String, Any?>): Map<String, Any?> {
@@ -1355,6 +1489,8 @@ class SwingApp(private val p: Platform) {
             m["feed"] = s.feed.take(AppState.MAX_FEED).map { it.toMap() }
             m["watch"] = watchItems
             m["myWatch"] = myWatch(s, now)
+            m["ideas"] = ideaItems
+            m["targets"] = s.targets.map { it.toMap() }
             return m
         }
     }
@@ -1377,7 +1513,10 @@ class SwingApp(private val p: Platform) {
         for (g in st.signals) if (g.status == "NEW" && !sm.containsKey(g.sym)) sm[g.sym] = doubleArrayOf(g.entry, g.sl, g.t1, g.t2)
         val vm = HashMap<String, String>()
         for (sg in Strategies.all) vm[sg.id] = if (sg.enabled()) st.strat(sg.id).verdict else "PAUSED"
-        return Refs(hm, total, st.watch.toHashSet(), tm, sm, regimeInt(), vm)
+        val tg = HashMap<String, Map<String, Any?>>()
+        for (t in st.targets) tg[t.sym] = linkedMapOf("target" to Fmt.r2(t.target), "stop" to Fmt.r2(t.stop), "note" to t.note, "status" to t.status)
+        return Refs(hm, total, st.watch.toHashSet(), tm, sm, regimeInt(), vm, tg,
+            doubleArrayOf(st.settings.capital, st.settings.riskPct, st.settings.costPct))
     }
 
     companion object {
@@ -1388,6 +1527,7 @@ class SwingApp(private val p: Platform) {
         private const val LRU_MAX = 20
         /** A stock-page quote younger than this is reused by the next lookup of the same symbol. */
         private const val QUOTE_REUSE_MS = 60_000L
+        private val NO_TARGET: Map<String, Any?> = linkedMapOf("target" to 0.0, "stop" to 0.0, "note" to "", "status" to "")
         const val NO_LIVE_TEXT = "No strategy is passing its test right now — no new buys. Sell calls and portfolio checks still run."
 
         /** qty = floor(capital x riskPct% / (entry - sl + entry x costPct%)), capped at MAX_POSITION_FRACTION of capital. */

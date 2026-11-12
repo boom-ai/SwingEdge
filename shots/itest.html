@@ -16,7 +16,7 @@ document.getElementById('f').onload=async()=>{
   ok(qa('#view .card.k-buy').length===3,'3 buy cards');
   // order: exits, book half, sell, trim, buy
   const tags=qa('#view .sec ~ article .sym .tag').map(t=>t.textContent).join(',');
-  ok(tags==='EXIT NOW,TIME EXIT,BOOK HALF,SELL,SELL,TRIM,BUY,BUY,BUY','act-now order: '+tags);
+  ok(tags==='EXIT NOW,TIME EXIT,BOOK HALF,SELL,SELL,TRIM,STOP HIT,TARGET HIT,BUY,BUY,BUY','act-now order: '+tags);
   // scan: double fire guard + busy
   click('[data-c="scan"]');click('[data-c="scan"]');
   ok(calls.filter(c=>c==='scanNow').length===1,'scan fired once on double tap');
@@ -144,16 +144,189 @@ document.getElementById('f').onload=async()=>{
   click('[data-c="tab"][data-id="portfolio"]');await tapOpen('#view .card .symbtn',q('#view .card .symbtn b').textContent,'Holding card symbol');
   const wl=q('#view .wl');if(wl)await tapOpen('#view .wl',wl.getAttribute('data-id'),'best/worst row');
   click('[data-c="tab"][data-id="setups"]');ok(!!q('#view .wsec')&&qa('#view .wmain').length===5,'My watchlist section shows its rows: 3 defaults + no-data row + the stock added above ('+qa('#view .wmain').length+')');
-  await tapOpen('#view .srow:not(.wmain)',q('#view .srow:not(.wmain)').getAttribute('data-id'),'EMA-cross row');
+  await tapOpen('#view .srow:not(.wmain):not(.idea)',q('#view .srow:not(.wmain):not(.idea)').getAttribute('data-id'),'EMA-cross row');
   await tapOpen('#view .wmain','DIXON','watchlist row');
   ok(/no data yet/i.test(qa('#view .wrow').filter(r=>/NEWLISTCO/.test(r.textContent))[0].textContent),'dataOk:false watchlist row says "no data yet"');
-  ok(qa('#view .srow:not(.wmain) .s2.g5 > span').length===5*qa('#view .srow:not(.wmain)').length,'EMA values laid out as a five-column grid');
+  ok(qa('#view .srow:not(.wmain):not(.idea) .s2.g5 > span').length===5*qa('#view .srow:not(.wmain):not(.idea)').length,'EMA values laid out as a five-column grid');
   // edit mode removes
   click('[data-c="watch-edit"]');ok(qa('#view .wrm').length===5,'Edit shows a remove button per row');
   click('#view .wrm[data-id="DIXON"]');ok(q('#view .wrm[data-id="DIXON"]').disabled,'remove locks its row while in flight');await sleep(800);
   ok(!st().myWatch.some(x=>x.sym==='DIXON')&&!q('#view .wrm[data-id="DIXON"]'),'removed from state and from the list');
   click('[data-c="watch-edit"]');ok(qa('#view .wrm').length===0,'Done leaves edit mode');
   click('#view .wsec [data-c="search"]');ok(!!inp(),'"Add stock" opens the search');hist();await sleep(150);
+  // ===== v3: verdict card, targets, ideas, interactive charts =====
+  const reps={};const oar=w.onActionResult;w.onActionResult=function(n,j){try{const o=JSON.parse(j);if(n==='stockInfo'&&o&&o.sym)reps['i:'+o.sym]=o;if(n==='getChart'&&o&&o.sym&&o.c&&o.c.length>=500)reps['c:'+o.sym]=o;}catch(e){}return oar.apply(this,arguments);};
+  const sect=async(name,fn)=>{try{await fn();}catch(e){ok(false,'EXCEPTION in '+name+': '+(e&&e.stack||e));while(!q('#sheet-root').hidden){hist();await sleep(150);}}};
+  const mkT=(el,id,x,y)=>new w.Touch({identifier:id,target:el,clientX:x,clientY:y,pageX:x,pageY:y,screenX:x,screenY:y});
+  const tev=(el,type,list,changed)=>el.dispatchEvent(new w.TouchEvent(type,{bubbles:true,cancelable:true,touches:list,targetTouches:list,changedTouches:changed||list}));
+  const rect=el=>el.getBoundingClientRect();
+  const openSym=async sym=>{click('[data-c="tab"][data-id="today"]');click('.topbar [data-c="search"]');typeQ(sym);await sleep(500);click('#sheet-root .srr[data-id="'+sym+'"]');await sleep(1000);};
+  const cfi=()=>w.__seChart&&w.__seChart();
+  const closeAll=async()=>{let g=0;while(!q('#sheet-root').hidden&&g++<6){hist();await sleep(200);}};
+  const noC=s=>s.replace(/,/g,'');
+  await closeAll();
+  ok(typeof w.Touch==='function'&&typeof w.TouchEvent==='function','Touch and TouchEvent constructors exist in this browser');
+  await sect('today ideas / hit rows',async()=>{
+    click('[data-c="tab"][data-id="today"]');await sleep(80);
+    ok(/Best setups now/.test(q('#view').textContent)&&qa('#view .srow.idea').length===5,'Today shows the top 5 ideas: '+qa('#view .srow.idea').length);
+    ok(!!q('#view .srow.idea .ring, #view .srow.idea svg'),'idea rows carry a score gauge and a sparkline');
+    ok(/TARGET HIT/.test(q('#view').textContent)&&/STOP HIT/.test(q('#view').textContent),'Today shows the hit target and the hit stop in Act now');
+    const pos=t=>q('#view').innerHTML.indexOf(t);
+    ok(pos('TARGET HIT')<pos('Best setups now')&&pos('TARGET HIT')<pos('class="sym"><span class="tag buy">BUY')||pos('TARGET HIT')<pos('Best setups now'),'hit rows come before the ideas');
+    const first=q('#view .srow.idea');const sym=first.getAttribute('data-id');first.click();await sleep(150);ok(stockOpen()&&q('#st-head').textContent.indexOf(sym)>=0,'tapping an idea opens the stock page for '+sym);await closeAll();
+    click('#view [data-c="tab"][data-id="setups"]');await sleep(80);
+    ok(qa('#view .srow.idea').length>5&&/a screen, not proven/i.test(q('#view').textContent),'Setups lists the full ranked list ('+qa('#view .srow.idea').length+') with the explanation line');
+    ok(q('#view').innerHTML.indexOf('Best setups now')<q('#view').innerHTML.indexOf('EMA'),'ideas sit above the EMA crossovers');
+  });
+  await sect('verdict BUY',async()=>{
+    await openSym('RELIANCE');
+    const c=reps['i:RELIANCE']&&reps['i:RELIANCE'].call;const v=q('#st-verdict');
+    ok(!!c&&!!v&&/BUY/.test(v.textContent),'BUY verdict card shown for RELIANCE (call.verdict='+(c&&c.verdict)+')');
+    ok(/What happened before/.test(v.textContent)&&qa('#st-verdict .vt').length===4,'hist block with 4 stat tiles');
+    ok(/Rule-based and tested on past data/.test(v.textContent)||/tested/i.test(v.textContent),'caveat shown');
+    ok(!/guaranteed|sure shot|risk-free/i.test(q('#sheet-root').textContent),'no forbidden wording on the page');
+    ok(!!q('#st-vcard [data-c="target-from-call"]')&&!/Buy now|Place order/i.test(v.textContent),'"Set these as my target" present, no order button');
+    ok(v.compareDocumentPosition(q('#st-chart'))&4&&q('#st-act').compareDocumentPosition(v)&4,'verdict sits between the action row and the chart');
+    click('#st-vcard [data-c="target-from-call"]');
+    ok(!!q('#sheet-root input[name="target"]')&&Number(q('[name=target]').value)===Number(c.t1)&&Number(q('[name=stop]').value)===Number(c.stop),'target sheet prefilled with t1/stop: '+q('[name=target]').value+'/'+q('[name=stop]').value);
+    hist();await sleep(150);ok(stockOpen(),'Back returns to the stock page from the target sheet');
+    await closeAll();
+  });
+  await sect('verdict WAIT/AVOID/absent',async()=>{
+    await openSym('TATAMOTORS');let v=q('#st-verdict');
+    ok(/WAIT/.test(v.textContent)&&/What would make it a buy candidate/.test(v.textContent)&&/Entry zone/.test(v.textContent),'WAIT card shows waitFor and the levels');
+    await closeAll();await openSym('YESBANK');v=q('#st-verdict');
+    ok(/AVOID/.test(v.textContent)&&!/Target 1/.test(v.textContent)&&!q('#st-vcard [data-c="target-from-call"]')&&/What happened before/.test(v.textContent),'AVOID card: reason + hist, no levels, no target button');
+    await closeAll();
+    const oi=w.Android.action;w.Android.action=function(n,a){if(n==='stockInfo'){const aa=JSON.parse(a);setTimeout(()=>{const r=JSON.parse(JSON.stringify(reps['i:'+aa.sym]||{ok:true,sym:aa.sym,name:'X',ltp:100}));delete r.call;w.onActionResult('stockInfo',JSON.stringify(r));},100);return;}return oi.apply(this,arguments);};
+    await openSym('ITC');ok(!!q('#st-body')&&!/BUY|WAIT|AVOID/.test((q('#st-verdict')||{textContent:''}).textContent)&&!q('#st-vcard'),'no card when call is absent');
+    w.Android.action=oi;await closeAll();
+  });
+  await sect('set target flow',async()=>{
+    await openSym('ITC');ok(!!q('#st-act .tbtn')&&/Set target|Target/.test(q('#st-act .tbtn').textContent),'target button on the action row: '+q('#st-act .tbtn').textContent);
+    const had=st().targets.some(t=>t.sym==='ITC');
+    if(had){click('#st-act .tbtn');click('#sheet-root [data-c="target-clear"]');await sleep(800);ok(!st().targets.some(t=>t.sym==='ITC'),'(cleared the seeded ITC target first)');await closeAll();await openSym('ITC');}
+    ok(/Set target/.test(q('#st-act .tbtn').textContent),'button says "Set target" when none');
+    click('#st-act .tbtn');ok(!!q('[name=target]')&&!q('#sheet-root [data-c="target-clear"]'),'target sheet opens, no Remove button for a new target');
+    click('#sheet-root [data-c="submit"]');ok(!!q('#formerr')&&!q('#formerr').hidden||qa('#sheet-root .fld.bad').length>0,'empty save rejected');
+    type('target','-4');click('#sheet-root [data-c="submit"]');ok(qa('#sheet-root .fld.bad').length>0&&!calls.slice(-1).includes('setTarget'),'negative number rejected');
+    const l0=log.length;click('#sheet-root .qc[data-id="t10"]');const base=Number(q('[name=target]').value);ok(base>0&&/\+10\.0*%/.test(q('#calc').textContent.replace(/\s/g,' ')),'+10% chip fills the target and the preview shows +10%: '+q('[name=target]').value+' | '+q('#calc').textContent.slice(0,80));
+    click('#sheet-root .qc[data-id="s8"]');ok(Number(q('[name=stop]').value)>0&&Number(q('[name=stop]').value)<base,'-8% chip fills the stop');
+    type('note','book half');click('#sheet-root [data-c="submit"]');ok(q('#sheet-root [data-c="submit"]').disabled,'save disabled while in flight');await sleep(800);
+    const sent=log.slice(l0).filter(c=>c.n==='setTarget')[0];ok(!!sent&&sent.a.sym==='ITC'&&sent.a.target===base&&sent.a.stop>0&&sent.a.note==='book half','setTarget sent with the right args: '+JSON.stringify(sent&&sent.a));
+    ok(q('#sheet-root [name=target]')===null&&st().targets.some(t=>t.sym==='ITC'&&t.target===base),'sheet closed and state.targets has the new row');
+    ok(/Target .*950|Target ₹/.test(q('#st-act .tbtn').textContent)&&/✓/.test(q('#st-act .tbtn').textContent),'stock page button now reads "Target ₹… ✓": '+q('#st-act .tbtn').textContent);
+    click('#st-act .tbtn');ok(Number(q('[name=target]').value)===base&&q('[name=note]').value==='book half'&&!!q('#sheet-root [data-c="target-clear"]'),'reopening shows the saved values and a Remove button');
+    click('#sheet-root [data-c="target-clear"]');await sleep(800);ok(!st().targets.some(t=>t.sym==='ITC')&&/Set target/.test(q('#st-act .tbtn').textContent),'Remove clears state and the button goes back to "Set target"');
+    await closeAll();
+  });
+  await sect('Trades: My targets',async()=>{
+    click('[data-c="tab"][data-id="trades"]');await sleep(80);
+    const ts=()=>qa('#view .trow');ok(/My targets/.test(q('#view').textContent)&&ts().length>=2,'My targets section with rows: '+ts().length);
+    ok(q('#view').innerHTML.indexOf('My targets')<q('#view').innerHTML.indexOf('Open trades')||q('#view').innerHTML.indexOf('My targets')<q('#view').innerHTML.indexOf('class="track'),'My targets sits above the open trades');
+    ok(/HIT TARGET/.test(q('#view').textContent)&&/HIT STOP/.test(q('#view').textContent),'HIT_TARGET and HIT_STOP pills render');
+    ok(qa('#view .trow .tw').length>=2,'hit rows show a time');
+    ok(qa('#view .trow .tprog').length>=2,'rows with a target and a stop draw the progress bar: '+qa('#view .trow .tprog').length);
+    const n0=ts().length,sym=ts()[ts().length-1].querySelector('.tclr').getAttribute('data-id');
+    click(ts()[ts().length-1].querySelector('.tclr'));ok(!!q('#view .tconf')&&st().targets.length>=n0,'Clear asks in-page first (no native confirm), nothing removed yet');
+    click('#view .tconf [data-c="target-clear-no"]');ok(!q('#view .tconf'),'Keep dismisses the confirm');
+    click(ts()[ts().length-1].querySelector('.tclr'));click('#view .tconf [data-c="target-clear-yes"]');await sleep(800);
+    ok(!st().targets.some(t=>t.sym===sym)&&!qa('#view .trow .tclr[data-id="'+sym+'"]').length,'confirmed clear removes '+sym+' from state and the list');
+    ts()[0].querySelector('.tmain').click();await sleep(200);ok(stockOpen(),'tapping a target row opens its stock page');await closeAll();
+  });
+  await sect('full chart: open/close',async()=>{
+    await openSym('RELIANCE');q('#st-scroll').scrollTop=300;const y0=q('#st-scroll').scrollTop;
+    const svg=q('#st-chart .cwrap.live svg.chart');ok(!!svg&&!!q('.cwrap.live .xpand'),'inline chart has the expand affordance');
+    const r=rect(svg),x=r.left+r.width/2,y=r.top+r.height/2;
+    const t=mkT(svg,1,x,y);tev(svg,'touchstart',[t]);await sleep(60);tev(svg,'touchend',[],[t]);await sleep(500);
+    ok(!!q('.sheet.cfs')&&!!cfi(),'tapping the stock-page chart opens the full-screen chart');
+    ok(cfi()&&cfi().state().w>200&&cfi().state().h>150&&cfi().state().dpr>=1,'canvas is sized: '+JSON.stringify(cfi()&&{w:cfi().state().w,h:cfi().state().h,dpr:cfi().state().dpr}));
+    await sleep(900);ok(cfi().state().n===500,'the longer history (500 bars) is swapped in: n='+cfi().state().n);
+    hist();await sleep(250);ok(!q('.sheet.cfs')&&stockOpen()&&Math.abs(q('#st-scroll').scrollTop-y0)<3,'Back returns to the stock page at the same scroll: '+q('#st-scroll').scrollTop+' vs '+y0);
+    await sleep(500);click('#st-chart .xpand');await sleep(500);ok(!!q('.sheet.cfs'),'the expand icon opens it too');hist();await sleep(250);
+    await closeAll();
+  });
+  await sect('full chart: gestures',async()=>{
+    await openSym('RELIANCE');click('#st-chart .xpand');await sleep(1600);
+    const I=cfi(),cv=I.canvas,res=reps['c:RELIANCE'];ok(!!I&&!!cv&&!!res,'chart ready for gestures (500 bars in reply: '+!!res+')');
+    let s=I.state();ok(s.c===126&&s.s===374,'default window = last 126 bars: '+s.s+'/'+s.c);
+    const cr=rect(cv),cx=cr.left+s.plot.l+s.plot.w/2,cy=cr.top+cr.height/3;
+    const wheel=(dy,x)=>{cv.dispatchEvent(new w.WheelEvent('wheel',{deltaY:dy,clientX:x==null?cx:x,clientY:cy,bubbles:true,cancelable:true}));I.flush();};
+    wheel(-400);s=I.state();ok(s.c<126&&s.c>=20,'wheel up zooms in within the clamp: c='+s.c);
+    for(let k=0;k<40;k++)wheel(-400);s=I.state();ok(s.c===20,'zoom in stops at 20 bars: c='+s.c);
+    for(let k=0;k<80;k++)wheel(400);s=I.state();ok(s.c===500&&s.s===0,'zoom out stops at all bars: '+s.s+'/'+s.c);
+    I.reset();I.flush();wheel(-300);const z=I.state();ok(z.c<126&&z.s>=0&&z.s+z.c<=500+1e-6,'zoom keeps the window inside the data: '+z.s+'/'+z.c);
+    // pan by mouse drag
+    I.setView({s:200,c:100});I.flush();const sp=I.state().s;
+    cv.dispatchEvent(new w.MouseEvent('mousedown',{clientX:cx,clientY:cy,button:0,bubbles:true,cancelable:true}));
+    w.dispatchEvent(new w.MouseEvent('mousemove',{clientX:cx+120,clientY:cy,bubbles:true}));w.dispatchEvent(new w.MouseEvent('mouseup',{clientX:cx+120,clientY:cy,bubbles:true}));I.flush();
+    s=I.state();ok(s.s<sp&&s.s>=0,'dragging right pans back in time: '+sp+' -> '+s.s);
+    I.setView({s:0,c:100});I.flush();cv.dispatchEvent(new w.MouseEvent('mousedown',{clientX:cx,clientY:cy,button:0,bubbles:true,cancelable:true}));
+    w.dispatchEvent(new w.MouseEvent('mousemove',{clientX:cx+600,clientY:cy,bubbles:true}));w.dispatchEvent(new w.MouseEvent('mouseup',{clientX:cx+600,clientY:cy,bubbles:true}));I.flush();
+    ok(I.state().s===0,'pan beyond the first bar clamps at 0');
+    // two-finger pinch
+    I.reset();I.flush();await sleep(50);const c0=I.state().c;
+    const ta=mkT(cv,1,cx-30,cy),tb=mkT(cv,2,cx+30,cy);tev(cv,'touchstart',[ta,tb]);
+    const ta2=mkT(cv,1,cx-90,cy),tb2=mkT(cv,2,cx+90,cy);tev(cv,'touchmove',[ta2,tb2]);I.flush();s=I.state();
+    ok(s.c<c0&&s.c>=20,'pinch out zooms in: '+c0+' -> '+s.c);tev(cv,'touchend',[],[ta2,tb2]);
+    const c1=s.c;tev(cv,'touchstart',[mkT(cv,1,cx-90,cy),mkT(cv,2,cx+90,cy)]);tev(cv,'touchmove',[mkT(cv,1,cx-20,cy),mkT(cv,2,cx+20,cy)]);I.flush();
+    ok(I.state().c>c1,'pinch in zooms out: '+c1+' -> '+I.state().c);tev(cv,'touchend',[],[mkT(cv,1,cx-20,cy),mkT(cv,2,cx+20,cy)]);await sleep(50);
+    // one-finger pan on touch
+    I.setView({s:300,c:100});I.flush();const sp2=I.state().s;const f=mkT(cv,1,cx,cy);tev(cv,'touchstart',[f]);
+    for(let k=1;k<=6;k++){tev(cv,'touchmove',[mkT(cv,1,cx+k*15,cy)]);await sleep(16);}tev(cv,'touchend',[],[mkT(cv,1,cx+90,cy)]);await sleep(30);I.flush();
+    ok(I.state().s<sp2,'one-finger drag pans (with inertia): '+sp2+' -> '+I.state().s);await sleep(1200);
+    // long press + move: crosshair readout
+    I.setView({s:300,c:100});I.flush();await sleep(60);s=I.state();ok(s.cross<0,'no crosshair before the press: '+s.cross);
+    const px0=cr.left+s.plot.l+s.plot.w*0.3;tev(cv,'touchstart',[mkT(cv,1,px0,cy)]);await sleep(60);ok(I.state().cross<0,'a short touch does not show the crosshair yet');await sleep(330);
+    s=I.state();let want=Math.floor(s.s+(px0-cr.left-s.plot.l)/s.plot.w*s.c);ok(s.cross===want,'held touch snaps the crosshair to the right bar: '+s.cross+' vs '+want);
+    const px1=cr.left+s.plot.l+s.plot.w*0.7;tev(cv,'touchmove',[mkT(cv,1,px1,cy)]);I.flush();s=I.state();want=Math.floor(s.s+(px1-cr.left-s.plot.l)/s.plot.w*s.c);
+    ok(s.cross===want&&s.s===300,'dragging the held finger moves the crosshair without panning: '+s.cross+' vs '+want);
+    const ro=q('#cf-ro');const txt=noC(ro.textContent);
+    ok(!ro.hidden&&txt.indexOf(res.c[s.cross].toFixed(2))>=0&&txt.indexOf(res.o[s.cross].toFixed(2))>=0&&txt.indexOf(res.h[s.cross].toFixed(2))>=0&&txt.indexOf(res.l[s.cross].toFixed(2))>=0,'readout shows O/H/L/C of the bar under the finger: '+ro.textContent.replace(/\s+/g,' ').slice(0,120));
+    ok(/Change/.test(ro.textContent)&&/Volume/.test(ro.textContent)&&/EMA 10/.test(ro.textContent)&&!/EMA 100/.test(ro.textContent),'readout has change, volume and each visible EMA only');
+    const rr=rect(ro);ok(rr.right<px1||rr.left>px1,'readout panel does not sit under the finger');
+    tev(cv,'touchend',[],[mkT(cv,1,px1,cy)]);await sleep(40);ok(I.state().cross===want&&!q('#cf-ro').hidden,'readout stays after lifting');
+    // tap clears; double tap resets
+    const tp=mkT(cv,1,cx,cy);tev(cv,'touchstart',[tp]);await sleep(40);tev(cv,'touchend',[],[tp]);await sleep(40);ok(I.state().cross<0&&q('#cf-ro').hidden,'a tap dismisses the crosshair');
+    await sleep(500);I.setView({s:100,c:40});I.flush();
+    const d1=mkT(cv,1,cx,cy);tev(cv,'touchstart',[d1]);await sleep(30);tev(cv,'touchend',[],[d1]);await sleep(60);tev(cv,'touchstart',[mkT(cv,1,cx+3,cy)]);await sleep(30);tev(cv,'touchend',[],[mkT(cv,1,cx+3,cy)]);I.flush();
+    s=I.state();ok(s.c===126&&s.s===374,'double-tap resets to the default window: '+s.s+'/'+s.c);
+    // toggles + ranges
+    const fr=I.state().frames;click('.cfe[data-id="100"]');I.flush();ok(I.state().emas.indexOf(100)>=0&&I.state().frames>fr&&q('.cfe[data-id="100"]').getAttribute('aria-pressed')==='true','EMA 100 toggle redraws and is pressed: '+JSON.stringify(I.state().emas)+' frames '+fr+'->'+I.state().frames+' '+q('.cfe[data-id="100"]').getAttribute('aria-pressed'));
+    click('.cfe[data-id="10"]');I.flush();ok(I.state().emas.indexOf(10)<0,'EMA 10 toggle off: '+JSON.stringify(I.state().emas));click('.cfe[data-id="10"]');I.flush();
+    const fr2=I.state().frames;click('[data-c="cf-levels"]');I.flush();ok(I.state().levels===false&&I.state().frames>fr2&&I.state().labels.length===0,'Levels toggle off redraws and removes labels: '+I.state().levels+' '+I.state().labels.length+' frames '+fr2+'->'+I.state().frames);click('[data-c="cf-levels"]');I.flush();
+    const lab=I.state().labels;ok(lab.length>=3&&/your target|Stop|Target/i.test(lab.map(l=>l.t).join(' ')),'level labels drawn: '+lab.map(l=>l.t).join(', '));
+    const ys=lab.map(l=>l.y).sort((a,b)=>a-b);let gap=1e9;for(let k=1;k<ys.length;k++)gap=Math.min(gap,ys[k]-ys[k-1]);ok(gap>=11,'right-edge labels never overlap (min gap '+gap.toFixed(1)+'px)');
+    click('.rchip[data-id="3M"]');await sleep(60);ok(I.state().c===63&&/3M/.test(q('#cf-rng .rchip.on').textContent),'3M range chip sets 63 bars');
+    click('.rchip[data-id="All"]');await sleep(60);ok(I.state().c===500&&I.state().mode==='line','All shows every bar as a close line');
+    click('.rchip[data-id="6M"]');await sleep(60);ok(I.state().mode==='candles','candles when 126 bars are visible');
+    click('[data-c="cf-vol"]');I.flush();ok(I.state().vol===false,'volume toggle '+I.state().vol);click('[data-c="cf-vol"]');I.flush();
+    click('[data-c="cf-reset"]');await sleep(60);ok(I.state().c===126,'Reset button restores the default window');
+    // state poll must not touch the open chart or its focus
+    const cvEl=q('#cf-canvas');w.onStateChanged();await sleep(200);ok(q('#cf-canvas')===cvEl&&!!cfi(),'a state poll does not re-render the open chart');
+    // resize / rotation: the canvas follows the stage
+    const wb0=I.state().w,fe=document.getElementById('f');fe.width=320;w.dispatchEvent(new w.Event('resize'));await sleep(200);I.flush();const wb1=I.state().w;ok(wb1<wb0&&wb1>200,'canvas resizes with the window: '+wb0+' -> '+wb1+' iw='+w.innerWidth+' stage='+q('#cf-stage').getBoundingClientRect().width+' css='+q('#cf-canvas').getBoundingClientRect().width);
+    fe.width=390;w.dispatchEvent(new w.Event('orientationchange'));await sleep(200);I.flush();ok(I.state().w>wb1,'...and back: '+I.state().w);
+    // EMA setting is shared with the stock page
+    hist();await sleep(250);ok(!q('.sheet.cfs')&&!cfi(),'Back closes the chart and frees the instance');
+    ok(!!q('.echip[data-id="100"].on')===true,'EMA 100 turned on in the full chart shows on the stock page chips: '+qa('.echip').map(e=>e.getAttribute('data-id')+(e.classList.contains('on')?'+':'-')).join(' '));click('.echip[data-id="100"]');
+    await closeAll();
+  });
+  await sect('inline chart: hold + scroll',async()=>{
+    await openSym('RELIANCE');const svg=q('#st-chart .cwrap.live svg.chart'),r=rect(svg),x=r.left+r.width*0.6,y=r.top+r.height/2;
+    ok(getComputedStyle(q('.cwrap.live')).touchAction==='pan-y','inline chart leaves vertical panning to the page (touch-action: pan-y)');
+    // vertical drag: no crosshair, not claimed
+    const t0=mkT(svg,1,x,y);tev(svg,'touchstart',[t0]);tev(svg,'touchmove',[mkT(svg,1,x,y-40)]);const ev=new w.TouchEvent('touchmove',{bubbles:true,cancelable:true,touches:[mkT(svg,1,x,y-60)],changedTouches:[mkT(svg,1,x,y-60)]});svg.dispatchEvent(ev);
+    ok(!ev.defaultPrevented&&!q('#xh.on, #xh .on, .xh.on'),'a vertical drag is left for the page (not default-prevented, no crosshair)');tev(svg,'touchend',[],[t0]);await sleep(450);ok(!q('.sheet.cfs'),'...and does not open the full chart');
+    // hold: crosshair + readout above
+    const h0=mkT(svg,1,x,y);tev(svg,'touchstart',[h0]);await sleep(350);ok(!!q('.xh.on')&&!/Press and hold/.test(q('#st-cro').textContent)&&/O \d/.test(q('#st-cro').textContent),'press-and-hold shows the crosshair and a readout above the chart: '+q('#st-cro').textContent.slice(0,80));
+    const ev2=new w.TouchEvent('touchmove',{bubbles:true,cancelable:true,touches:[mkT(svg,1,x+60,y)],changedTouches:[mkT(svg,1,x+60,y)]});const before=q('#st-cro').textContent;svg.dispatchEvent(ev2);ok(ev2.defaultPrevented&&q('#st-cro').textContent!==before,'moving while held scrubs the readout and claims the gesture');
+    tev(svg,'touchend',[],[h0]);await sleep(40);ok(!!q('.xh.on')&&!q('.sheet.cfs'),'lifting keeps the readout and does not expand');
+    const t1=mkT(svg,1,x,y);tev(svg,'touchstart',[t1]);await sleep(40);tev(svg,'touchend',[],[t1]);await sleep(450);ok(!q('.xh.on')&&!q('.sheet.cfs'),'next tap only dismisses the crosshair');
+    const t2=mkT(svg,1,x,y);tev(svg,'touchstart',[t2]);await sleep(40);tev(svg,'touchend',[],[t2]);await sleep(450);ok(!!q('.sheet.cfs'),'the tap after that expands the chart');
+    await closeAll();
+  });
+  w.onActionResult=oar;
   w.Android.action=orig;
   // malformed pushes must not throw
   w.onActionResult('whatever','not json');w.onActionResult('importHoldings','{"ok":false}');w.onActionResult(null,null);ok(true,'bad action results tolerated');

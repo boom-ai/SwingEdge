@@ -81,6 +81,7 @@ object ScoreTexts {
     val POINT_LABELS = listOf("6-month momentum (risk-adjusted)", "6-month return", "12-month return", "Near its 52-week high", "Above its 52-week low")
 
     const val EXIT_RULE = "Sell if it closes below its 50-day average, or after 60 trading days. Targets are reference levels, not sell orders."
+    const val LOW_PRICE_LINE = "Priced under ₹50: scored against the 574 liquid stocks, but the tested history behind these numbers covers ₹50+ stocks only, and low-priced stocks move in bigger jumps"
     const val CAVEAT = "Rule-based and tested on past data. Losses happen; the stop limits them, it does not remove them."
 
     private fun s1(x: Double) = Fmt.pct(x)                       // +4.4%

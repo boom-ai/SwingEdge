@@ -894,8 +894,8 @@
       '<div class="vtop"><div class="vl"><div class="vk">Rule-based call' + (T(c.band).trim() ? ' · score band ' + esc(T(c.band).trim()) : '') + '</div><span class="vpill ' + k.cls + '">' + ic(k.icon) + pillText + '</span></div>' +
       (lab === 'NA' ? '' : '<div class="vscore">' + scoreRing(c.score, k.cls, 60) + '<span class="vsl">setup score</span></div>') + '</div>' +
       (head ? '<p class="vhead">' + esc(head) + '</p>' : '') +
-      (T(c.evidence).trim() ? '<div class="vevid ' + (c.proven === true ? 'ok' : 'warn') + '">' + ic(c.proven === true ? 'check' : 'info') + '<div><b>' + (c.proven === true ? 'What the test showed' : 'Tested record, 2022–26') + '</b><span>' + esc(T(c.evidence).trim()) + '</span></div></div>' : '') +
-      pointsBlock(c.points);
+      (T(c.evidence).trim() && lab !== 'NA' ? '<div class="vevid ' + (c.proven === true ? 'ok' : 'warn') + '">' + ic(c.proven === true ? 'check' : 'info') + '<div><b>' + (c.proven === true ? 'What the test showed' : 'Tested record, 2022–26') + '</b><span>' + esc(T(c.evidence).trim()) + '</span></div></div>' : '') +
+      (lab === 'NA' ? '' : pointsBlock(c.points));
     var lo = N(c.entryLow), hi = N(c.entryHigh), stp = N(c.stop), t1 = N(c.t1), t2 = N(c.t2);
     var levels = lab !== 'AVOID' && ((lo > 0 && hi > 0) || stp > 0 || t1 > 0 || t2 > 0);
     if (levels) {

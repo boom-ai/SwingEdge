@@ -32,9 +32,17 @@ class ScoreComp(
     /** Gets a score: in U and every component defined. */
     val rateable: Boolean get() = inUniverse && allDefined
 
+    /**
+     * Liquid by turnover, enough history, every component defined, but priced under Rs 50. Not part of the cross-section
+     * (the research universe excludes it), but scored by insertion against it so the user still gets a rating; the
+     * call texts say the tested history covers Rs 50+ stocks only.
+     */
+    val lowPriceRateable: Boolean get() = !rateable && to20 >= SetupScore.MIN_TO20_CR && !(rawClose >= SetupScore.MIN_PRICE) &&
+        nbars >= SetupScore.MIN_RATED_BARS && allDefined
+
     /** Why it is not rated: null if rateable, else ILLIQUID | CHEAP | SHORT | INCOMPLETE. */
     fun naKind(): String? = when {
-        rateable -> null
+        rateable || lowPriceRateable -> null
         !(to20 >= SetupScore.MIN_TO20_CR) -> SetupScore.NA_ILLIQUID
         !(rawClose >= SetupScore.MIN_PRICE) -> SetupScore.NA_CHEAP
         nbars < SetupScore.MIN_RATED_BARS || r12.isNaN() -> SetupScore.NA_SHORT
@@ -226,7 +234,9 @@ object SetupScore {
         val cols = Array(5) { k -> column(DoubleArray(members.size) { members[it].second.x(k) }) }
         val pre = ArrayList<ScoreEntry>()
         val out = HashMap<String, ScoreEntry>()
+        val lowPrice = ArrayList<Pair<String, ScoreComp>>()
         for ((sym, comp) in items) {
+            if (comp.lowPriceRateable) { lowPrice.add(Pair(sym, comp)); continue }
             if (!comp.rateable) { out[sym] = na(sym, comp); continue }
             val p = DoubleArray(5) { k -> pct(cols[k], comp.x(k), true) }
             pre.add(scored(sym, comp, p, 0, 0))
@@ -238,7 +248,9 @@ object SetupScore {
             ranked.add(r)
             out[e.sym] = r
         }
-        return ScoreTable(builtAt, out, cols, ranked, members.size)
+        val t = ScoreTable(builtAt, out, cols, ranked, members.size)
+        for ((sym, comp) in lowPrice) out[sym] = insert(t, sym, comp)
+        return t
     }
 
     /**
@@ -246,7 +258,7 @@ object SetupScore {
      * among the table's rated stocks plus itself.
      */
     fun insert(t: ScoreTable, sym: String, comp: ScoreComp): ScoreEntry {
-        if (!comp.rateable) return na(sym, comp)
+        if (!comp.rateable && !comp.lowPriceRateable) return na(sym, comp)
         val p = DoubleArray(5) { k -> pct(t.cols[k], comp.x(k), false) }
         if (p.any { it.isNaN() }) return na(sym, comp)
         val e = scored(sym, comp, p, 0, 0)

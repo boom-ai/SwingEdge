@@ -62,6 +62,7 @@ object BuyCall {
         val c = e.comp
         val out = ArrayList<String>()
         if (stale) out.add(ScoreTexts.staleLine(c.close, c.day))
+        if (c.lowPriceRateable) out.add(ScoreTexts.LOW_PRICE_LINE)
         if (c.uclock && e.score >= SetupScore.BUY_MIN) out.add(ScoreTexts.UCLOCK_LINE)
         if (!c.sma50.isNaN() && c.sma50 > 0) out.add(ScoreTexts.trendLine(c.close, c.sma50))
         // components: strongest first, weakest first for AVOID ("why it fails")

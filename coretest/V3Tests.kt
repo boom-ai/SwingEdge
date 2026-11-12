@@ -227,7 +227,8 @@ object V3Tests {
         T.eq(k.hi252, h.copyOfRange(n - 252, n).max(), "HI252")
         T.check(SetupScore.compute(h, l, c, c[251], to, 251, 252).r12.isNaN() && SetupScore.compute(h, l, c, c[252], to, 252, 253).let { !it.r12.isNaN() && it.rateable }, "252 bars: no R12; 253: rated")
         T.check(SetupScore.compute(h, l, c, c[n - 1], to, n - 1, n).rateable && !SetupScore.compute(h, l, c, 40.0, to, n - 1, n).rateable, "price under 50 not rated")
-        T.eq(SetupScore.compute(h, l, c, 40.0, to, n - 1, n).naKind(), SetupScore.NA_CHEAP, "CHEAP kind")
+        T.check(SetupScore.compute(h, l, c, 40.0, to, n - 1, n).let { it.lowPriceRateable && it.naKind() == null }, "liquid, full history, under Rs 50: scored by insertion")
+        T.eq(SetupScore.compute(h, l, c, 40.0, to, 199, 200).naKind(), SetupScore.NA_CHEAP, "under Rs 50 with short history: CHEAP kind")
         T.eq(SetupScore.compute(doubleArrayOf(), doubleArrayOf(), doubleArrayOf(), 0.0, doubleArrayOf(), 5, 6).naKind(), SetupScore.NA_ILLIQUID, "bad index does not throw")
         // topBuys: order, ties, cap
         val many = (1..30).map { j -> String.format("S%02d", j) to hc(doubleArrayOf(j / 10.0, j / 10.0, j / 10.0, j / 10.0, j / 10.0)) } +
@@ -414,6 +415,7 @@ object V3Tests {
             val e = t.entries[sym]!!
             T.eq(c.str("label"), e.label, "$sym call label = table")
             if (e.rated) T.eq(c.num("score"), Fmt.r1(e.score), "$sym score = table")
+            if (sym == "CHEAPO") T.check(e.rated && c.list("reasons").any { it.toString().contains("under ₹50") } && t.ranked.none { it.sym == sym }, "under Rs 50: scored, caveat shown, kept out of the ranked list")
             seen[c.str("label")] = (seen[c.str("label")] ?: 0) + 1
         }
         println("      calls by label: $seen")
@@ -472,7 +474,10 @@ object V3Tests {
         val ipo = V2Tests.info(a2, "NEWIPO", "ipo").obj("call")
         T.eq(ipo.str("label"), "NA", "30-bar listing")
         val ch = V2Tests.info(a2, "CHEAPO", "cheap")
-        if (ch.num("ltp") < 50) T.check(ch.obj("call").str("headline").contains("under ₹50"), "liquid but under Rs 50: NA: " + ch.obj("call").str("headline"))
+        if (ch.num("ltp") < 50) {
+            val cc = ch.obj("call")
+            T.check(cc.str("label") == "NA" && cc.str("headline").contains("full scan"), "liquid but under Rs 50, before the first scan: needs a full scan: " + cc.str("headline"))
+        }
         T.check(V2Tests.info(a2, "UP01", "no table").obj("call").str("headline").contains("full scan"), "liquid stock before the first scan: needs a full scan")
         for (x in listOf(thin, short, s252, ipo)) checkCall(x, 1.0, doubleArrayOf(1e5, 0.75, 0.25), "NA")
     }

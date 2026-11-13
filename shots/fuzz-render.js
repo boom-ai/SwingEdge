@@ -21,11 +21,13 @@ function mockReply(name, args, scenario) {
   win.Android.action(name, JSON.stringify(args));
   return out;
 }
-const STOCKS = ['TATAMOTORS', 'POLYCAB', 'ILLIQTEXTILE', 'NEWSYM', 'M&M', 'YESBANK'].map(sym => ({
+const STOCKS = ['TATAMOTORS', 'POLYCAB', 'ILLIQTEXTILE', 'NEWSYM', 'M&M', 'YESBANK', 'RELIANCE', 'NEWIPO', 'SMEKRAFT'].map(sym => ({
   sym, info: mockReply('stockInfo', { sym }), chart: mockReply('getChart', { sym, bars: 260 }), chart2: mockReply('getChart', { sym, bars: 500 })
 }));
+const NEWL = mockReply('newListings', { days: 365 }); const BROKEN_INFO = mockReply('stockInfo', { sym: 'RELIANCE' }, 'broken'); const BROKEN_NEW = mockReply('stockInfo', { sym: 'NEWIPO' }, 'broken');
 const FAILED = mockReply('stockInfo', { sym: 'ZZTEST' });
-const SEARCHES = [mockReply('search', { q: 'tata' }), mockReply('search', { q: 'zzqx' }), mockReply('search', { q: 'tata mot' })];
+const SEARCHES = [mockReply('search', { q: 'tata' }), mockReply('search', { q: 'zzqx' }), mockReply('search', { q: 'tata mot' }), mockReply('search', { q: 'kraft' })];
+const LISTS = [SEARCHES[0].list, mockReply('search', { q: '' }, 'broken').list, { count: 3000, updatedAt: Date.now() - 5 * 864e5, source: 'saved', stale: true, newCount: 2 }, { count: 0, updatedAt: 0, source: 'bundled', stale: false, newCount: 0 }];
 let seed = Number(process.env.SEED || 12345);
 function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
 function pick(a) { return a[Math.floor(rnd() * a.length)]; }
@@ -78,7 +80,7 @@ function run(S, ui, tag) {
       const mode = rnd();
       const st = mode < 0.12 ? { sym: pick(['ZZTEST', JUNK()]), info: null, err: pick([FAILED.error, JUNK(), 'No reply after 20 seconds.']), chart: null, chartErr: pick(['', 'x', JUNK()]), want: 130, inflight: 0 }
         : mode < 0.22 ? { sym: b.sym, name: pick([JUNK(), 'x'.repeat(300)]), info: null, err: '', chart: rnd() < 0.5 ? mutate(b.chart, 0) : null, want: pick([130, 260, 500, JUNK()]), inflight: pick([0, 130, JUNK()]) }
-        : { sym: pick([b.sym, JUNK()]), name: pick(['x'.repeat(300), JUNK(), '']), info: mutate(b.info, 0), chart: rnd() < 0.85 ? mutate(rnd() < 0.5 ? b.chart : b.chart2, 0) : pick([null, JUNK()]), chartErr: pick(['', JUNK()]),
+        : { sym: pick([b.sym, JUNK()]), name: pick(['x'.repeat(300), JUNK(), '']), info: mutate(rnd() < 0.15 ? pick([BROKEN_INFO, BROKEN_NEW]) : b.info, 0), chart: rnd() < 0.85 ? mutate(rnd() < 0.5 ? b.chart : b.chart2, 0) : pick([null, JUNK()]), chartErr: pick(['', JUNK()]),
           err: '', want: pick([130, 260, 500, JUNK()]), range: pick([130, 260, JUNK()]), inflight: pick([0, 0, 130, JUNK()]) };
       if (st.info && typeof st.info === 'object' && rnd() < 0.2) st.info.name = 'N'.repeat(300);
       return st;
@@ -86,7 +88,9 @@ function run(S, ui, tag) {
     const u2 = Object.assign({}, ui && typeof ui === 'object' ? ui : {}, {
       stock: rnd() < 0.05 ? JUNK() : mk(),
       search: rnd() < 0.1 ? JUNK() : { q: pick(['', 'a', 'tata', EVIL, 'x'.repeat(300), JUNK()]), sent: 'tata', shown: pick(['tata', JUNK()]), loading: pick([true, false, JUNK()]), err: pick(['', 'Search is not available', JUNK()]),
-        results: pick([null, [], mutate(pick(SEARCHES).results, 0), JUNK(), [{ sym: 'M&M', name: 'N'.repeat(300), tracked: true }, null, { name: 'no sym' }]]) },
+        results: pick([null, [], mutate(pick(SEARCHES).results, 0), JUNK(), [{ sym: 'M&M', name: 'N'.repeat(300), tracked: true }, null, { name: 'no sym' }]]),
+        filter: pick(['all', 'new', 'watch', 'held', JUNK()]), newList: pick([null, [], NEWL.results, mutate(NEWL.results, 0), JUNK()]), newErr: pick(['', 'boom', JUNK()]) },
+      listMeta: pick([null, pick(LISTS), mutate(pick(LISTS), 0), JUNK()]), pnl: pick([{}, { 0: true, 1: false, 2: true }, JUNK(), { x: 1 }]), vOpen: pick([{}, { why: 1, hist: 1 }, JUNK()]),
       recent: pick([[], [{ sym: 'ITC', name: 'ITC Ltd' }, null, { sym: EVIL, name: JUNK() }], JUNK(), mutate([{ sym: 'TCS', name: 'Tata' }], 0)]),
       emaOn: pick([{ 10: true, 20: false, 50: true, 100: true, 200: true }, JUNK(), {}, { 10: JUNK() }]), watchEdit: pick([true, false, JUNK()]) });
     check('sheet:stock', SE.sheet('stock', S, u2, { id: pick([b.sym, JUNK(), EVIL]) }), tag);
@@ -138,6 +142,20 @@ bases.forEach((b, i) => run(b.state, { tab: 'today', expanded: {}, pending: {}, 
   must('target sheet', SE.sheet('target', b.state, u3, { id: 'RELIANCE' }), /(Save|Update) target/);
   must('chartfull sheet', SE.sheet('chartfull', b.state, u3, { id: 'RELIANCE' }), /cf-canvas/);
   must('search', SE.sheet('search', b.state, u, {}), /TATAMOTORS/); must('watchlist', SE.view(b.state, u), /My watchlist/);
+  { const ni = mockReply('stockInfo', { sym: 'MARUTI' }), pu = Object.assign({}, u, { pnl: {}, vOpen: {}, stock: { sym: 'MARUTI', info: ni, chart: t.chart, want: 260, range: 260 } });
+    const ph = SE.stockPart('panel', b.state, pu, { id: 'MARUTI' });
+    must('panel', ph, /Analyst panel/); must('panel', ph, /managers/); must('panel', ph, /does not decide/); must('panel', ph, /BUY CANDIDATE/); must('panel', ph, /What would change the call/); must('panel', ph, /Replies to/);
+    ni.panel.managers.forEach(m => must('panel mgr ' + m.id, ph, new RegExp('>' + m.name + '<')));
+    const lv = SE.stockPart('verdict', b.state, pu, { id: 'MARUTI' }); must('verdict collapsed', lv, /data-c="vopen"/); renders++; if (/class="vrs"/.test(lv)) { fails++; console.log('FAIL why list not collapsed'); }
+    const li = mockReply('stockInfo', { sym: 'NEWIPO' }), lu = Object.assign({}, u, { stock: { sym: 'NEWIPO', info: li, chart: t.chart, want: 130 } });
+    const lh = SE.sheet('stock', b.state, lu, { id: 'NEWIPO' });
+    must('listing', lh, /sk-listing/); must('listing', lh, /NEW · listed/); must('listing', lh, /A rating becomes possible in/); must('listing', lh, /Base rate/); must('listing', lh, /NOT RATED/); must('listing chip', lh, /Since listing/);
+    renders++; if (/EMA 200/.test(SE.stockPart('body', b.state, lu, {}))) { fails++; console.log('FAIL EMA rows shown for a new listing'); }
+    const sb = SE.searchBody(b.state, Object.assign({}, u, { listMeta: mockReply('search', { q: '' }).list, search: { q: 'kraft', sent: 'kraft', shown: 'kraft', results: SEARCHES[3].results, filter: 'all' } }));
+    must('search fresh', sb, /Stock list updated/); must('search NEW', sb, /class="nchip"/); must('search SME', sb, /class="sme"/); must('search filters', sb, /data-c="sfilter"/);
+    must('search stale', SE.searchBody(b.state, Object.assign({}, u, { listMeta: LISTS[2], search: { q: '', filter: 'all' } })), /data-c="refresh-symbols"/);
+    must('new filter', SE.searchBody(b.state, Object.assign({}, u, { listMeta: LISTS[0], search: { q: '', filter: 'new', newList: NEWL.results } })), /listed /);
+  }
   must('search-empty', SE.searchBody(b.state, Object.assign({}, u, { search: { q: 'zzqx', sent: 'zzqx', shown: 'zzqx', results: [] } })), /No NSE stock matches/);
   must('search-lookup', SE.searchBody(b.state, Object.assign({}, u, { search: { q: 'zzqx', sent: 'zzqx', shown: 'zzqx', results: [] } })), /Look up ZZQX anyway/);
 }

@@ -200,8 +200,13 @@
     ['FEDERALBNK', 'Federal Bank Ltd', 212.4, 1], ['TVSMOTOR', 'TVS Motor Company Ltd', 3105.0, 1], ['IRCTC', 'Indian Railway Catering & Tourism Corp Ltd', 812.0, 1],
     ['ZEEL', 'Zee Entertainment Enterprises Ltd', 131.4, 1], ['YESBANK', 'Yes Bank Ltd', 19.82, 1], ['MARICO', 'Marico Ltd', 664.9, 1],
     ['DIXON', 'Dixon Technologies (India) Ltd', 14820.0, 1], ['PFC', 'Power Finance Corporation Ltd', 468.0, 1], ['SIEMENS', 'Siemens Ltd', 6985.0, 1],
-    ['HDFCLIFE', 'HDFC Life Insurance Company Ltd', 712.4, 1], ['ILLIQTEXTILE', 'Illiq Textile Mills Ltd', 41.2, 0]
+    ['HDFCLIFE', 'HDFC Life Insurance Company Ltd', 712.4, 1], ['ILLIQTEXTILE', 'Illiq Textile Mills Ltd', 41.2, 0],
+    ['NEWIPO', 'Nova Pack Industries Ltd', 214.6, 1], ['FRESHMART', 'FreshMart Retail Ltd', 388.0, 1], ['SMEKRAFT', 'Kraft Smart Solutions Ltd', 96.5, 0],
+    ['URBANLEAF', 'Urban Leaf Foods Ltd', 152.3, 1], ['ORBITSME', 'Orbit Express Logistics Ltd', 71.8, 0]
   ];
+  /* SPEC5: new listings have a short history (bars) and a board; ?listing=new makes every other symbol a 160-bar listing too */
+  var NEWS = { NEWIPO: { bars: 160, board: 'EQ' }, FRESHMART: { bars: 230, board: 'EQ' }, SMEKRAFT: { bars: 60, board: 'SME' }, URBANLEAF: { bars: 120, board: 'EQ' }, ORBITSME: { bars: 200, board: 'SME' } };
+  function barsFor(sym) { return NEWS[sym] ? NEWS[sym].bars : qs.listing === 'new' && !/^(ILLIQ)/.test(sym) ? 160 : 500; }
   var UBY = {}; UNI.forEach(function (u) { UBY[u[0]] = u; });
   var DAYCHG = {}; holdings().forEach(function (h) { DAYCHG[h.sym] = h.dayChgPct; });
   var NIFTY_RET = { d21: 1.6, d63: 4.3, d126: 7.9 };
@@ -223,6 +228,7 @@
   function model(sym) {
     if (models[sym]) return models[sym];
     var u = UBY[sym], base = u ? u[2] : 60 + hash(sym) % 3400, n = 500, rnd = mkRnd(hash(sym) * 7 + 13), i;
+    n = barsFor(sym);
     var drift = (rnd() - 0.4) * 0.0018, vol = 0.011 + rnd() * 0.011, p = 100, raw = [];
     for (i = 0; i < n; i++) { p *= 1 + drift + (rnd() + rnd() + rnd() - 1.5) * vol * 1.5; raw.push(p); }
     var k = base / raw[n - 1], c = [], o = [], h = [], l = [], v = [], d = [];
@@ -245,7 +251,7 @@
     var ld = new Date(d[n - 1] + IST), barDay = ld.getUTCFullYear() * 10000 + (ld.getUTCMonth() + 1) * 100 + ld.getUTCDate();
     var E = { 10: emaOf(c, 10), 20: emaOf(c, 20), 50: emaOf(c, 50), 100: emaOf(c, 100), 200: emaOf(c, 200) };
     var ltp = c[n - 1], prev = c[n - 2], e = {}, dist = {};
-    [10, 20, 50, 100, 200].forEach(function (q) { e['e' + q] = lastOf(E[q]); dist['e' + q] = r2((ltp / e['e' + q] - 1) * 100); });
+    [10, 20, 50, 100, 200].forEach(function (q) { e['e' + q] = lastOf(E[q]); dist['e' + q] = e['e' + q] > 0 ? r2((ltp / e['e' + q] - 1) * 100) : 0; });
     function crossOf(a, b, maxBack) {
       var cur = a[n - 1] >= b[n - 1] ? 'ABOVE' : 'BELOW', ds = -1, j;
       for (j = 0; j <= maxBack; j++) { var ix = n - 1 - j; if (ix < 1 || !(b[ix - 1] > 0)) break; if ((a[ix] >= b[ix]) !== (a[ix - 1] >= b[ix - 1])) { ds = j; break; } }
@@ -253,7 +259,7 @@
     }
     var cr = crossOf(E[10], E[20], 60), gap = (e.e10 - e.e20) / e.e20 * 100, gap2 = (E[10][n - 3] - E[20][n - 3]) / E[20][n - 3] * 100;
     var conv = Math.abs(gap) < Math.abs(gap2);
-    var gd = crossOf(E[50], E[200], 480);
+    var gd = e.e200 > 0 ? crossOf(E[50], E[200], 480) : { state: 'NONE', daysSince: -1 };
     var stackLab = e.e10 > e.e20 && e.e20 > e.e50 && e.e50 > e.e100 && e.e100 > e.e200 ? 'BULLISH' : e.e10 < e.e20 && e.e20 < e.e50 && e.e50 < e.e100 && e.e100 < e.e200 ? 'BEARISH' : 'MIXED';
     // RSI (Wilder) and ATR
     function rsi(per) {
@@ -264,9 +270,9 @@
       return dn === 0 ? 100 : 100 - 100 / (1 + up / dn);
     }
     var atr = 0, j2; for (j2 = 1; j2 < n; j2++) { var tr = Math.max(h[j2] - l[j2], Math.abs(h[j2] - c[j2 - 1]), Math.abs(l[j2] - c[j2 - 1])); atr = j2 < 15 ? atr + tr / 14 : (atr * 13 + tr) / 14; }
-    function ret(b) { return r2((ltp / c[n - 1 - b] - 1) * 100); }
+    function ret(b) { return n > b ? r2((ltp / c[n - 1 - b] - 1) * 100) : 0; }
     var rets = { d5: ret(5), d21: ret(21), d63: ret(63), d126: ret(126), d250: ret(250) };
-    var vsN = { d21: r2(rets.d21 - NIFTY_RET.d21), d63: r2(rets.d63 - NIFTY_RET.d63), d126: r2(rets.d126 - NIFTY_RET.d126) };
+    var vsN = { d21: n > 21 ? r2(rets.d21 - NIFTY_RET.d21) : 0, d63: n > 63 ? r2(rets.d63 - NIFTY_RET.d63) : 0, d126: n > 126 ? r2(rets.d126 - NIFTY_RET.d126) : 0 };
     var hi52 = Math.max.apply(null, h.slice(-250)), lo52 = Math.min.apply(null, l.slice(-250)), hi20 = Math.max.apply(null, h.slice(-20)), lo20 = Math.min.apply(null, l.slice(-20));
     var avgV = Math.round(v.slice(-21, -1).reduce(function (a, b) { return a + b; }, 0) / 20), volu = v[n - 1];
     var turnCr = r2(volu * ltp / 1e7), liquid = turnCr >= 25;
@@ -279,16 +285,17 @@
     var pctTxt = function (x) { return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1) + '%'; };
     var rup = function (x) { return '₹' + Math.round(x).toLocaleString('en-IN'); };
     var checks = [
-      { label: 'Above the 200 EMA', ok: ltp > e.e200, text: rup(ltp) + ' vs ' + rup(e.e200) + ' (' + pctTxt(dist.e200) + ')' },
+      { label: 'Above the 200 EMA', ok: ltp > e.e200, skip: !(e.e200 > 0), text: rup(ltp) + ' vs ' + rup(e.e200) + ' (' + pctTxt(dist.e200) + ')' },
       { label: 'Above the 50 EMA', ok: ltp > e.e50, text: rup(ltp) + ' vs ' + rup(e.e50) + ' (' + pctTxt(dist.e50) + ')' },
       { label: '10 EMA above the 20 EMA', ok: cr.state === 'ABOVE', text: 'Gap ' + pctTxt(gap) },
-      { label: '50 EMA above the 200 EMA', ok: gd.state === 'ABOVE', text: rup(e.e50) + ' vs ' + rup(e.e200) },
+      { label: '50 EMA above the 200 EMA', skip: !(e.e200 > 0), ok: gd.state === 'ABOVE', text: rup(e.e50) + ' vs ' + rup(e.e200) },
       { label: 'Not overheated (RSI below 70)', ok: rsi14 < 70, text: 'RSI (14) is ' + Math.round(rsi14) },
       { label: 'Within 10% of the 52-week high', ok: ltp / hi52 - 1 > -0.1, text: pctTxt((ltp / hi52 - 1) * 100) + ' from ' + rup(hi52) },
       { label: 'Volume at or above its 20-day average', ok: volu >= avgV, text: (volu / avgV).toFixed(2) + '× the average' },
       { label: 'Liquid enough', ok: liquid, text: '₹' + turnCr.toFixed(1) + ' crore traded today (screen needs ₹25 crore+)' },
       { label: 'Positive 3-month return', ok: rets.d63 > 0, text: pctTxt(rets.d63) + ' over 63 trading days' }
     ];
+    checks = checks.filter(function (x) { return !x.skip; });
     var xmatch = cr.state === 'ABOVE' && cr.daysSince === 0 && e.e10 > e.e50 && e.e10 > e.e100 && e.e10 > e.e200 && liquid;
     var xtxt = xmatch ? 'Crossed today with the 10 EMA above the 50, 100 and 200 EMA' :
       cr.state === 'BELOW' ? 'The 10 EMA is below the 20 EMA, so there is no upward cross' :
@@ -321,6 +328,17 @@
       summary: nm + ' last traded at ' + rup(ltp) + ', ' + pctTxt(dist.e200) + ' from its 200 EMA. ' + (stackLab === 'BULLISH' ? 'The averages are stacked in order, which is how a steady uptrend looks on the chart. ' : stackLab === 'BEARISH' ? 'The averages are stacked against the price, which is how a steady downtrend looks. ' : 'The averages are tangled, so there is no clean trend. ') +
         'RSI (14) is ' + Math.round(rsi14) + '. The picture would change on a close below the ' + rup(lo20) + ' support or above the ' + rup(resist) + ' resistance.' + (liquid ? '' : ' Trading is thin here, so prices can jump between trades.')
     };
+    function dayOf(t) { var q = new Date(t + IST); return q.getUTCFullYear() * 10000 + (q.getUTCMonth() + 1) * 100 + q.getUTCDate(); }
+    if (n < 253) {
+      var hiI = 0, loI = 0, peak = c[0], mdd = 0, tv = 0;
+      for (j2 = 0; j2 < n; j2++) {
+        if (h[j2] > h[hiI]) hiI = j2; if (l[j2] < l[loI]) loI = j2;
+        peak = Math.max(peak, c[j2]); mdd = Math.min(mdd, (c[j2] / peak - 1) * 100); tv += v[j2] * c[j2] / 1e7;
+      }
+      info.listing = { isNew: true, listedDay: dayOf(d[0]), daysListed: Math.round((Date.now() - d[0]) / 86400000), bars: n, listPrice: o[0], ltp: ltp, sinceListingPct: r2((ltp / o[0] - 1) * 100),
+        highSince: h[hiI], highDay: dayOf(d[hiI]), lowSince: l[loI], lowDay: dayOf(d[loI]), rangePos: r2((ltp - l[loI]) / (h[hiI] - l[loI])), maxDdPct: r2(mdd), avgValueCr: r2(tv / n), barsToRated: 253 - n,
+        baseRate: 'Stocks listed 2022–25 lagged the average liquid stock by about 4% per 60 trading days in their first year (183 stocks). Not a forecast for this one.' };
+    } else info.listing = null;
     return (models[sym] = { c: c, o: o, h: h, l: l, v: v, d: d, E: E, info: info, crossText: crossText, strength: strength });
   }
 
@@ -345,6 +363,8 @@
   function pTxt(x) { return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1) + '%'; }
   function callOf(sym, force) {
     var m = model(sym), i = m.info, ltp = i.ltp, e = i.ema, atr = i.atr, h = hash(sym), lab;
+    if (i.listing) return { label: 'NA', proven: false, evidence: '', band: '', points: [], exitRule: '', score: 0, headline: 'Too new to rate: only ' + i.bars + ' trading days of history', reasons: [], entryLow: 0, entryHigh: 0, stop: 0, t1: 0, t2: 0, stopPct: 0, t1Pct: 0, t2Pct: 0, rr: 0, horizonDays: 60,
+      qty: 0, investRs: 0, riskRs: 0, hist: { n: 0 }, waitFor: 'About ' + i.listing.barsToRated + ' more trading days of history; the score needs 253', caveat: 'New listings are not rated. The facts below are measured, not a forecast.' };
     if (force) lab = force.toUpperCase();
     else if (FORCE[sym]) lab = FORCE[sym];
     else if (!i.liquid || ltp < e.e200 || i.stack.label === 'BEARISH') lab = 'AVOID';
@@ -383,6 +403,78 @@
     c.band = c.score >= 85 ? '85-100' : c.score >= 70 ? '70-84' : c.score >= 55 ? '55-69' : c.score >= 40 ? '40-54' : '0-39';
     c.points = ptsOf(c.score, h);
     return c;
+  }
+
+  /* ---------- SPEC5: analyst panel ---------- */
+  function strOf(x, a, b, c) { x = Math.abs(x); return x >= c ? 3 : x >= b ? 2 : x >= a ? 1 : 0; }
+  function panelOf(sym, call) {
+    var m = model(sym), i = m.info, e = i.ema, ltp = i.ltp, st = (typeof state === 'object' && state && state.settings) || defaultSettings(), L = i.listing, out = [];
+    var pct = function (x) { return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1) + '%'; }, rup = function (x) { return '₹' + Math.round(x).toLocaleString('en-IN'); };
+    var add = function (id, name, stance, strength, evidence, text, short, metrics) { out.push({ id: id, name: name, stance: stance, strength: strength, evidence: evidence, text: text, short: short, answers: '', rebuttal: '', metrics: metrics }); };
+    var NE = function (id, name, ev, why) { add(id, name, 'NEUTRAL', 0, ev, why, 'not enough history to judge', []); };
+    var tr, mo, rk, lq, tm, mk;
+    if (e.e200 > 0) {
+      var d200 = i.emaDist.e200, up = ltp > e.e50 && e.e50 > e.e200;
+      add('trend', 'Trend', up ? 'FOR' : ltp < e.e200 ? 'AGAINST' : 'NEUTRAL', up ? strOf(d200, 2, 6, 12) : ltp < e.e200 ? strOf(d200, 2, 6, 12) : 0, 'tested, weak',
+        'Price ' + Math.abs(d200).toFixed(1) + '% ' + (d200 >= 0 ? 'above' : 'below') + ' the 200-day average; 50-day ' + (e.e50 > e.e200 ? 'above' : 'below') + ' 200-day', 'price is ' + pct(d200) + ' from the 200-day', [{ label: 'vs 200-day', value: pct(d200) }, { label: '50-day', value: rup(e.e50) }, { label: '200-day', value: rup(e.e200) }]);
+    } else NE('trend', 'Trend', 'tested, weak', 'Needs 200 trading days of history; this stock has ' + i.bars);
+    if (i.bars > 250) {
+      var mom = (i.ret.d126 + i.ret.d250) / 2;
+      add('momentum', 'Momentum', mom >= 12 ? 'FOR' : mom <= -4 ? 'AGAINST' : 'NEUTRAL', mom >= 12 ? strOf(mom, 12, 25, 45) : mom <= -4 ? strOf(mom, 4, 12, 25) : 0, '= the score', '6-month return ' + pct(i.ret.d126) + ', 12-month return ' + pct(i.ret.d250), '6- and 12-month returns are ' + pct(i.ret.d126) + ' and ' + pct(i.ret.d250), [{ label: '6-month', value: pct(i.ret.d126) }, { label: '12-month', value: pct(i.ret.d250) }]);
+    } else NE('momentum', 'Momentum', '= the score', 'Needs 12 months of history to rank the 6-1 and 12-1 month returns');
+    var stopPct = 5 * i.atrPct, atRisk = Math.round(st.capital * st.riskPct / 100);
+    rk = i.atrPct < 1.5 ? 'FOR' : i.atrPct > 2.4 ? 'AGAINST' : 'NEUTRAL';
+    add('risk', 'Risk', rk, rk === 'FOR' ? strOf(1.9 - i.atrPct, 0.1, 0.3, 0.6) : rk === 'AGAINST' ? strOf(i.atrPct - 2.4, 0.1, 0.5, 1.2) : 0, 'no edge (describes risk)',
+      'Daily range is ' + i.atrPct.toFixed(1) + '% of price. The 5-ATR stop sits ' + stopPct.toFixed(1) + '% (' + rup(5 * i.atr) + ') below the buy price; about ' + rup(atRisk) + ' at risk on your size', 'a 5-ATR stop is ' + stopPct.toFixed(1) + '% away', [{ label: 'ATR %', value: i.atrPct.toFixed(1) + '%' }, { label: 'Stop distance', value: stopPct.toFixed(1) + '%' }, { label: 'At risk', value: rup(atRisk) }]);
+    lq = i.turnoverCr >= 100 ? 'FOR' : i.turnoverCr < 25 ? 'AGAINST' : 'NEUTRAL';
+    add('liquidity', 'Liquidity', lq, lq === 'FOR' ? (i.turnoverCr >= 300 ? 3 : i.turnoverCr >= 200 ? 2 : 1) : lq === 'AGAINST' ? (i.turnoverCr < 5 ? 3 : i.turnoverCr < 12 ? 2 : 1) : 0, 'for execution only',
+      'Trades about ₹' + i.turnoverCr.toFixed(1) + ' crore a day (' + (lq === 'FOR' ? 'easy to enter and exit' : lq === 'AGAINST' ? 'thin: expect slippage on the way out' : 'enough for a small position') + ')', 'it trades only ₹' + i.turnoverCr.toFixed(0) + ' crore a day', [{ label: 'Turnover', value: '₹' + i.turnoverCr.toFixed(1) + ' cr/day' }]);
+    if (e.e50 > 0 && i.atr > 0) {
+      var ext = (ltp - e.e50) / i.atr;
+      tm = ext >= 0 && ext <= 2 ? 'FOR' : ext > 3.5 ? 'AGAINST' : 'NEUTRAL';
+      add('timing', 'Timing', tm, tm === 'FOR' ? (ext < 1 ? 3 : 2) : tm === 'AGAINST' ? strOf(ext - 3.5, 0.1, 1, 2) : 0, 'no edge', 'Price is ' + ext.toFixed(1) + ' ATRs ' + (ext >= 0 ? 'above' : 'below') + ' the 50-day average (' + (tm === 'FOR' ? 'not stretched' : tm === 'AGAINST' ? 'stretched' : 'in between') + '); RSI(2) is ' + Math.round(i.rsi2), 'price is ' + ext.toFixed(1) + ' ATRs above the 50-day', [{ label: 'vs 50-day', value: ext.toFixed(1) + ' ATR' }, { label: 'RSI (2)', value: String(Math.round(i.rsi2)) }]);
+    } else NE('timing', 'Timing', 'no edge', 'Needs 50 trading days of history');
+    add('market', 'Market', 'FOR', 1, 'no edge — weak markets were followed by rebounds', 'Nifty is above its 200-day average and 58% of rated stocks are above their 50-day', 'the market backdrop is supportive', [{ label: 'Nifty vs 200-day', value: '+4.1%' }, { label: 'Breadth', value: '58%' }]);
+    if (L) add('newlisting', 'New listing', 'AGAINST', 1, 'base rate only', 'Listed ' + L.daysListed + ' days ago with ' + i.bars + ' trading days of data. ' + L.baseRate, 'new listings have lagged by about 4% per 60 days', [{ label: 'Bars', value: String(i.bars) }, { label: 'Since listing', value: pct(L.sinceListingPct) }]);
+    // exchange: the strongest FOR and the strongest AGAINST answer each other
+    var best = function (sd) { var b = null; out.forEach(function (x) { if (x.stance === sd && (!b || x.strength > b.strength)) b = x; }); return b; };
+    var f = best('FOR'), a = best('AGAINST');
+    if (f && a) {
+      f.answers = a.id; f.rebuttal = 'Fair point that ' + a.short + '. It does not cancel that ' + f.short + ', and the tested score already weighs both.';
+      a.answers = f.id; a.rebuttal = 'Agreed that ' + f.short + ', but ' + a.short + ', so the risk is not zero.';
+    }
+    var tally = { 'for': 0, against: 0, neutral: 0 };
+    out.forEach(function (x) { tally[x.stance === 'FOR' ? 'for' : x.stance === 'AGAINST' ? 'against' : 'neutral']++; });
+    var lab = call.label, rup2 = rup;
+    var pros = out.filter(function (x) { return x.stance === 'FOR'; }).map(function (x) { return x.short.charAt(0).toUpperCase() + x.short.slice(1); }).slice(0, 4);
+    var cons = out.filter(function (x) { return x.stance === 'AGAINST'; }).map(function (x) { return x.short.charAt(0).toUpperCase() + x.short.slice(1); }).slice(0, 4);
+    var flipUp = '', flipDown = '';
+    if (lab === 'BUY') { flipUp = 'Nothing to upgrade: the score is already in the 85–100 band.'; flipDown = 'The score falls below 85, or a close under the 50-day average (' + rup2(e.e50) + ') or the 200-day (' + rup2(e.e200) + ').'; }
+    else if (lab === 'WAIT') { flipUp = 'The score reaches 85 with price above the 50-day average (' + rup2(e.e50) + ') and inside its entry zone.'; flipDown = 'The score falls below 55, or a close under the 200-day average (' + rup2(e.e200) + ').'; }
+    else if (lab === 'AVOID') { flipUp = 'A close above the 200-day average (' + rup2(e.e200) + ') and a score back above 55.'; flipDown = ''; }
+    else { flipUp = 'A rating becomes possible after about ' + (L ? L.barsToRated : 0) + ' more trading days of history.'; flipDown = ''; }
+    return { tally: tally, managers: out.map(function (x) { delete x.short; return x; }),
+      chair: { label: lab, proven: !!call.proven, text: lab === 'NA' ? 'This stock is too new to rate. The panel only lists the facts; the call stays NOT RATED until it has 253 trading days.' : 'The call comes from the tested score, not from the vote: ' + tally['for'] + ' for, ' + tally.against + ' against, ' + tally.neutral + ' neutral. The managers explain what sits behind it.',
+        pros: pros, cons: cons, flipUp: flipUp, flipDown: flipDown }, asOfDay: i.barDay };
+  }
+  /* ---------- SPEC5: stock list meta, new listings ---------- */
+  var listFresh = qs.list !== 'stale';
+  function listedOf(sym) {
+    if (NEWS[sym] || (qs.listing === 'new' && barsFor(sym) < 253)) return model(sym).info.listing.listedDay;
+    return (2005 + hash(sym) % 18) * 10000 + (1 + hash(sym) % 12) * 100 + 1 + hash(sym) % 27; // an old date; not "new"
+  }
+  function listMeta() {
+    var at = new Date(T0 + 19800000); at.setUTCHours(2, 42, 0, 0);           // 08:12 IST today
+    var upd = at.getTime() > T0 ? at.getTime() - DAY : at.getTime();
+    if (scenario === 'broken') return { count: 'lots', updatedAt: 'NaN', source: null, stale: 'yes', newCount: '<b>x</b>' };
+    return listFresh ? { count: 3218, updatedAt: upd, source: 'nse', stale: false, newCount: Object.keys(NEWS).length } : { count: 3187, updatedAt: T0 - 4 * DAY - 3 * HR, source: 'saved', stale: true, newCount: 3 };
+  }
+  function newListingsList() {
+    var arr = UNI.filter(function (u) { return model(u[0]).info.listing; }).map(function (u) {
+      return { sym: u[0], name: u[1], listedDay: listedOf(u[0]), board: (NEWS[u[0]] || {}).board || 'EQ', tracked: u[3] === 1 };
+    });
+    arr.sort(function (a, b) { return b.listedDay - a.listedDay; });
+    return arr.slice(0, 100);
   }
   function ideasList() {
     var out = [];
@@ -436,7 +528,10 @@
       if (rank < 99) out.push({ r: rank, i: idx, u: u });
     });
     out.sort(function (a, b) { return a.r - b.r || a.i - b.i; });
-    return out.slice(0, 25).map(function (x) { return { sym: x.u[0], name: x.u[1], tracked: x.u[3] === 1 }; });
+    return out.slice(0, 25).map(function (x) {
+      var ld = listedOf(x.u[0]), cut = new Date(T0 + 19800000 - 365 * DAY), cutDay = cut.getUTCFullYear() * 10000 + (cut.getUTCMonth() + 1) * 100 + cut.getUTCDate();
+      return { sym: x.u[0], name: x.u[1], tracked: x.u[3] === 1, listedDay: ld, isNew: ld >= cutDay, board: (NEWS[x.u[0]] || {}).board || 'EQ' };
+    });
   }
 
   function baseState() {
@@ -727,14 +822,19 @@
     clearFeed: function () { state.feed = []; finish('clearFeed', { ok: true }); },
     search: function (a) {
       var q = String(a.q == null ? '' : a.q);
-      setTimeout(function () { finish('search', { ok: true, q: q, results: doSearch(q) }, 0); }, 70);
+      setTimeout(function () { finish('search', { ok: true, q: q, results: doSearch(q), list: listMeta() }, 0); }, 70);
     },
+    newListings: function (a) { setTimeout(function () { finish('newListings', { ok: true, results: newListingsList() }, 0); }, 120); },
+    refreshSymbols: function () { setTimeout(function () { listFresh = true; finish('refreshSymbols', { ok: true, list: listMeta() }, 0); }, 900); },
     stockInfo: function (a) {
       var sym = String(a.sym || '').toUpperCase();
       if (/^ZZ/.test(sym) || !/^[A-Z0-9&\-]{1,20}$/.test(sym)) return finish('stockInfo', { ok: false, sym: sym, error: 'No price data found for ' + sym + '. Check the symbol.' }, 500);
       var res = JSON.parse(JSON.stringify(model(sym).info));
       res.asOf = Date.now(); res.live = scenario !== 'closed';
       res.call = callOf(sym, /^(buy|wait|avoid)$/.test(qs.call || '') ? qs.call : '');
+      res.panel = scenario === 'broken' ? { tally: 'x', managers: [null, 5, { id: '<b>trend</b>', name: '<script>alert(1)</script>', stance: 'MAYBE', strength: 'NaN', evidence: 42, text: null, answers: 'ghost', rebuttal: { a: 1 }, metrics: 'none' },
+        { id: 'risk', name: 'R'.repeat(300), stance: 'FOR', strength: 99, evidence: 'x', text: 'y'.repeat(500), metrics: [{ label: 'a' }, null, { label: 'b', value: 'NaN' }] }], chair: { label: 'MAYBE', proven: 'yes', text: ['no'], pros: 'p', cons: [null, 4], flipUp: {}, flipDown: 9 }, asOfDay: 'x' } : panelOf(sym, res.call);
+      if (scenario === 'broken' && res.listing) res.listing = { isNew: 'yes', listedDay: 'x', daysListed: -4, bars: 'many', listPrice: 0, ltp: 'NaN', sinceListingPct: null, highSince: 0, highDay: 0, lowSince: 'z', lowDay: null, rangePos: 'mid', maxDdPct: 'big', avgValueCr: 0, barsToRated: 'NaN', baseRate: 123 };
       var mt = (state.targets || []).filter(function (x) { return x && x.sym === sym; })[0];
       res.myTarget = mt ? { target: mt.target, stop: mt.stop, note: mt.note, status: mt.status } : { target: 0, stop: 0, note: '', status: '' };
       res.isHolding = (state.holdings || []).some(function (h) { return h && h.sym === sym; });

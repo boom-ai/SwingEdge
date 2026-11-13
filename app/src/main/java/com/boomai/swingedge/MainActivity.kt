@@ -214,7 +214,7 @@ class MainActivity : Activity() {
     private fun runAction(name: String, argsJson: String) {
         try {
             // look-ups must not queue behind a scan/backtest or behind each other's network waits
-            val exec = if (name == "search") searchExec else if (name == "stockInfo" || name == "getChart") readExec else actionExec
+            val exec = if (name == "search") searchExec else if (name == "stockInfo" || name == "getChart" || name == "refreshSymbols" || name == "newListings") readExec else actionExec
             exec.execute {
                 val result = try {
                     App.from(this).swing.action(name, argsJson)

@@ -14,7 +14,10 @@ class SymbolIndex private constructor(
     private val nameWords: Array<Array<Array<String>>>,
     private val nameKey: Array<Array<String>>,
     /** fewest words among the name variants (a closer name match ranks first within a tier) */
-    private val nameLen: IntArray
+    private val nameLen: IntArray,
+    /** IST epoch day of listing (0 unknown) and board ("EQ" | "SME") from the stock list */
+    private val listed: IntArray = IntArray(syms.size),
+    private val board: Array<String> = Array(syms.size) { StockList.EQ }
 ) {
     val size: Int get() = syms.size
 
@@ -23,10 +26,35 @@ class SymbolIndex private constructor(
         return names[k]
     }
 
+    /** Listing day (IST epoch day) from the stock list, 0 when unknown. */
+    fun listedOf(sym: String): Int { val k = bySym[sym] ?: return 0; return listed[k] }
+    fun boardOf(sym: String): String { val k = bySym[sym] ?: return StockList.EQ; return board[k] }
+    fun trackedOf(sym: String): Boolean { val k = bySym[sym] ?: return false; return tracked[k] }
+
+    /** Symbols listed within the last [days] days of [today] (newest first, ties by symbol), at most [max]. */
+    fun newListings(today: Int, days: Int, max: Int = 100): List<Map<String, Any?>> {
+        try {
+            val idx = ArrayList<Int>()
+            for (k in syms.indices) { val l = listed[k]; if (l > 0 && today - l in 0..days) idx.add(k) }
+            idx.sortWith(Comparator { a, b -> if (listed[a] != listed[b]) listed[b] - listed[a] else syms[a].compareTo(syms[b]) })
+            val out = ArrayList<Map<String, Any?>>()
+            for (k in idx) {
+                if (out.size >= max) break
+                out.add(linkedMapOf("sym" to syms[k], "name" to names[k], "listedDay" to StockPage.yyyymmdd(listed[k]), "board" to board[k], "tracked" to tracked[k]))
+            }
+            return out
+        } catch (t: Throwable) {
+            return emptyList()
+        }
+    }
+
+    /** Rows listed within the last [NEW_DAYS] days of [today]. */
+    fun newCount(today: Int): Int { var n = 0; for (l in listed) if (l > 0 && today - l in 0..NEW_DAYS) n++; return n }
+
     private val bySym = HashMap<String, Int>(syms.size * 2).also { m -> for ((k, s) in syms.withIndex()) m[s] = k }
 
     /** Up to [max] matches, best first: exact symbol, symbol prefix, name word-prefix, symbol contains, name contains. */
-    fun find(qRaw: String, max: Int = MAX_RESULTS): List<Map<String, Any?>> {
+    fun find(qRaw: String, max: Int = MAX_RESULTS, today: Int = 0): List<Map<String, Any?>> {
         try {
             val q = if (qRaw.length > MAX_QUERY) qRaw.substring(0, MAX_QUERY) else qRaw
             val qSym = compact(q)
@@ -62,7 +90,9 @@ class SymbolIndex private constructor(
             val out = ArrayList<Map<String, Any?>>(minOf(max, idx.size))
             for (k in idx) {
                 if (out.size >= max) break
-                out.add(linkedMapOf("sym" to syms[k], "name" to names[k], "tracked" to tracked[k]))
+                val l = listed[k]
+                out.add(linkedMapOf("sym" to syms[k], "name" to names[k], "tracked" to tracked[k],
+                    "listedDay" to (if (l > 0) StockPage.yyyymmdd(l) else 0), "isNew" to (l > 0 && today > 0 && today - l in 0..NEW_DAYS), "board" to board[k]))
             }
             return out
         } catch (t: Throwable) {
@@ -86,7 +116,8 @@ class SymbolIndex private constructor(
     companion object {
         const val MAX_RESULTS = 25
         const val MAX_QUERY = 80
-        private val SYM_RE = Regex("^[A-Z0-9&][A-Z0-9&\\-]*$")
+        /** "isNew": listed within this many days */
+        const val NEW_DAYS = 365
         private val STOP = setOf("ltd", "limited")
 
         /** Lower-case ASCII letters and digits only. */
@@ -123,11 +154,17 @@ class SymbolIndex private constructor(
          * @param universe scanned symbols with their names (in list order)
          * @param extraNames more "SYMBOL,Name" pairs (aliases.csv); a symbol may appear several times
          */
-        fun build(symbolsCsv: String?, universe: List<String>, universeNames: Map<String, String>, extraNames: String?): SymbolIndex {
+        fun build(symbolsCsv: String?, universe: List<String>, universeNames: Map<String, String>, extraNames: String?): SymbolIndex =
+            build(try { StockList.parse(symbolsCsv).rows } catch (t: Throwable) { emptyList() }, universe, universeNames, extraNames)
+
+        /** Same, from already-parsed stock list rows (the live list). */
+        fun build(rows: List<ListRow>, universe: List<String>, universeNames: Map<String, String>, extraNames: String?): SymbolIndex {
             val order = ArrayList<String>()
             val primary = HashMap<String, String>()
             val primaryRank = HashMap<String, Int>()
             val variants = HashMap<String, LinkedHashSet<String>>()
+            val listedBy = HashMap<String, Int>()
+            val boardBy = HashMap<String, String>()
             /** rank: 0 symbols.csv, 1 universe.csv, 2 aliases.csv. A real company name beats one that repeats the symbol. */
             fun addName(sym: String, nameRaw: String, rank: Int) {
                 val name = nameRaw.replace("\uFEFF", "").trim().trim('"').trim()
@@ -138,18 +175,12 @@ class SymbolIndex private constructor(
                 val cur = primaryRank[sym]
                 if (cur == null || r < cur) { primary[sym] = name; primaryRank[sym] = r }
             }
-            fun cleanSym(raw: String): String? {
-                val s = raw.replace("﻿", "").trim().trim('"').trim().uppercase()
-                if (s.isEmpty() || s == "SYMBOL" || s.length > 25 || !SYM_RE.matches(s)) return null
-                return s
-            }
+            fun cleanSym(raw: String): String? = StockList.cleanSym(raw)
             try {
-                if (symbolsCsv != null) for (raw in symbolsCsv.split('\n')) {
-                    val line = raw.trim()
-                    if (line.isEmpty() || line.startsWith("#")) continue
-                    val k = line.indexOf(',')
-                    val sym = cleanSym(if (k < 0) line else line.substring(0, k)) ?: continue
-                    addName(sym, if (k < 0) "" else line.substring(k + 1), 0)
+                for (row in rows) {
+                    val sym = cleanSym(row.sym) ?: continue
+                    addName(sym, row.name, 0)
+                    if (!listedBy.containsKey(sym)) { listedBy[sym] = row.listed; boardBy[sym] = row.board }
                 }
             } catch (t: Throwable) {}
             try {
@@ -173,7 +204,9 @@ class SymbolIndex private constructor(
             val nameWords = Array(n) { k -> (variants[order[k]] ?: LinkedHashSet()).map { words(it) }.toTypedArray() }
             val nameKey = Array(n) { k -> nameWords[k].map { it.joinToString("") }.toTypedArray() }
             val nameLen = IntArray(n) { k -> nameWords[k].minOfOrNull { it.size } ?: 99 }
-            return SymbolIndex(syms, names, tracked, symKey, nameWords, nameKey, nameLen)
+            val listed = IntArray(n) { listedBy[order[it]] ?: 0 }
+            val board = Array(n) { if (boardBy[order[it]] == StockList.SME) StockList.SME else StockList.EQ }
+            return SymbolIndex(syms, names, tracked, symKey, nameWords, nameKey, nameLen, listed, board)
         }
     }
 }

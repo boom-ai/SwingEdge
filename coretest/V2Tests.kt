@@ -48,11 +48,24 @@ object V2Tests {
        "stopPct":0,"t1Pct":0,"t2Pct":0,"rr":0,"horizonDays":60,"qty":0,"investRs":0,"riskRs":0,
        "hist":{"n":0,"winPct":0,"avgPct":0,"medianPct":0,"worstPct":0,"horizonDays":60,"text":""},
        "waitFor":"","caveat":"","proven":false,"evidence":"","band":"","points":[{"label":"","pts":0,"max":20}],"exitRule":""},
-     "myTarget":{"target":0,"stop":0,"note":"","status":""}}""").asObj()
+     "myTarget":{"target":0,"stop":0,"note":"","status":""},
+     "panel":{"tally":{"for":0,"against":0,"neutral":0},
+       "managers":[{"id":"trend","name":"","stance":"FOR","strength":0,"evidence":"","text":"","answers":"","rebuttal":"","metrics":[{"label":"","value":""}]}],
+       "chair":{"label":"BUY","proven":false,"text":"","pros":[""],"cons":[""],"flipUp":"","flipDown":""},"asOfDay":0},
+     "listing":null}""").asObj()
+    /** SPEC5 §3 listing object (when not null). */
+    val LISTING: Map<String, Any?> = Json.parse("""{"isNew":true,"listedDay":0,"daysListed":0,"bars":0,"listPrice":0,"ltp":0,
+     "sinceListingPct":0,"highSince":0,"highDay":0,"lowSince":0,"lowDay":0,"rangePos":0,"maxDdPct":0,"avgValueCr":0,"barsToRated":0,"baseRate":""}""").asObj()
+    val MANAGER_IDS = listOf("trend", "momentum", "risk", "liquidity", "timing", "market", "newlisting")
+    val EVIDENCE = mapOf("trend" to "tested, weak", "momentum" to "= the score", "risk" to "no edge (describes risk)", "liquidity" to "for execution only",
+        "timing" to "no edge", "market" to "no edge — weak markets were followed by rebounds", "newlisting" to "base rate only")
+    const val BASE_RATE = "Stocks listed 2022–25 lagged the average liquid stock by about 4% per 60 trading days in their first year (183 stocks). Not a forecast for this one."
     private val ENUMS = mapOf("stack.label" to setOf("BULLISH", "MIXED", "BEARISH"), "cross.state" to setOf("ABOVE", "BELOW"),
         "golden.state" to setOf("ABOVE", "BELOW"), "verdict.label" to setOf("HOLD", "WATCH", "TRIM", "SELL"),
         "call.label" to setOf("BUY", "WAIT", "AVOID", "NA"), "call.band" to setOf("", "0-39", "40-54", "55-69", "70-84", "85-100"),
-        "myTarget.status" to setOf("", "ACTIVE", "HIT_TARGET", "HIT_STOP"))
+        "myTarget.status" to setOf("", "ACTIVE", "HIT_TARGET", "HIT_STOP"),
+        "panel.managers.id" to MANAGER_IDS.toSet(), "panel.managers.stance" to setOf("FOR", "AGAINST", "NEUTRAL"),
+        "panel.managers.answers" to (MANAGER_IDS + "").toSet(), "panel.chair.label" to setOf("BUY", "WAIT", "AVOID", "NA"))
 
     private fun shape(path: String, tpl: Any?, v: Any?, errs: ArrayList<String>) {
         when (tpl) {
@@ -74,7 +87,9 @@ object V2Tests {
         if (r["ok"] != true) return r
         val errs = ArrayList<String>()
         shape("", INFO, r, errs)
+        if (r["listing"] != null) shape("listing", LISTING, r["listing"], errs)
         T.check(errs.isEmpty(), "stockInfo schema for $sym at $where: " + errs.take(4))
+        panelChecks(r, "$sym at $where")
         T.check(r.list("checks").size in 6..9, "6-9 checks for $sym: ${r.list("checks").size}")
         val st = r.list("setups").map { it.asObj() }
         T.check(st.firstOrNull()?.str("id") == "EMA_CROSS" && st.size == 1 + Strategies.all.count { it.enabled() }, "EMA_CROSS + one setup per enabled strategy: " + st.map { it.str("id") })
@@ -86,6 +101,51 @@ object V2Tests {
         val low = Json.stringify(r).lowercase()
         for (w in BANNED) T.check(!low.contains(w), "banned word '$w' in stockInfo $sym")
         return r
+    }
+
+    /** SPEC5 panel/listing invariants that hold for every stock. */
+    fun panelChecks(r: Map<String, Any?>, where: String) {
+        val pn = r.obj("panel")
+        val ms = pn.list("managers").map { it.asObj() }
+        T.eq(ms.map { it.str("id") }, MANAGER_IDS, "every manager present, in order ($where)")
+        val call = r.obj("call")
+        T.check(pn.obj("chair").str("label") == call.str("label") && pn.obj("chair").bool("proven") == call.bool("proven"), "chair mirrors the call ($where)")
+        val tl = pn.obj("tally")
+        T.check(tl.int("for") == ms.count { it.str("stance") == "FOR" } && tl.int("against") == ms.count { it.str("stance") == "AGAINST" } &&
+            tl.int("neutral") == ms.count { it.str("stance") == "NEUTRAL" }, "tally counts the stances ($where)")
+        for (m in ms) {
+            val st = m.str("stance"); val id = m.str("id")
+            T.eq(m.str("evidence"), EVIDENCE[id], "fixed evidence tag for $id")
+            T.check(m.int("strength") in 0..3 && (st == "NEUTRAL") == (m.int("strength") == 0), "strength 0 iff NEUTRAL: $id $st ${m.int("strength")} ($where)")
+            T.check(m.str("text").isNotBlank() && !m.str("text").contains("NaN"), "$id explains itself ($where)")
+            val ans = m.str("answers")
+            if (ans.isNotEmpty()) {
+                val o = ms.first { it.str("id") == ans }
+                T.check(st != "NEUTRAL" && o.str("stance") != "NEUTRAL" && o.str("stance") != st, "$id answers an opponent ($where)")
+                T.check(ms.filter { it.str("stance") != "NEUTRAL" && it.str("stance") != st }.all { it.int("strength") <= o.int("strength") }, "$id answers the strongest opponent ($where)")
+            } else T.check(st == "NEUTRAL" || ms.none { it.str("stance") != "NEUTRAL" && it.str("stance") != st }, "$id: answers empty only without opponents ($where)")
+            if (ans.isEmpty()) T.eq(m.str("rebuttal"), "", "no rebuttal without an opponent")
+        }
+        val ch = pn.obj("chair")
+        T.check(ch.list("pros").size <= 4 && ch.list("cons").size <= 4, "max 4 pros/cons")
+        T.eq(ch.list("pros").size, minOf(4, tl.int("for")), "one pro per FOR manager ($where)")
+        T.eq(ch.list("cons").size, minOf(4, tl.int("against")), "one con per AGAINST manager ($where)")
+        T.check(ch.str("text").startsWith("The call comes from the tested score, not from the vote"), "chair text ($where)")
+        val label = call.str("label")
+        if (label == "BUY") T.check(ch.str("flipDown").contains("50-day average ₹") && ch.str("flipDown").contains("ranked "), "BUY flipDown names the 50-day level and rank: ${ch.str("flipDown")}")
+        if (label == "WAIT") T.check(ch.str("flipUp").contains("BUY") && ch.str("flipDown").contains("AVOID"), "WAIT flips both ways ($where): ${ch.str("flipUp")} / ${ch.str("flipDown")}")
+        if (label == "AVOID") T.check(ch.str("flipUp").contains("WAIT"), "AVOID flipUp to WAIT")
+        val bars = r.int("bars")
+        val nl = ms.last()
+        if (bars < SetupScore.MIN_RATED_BARS) {
+            T.check(r["listing"] is Map<*, *>, "listing present below 253 bars ($where)")
+            T.check(nl.str("stance") == "AGAINST" && nl.int("strength") == 1 && nl.str("text").contains(BASE_RATE), "newlisting AGAINST-1 with the base rate ($where)")
+            T.eq(r.obj("listing").str("baseRate"), BASE_RATE, "base-rate text exact")
+            T.eq(r.obj("listing").int("barsToRated"), SetupScore.MIN_RATED_BARS - bars, "barsToRated")
+        } else {
+            T.check(r["listing"] == null, "listing null at >= 253 bars ($where)")
+            T.check(nl.str("stance") == "NEUTRAL", "newlisting NEUTRAL for listed stocks")
+        }
     }
 
     // ------------------------------------------------------------------ search

@@ -186,6 +186,7 @@ object ScoreTexts {
     }
 
     const val HIST_NA = "No history shown: this stock is not rated."
+    const val LIST_FAILED = "Could not download the NSE stock list — keeping the current list. It will try again tomorrow."
 
     fun evidence(label: String, b: ScoreHistory.Band?): String = when (label) {
         "BUY" -> R5.BUY_EVIDENCE
@@ -240,4 +241,207 @@ object R5 {
     const val AVOID_EVIDENCE = "Score below 55 and price below the 200-day average: since 2022 such stocks lagged the average liquid stock by 1.6 points over the next " +
         "60 trading days (behind in 3 of 4 years; 2013–2025: 1.7 points, 11 of 13 years). Against the biggest stocks the lag was smaller (1.0 point). " +
         "They still rose 1.7% on average, so this means likely to lag, not likely to fall."
+}
+
+/** Every user-facing text of the SPEC5 analyst panel and new-listing card. Pure; never throws on NaN (callers check). */
+object PanelTexts {
+    const val BASE_RATE = "Stocks listed 2022–25 lagged the average liquid stock by about 4% per 60 trading days in their first year (183 stocks). Not a forecast for this one."
+    const val CANNOT = "Could not be computed for this stock."
+
+    /** absolute fallbacks when no scan ranking exists */
+    const val MOM_ABS_FOR = 0.25
+    const val MOM_ABS_AGAINST = -0.05
+    const val VOL_ABS_FOR = 0.02
+    const val VOL_ABS_AGAINST = 0.035
+    const val ATR_ABS_FOR = 2.5
+    const val ATR_ABS_AGAINST = 5.0
+    const val TO_FOR_CR = 100.0
+    const val STRETCH_MAX = 6.0
+
+    fun name(id: String): String = when (id) {
+        "trend" -> "Trend"; "momentum" -> "Momentum"; "risk" -> "Risk"; "liquidity" -> "Liquidity"
+        "timing" -> "Timing"; "market" -> "Market"; else -> "New listing"
+    }
+
+    fun evidence(id: String): String = when (id) {
+        "trend" -> "tested, weak"
+        "momentum" -> "= the score"
+        "risk" -> "no edge (describes risk)"
+        "liquidity" -> "for execution only"
+        "timing" -> "no edge"
+        "market" -> "no edge — weak markets were followed by rebounds"
+        else -> "base rate only"
+    }
+
+    private fun ok(vararg x: Double) = x.all { !it.isNaN() && !it.isInfinite() }
+    private fun ap(x: Double) = Fmt.p1(Math.abs(x)) + "%"              // 5.4%
+    private fun above(x: Double) = if (x >= 0) "above" else "below"
+    private fun pctOf(p: Double) = Math.round(p * 100.0).coerceIn(0, 100).toString() + "%"
+    private fun atrs(x: Double) = Fmt.p1(Math.abs(x)) + " ATR"
+    private fun scoreTxt(s: Double) = Fmt.p1(s).removeSuffix(".0")
+    private val MONTHS = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    fun dateTxt(day: Int): String = try {
+        val d = java.time.LocalDate.ofEpochDay(day.toLong())
+        d.dayOfMonth.toString() + " " + MONTHS[d.monthValue - 1] + " " + d.year
+    } catch (t: Throwable) { "" }
+    private fun needs(what: String, bars: Int, has: Int) = "Not enough history: needs " + bars + " trading days for " + what + " (has " + has + ")."
+
+    // ------------------------------------------------------------------ managers
+    fun trend(v: PanelVals): String {
+        val slope = if (v.slope200 > 0) "rising" else if (v.slope200 < 0) "falling" else "flat"
+        return "Price " + ap(v.dist200) + " " + above(v.dist200) + " the 200-day average " + Fmt.rs(v.sma200) + ", which is " + slope +
+            " (" + Fmt.pct(v.slope200) + " in 21 days); 50-day " + (if (v.sma50 > v.sma200) "above" else "below") + " 200-day"
+    }
+    fun trendNA(has: Int) = needs("a rising or falling 200-day average", 221, has)
+
+    fun momentum(v: PanelVals, ranked: Boolean): String {
+        val r = "6-month return " + Fmt.pct(v.r6 * 100.0) + (if (ok(v.r12)) " and 12-month return " + Fmt.pct(v.r12 * 100.0) else "") + " (leaving out the last month)"
+        return if (ranked) r + ", ahead of about " + pctOf(v.momP) + " of liquid stocks" + (if (ok(v.r12)) " on average" else "; no 12-month return yet")
+        else r + "; no market ranking yet, so judged on the level: for at +25% or more, against at -5% or less"
+    }
+    fun momentumNA(has: Int) = needs("a 6-month return", 127, has)
+
+    fun risk(v: PanelVals): String {
+        val swing = when {
+            ok(v.volP) -> "Swings about " + Fmt.p1(v.vol * 100.0) + "% a day, " + (if (v.volP <= 0.5) "calmer than about " + pctOf(1 - v.volP) else "wilder than about " + pctOf(v.volP)) + " of liquid stocks"
+            ok(v.vol) -> "Swings about " + Fmt.p1(v.vol * 100.0) + "% a day (no market ranking yet: calm under 2%, wild over 3.5%)"
+            else -> "Average daily range (ATR) " + Fmt.p1(v.atrPct) + "% of the price (too new for 6-month swings: calm under 2.5%, wild over 5%)"
+        }
+        val size = if (v.qty >= 1 && ok(v.riskRs)) ", " + Fmt.rs0(v.riskRs) + " at risk for your size (" + Fmt.plural(v.qty, "share") + ")"
+            else if (ok(v.budgetRs) && v.budgetRs > 0) "; at your risk setting (" + Fmt.rs0(v.budgetRs) + " a trade) not even 1 share fits" else ""
+        return swing + "; a 5-ATR stop is " + Fmt.p1(v.stopPct) + "% (" + Fmt.rs(v.stopRs) + " a share) below" + size
+    }
+    fun riskNA(has: Int) = needs("the daily range", 15, has)
+
+    fun liquidity(v: PanelVals): String = "Trades about ₹" + Fmt.p1(v.to20) + " cr a day (20-day average) — " + when {
+        v.to20 >= TO_FOR_CR -> "deep enough to buy and sell without moving the price"
+        v.to20 < SetupScore.MIN_TO20_CR -> "under ₹" + Fmt.num(SetupScore.MIN_TO20_CR) + " cr, so orders can move the price; use limit orders"
+        else -> "fine for small orders; ₹" + Fmt.num(TO_FOR_CR) + " cr or more counts as deep"
+    }
+    fun liquidityNA(has: Int) = needs("the 20-day turnover", 20, has)
+
+    fun timing(v: PanelVals, stretched: Boolean): String {
+        val base = "Price " + atrs(v.stretch) + " " + above(v.stretch) + " its 50-day average " + Fmt.rs(v.sma50)
+        return base + when {
+            stretched -> " — stretched (over " + Fmt.num(STRETCH_MAX) + " ATR" + (if (ok(v.stretchP90)) ", or past the 90th percentile of liquid stocks, " + atrs(v.stretchP90) else "") + ")"
+            v.stretch >= 0 && v.stretch <= 2 -> " — not stretched"
+            v.stretch < 0 -> " — not stretched, but not in an uptrend either"
+            else -> " — extended, not yet stretched"
+        }
+    }
+    fun timingNA(has: Int) = needs("the 50-day average", 50, has)
+
+    fun market(v: PanelVals): String =
+        "Nifty " + ap(v.niftyDist) + " " + above(v.niftyDist) + " its 200-day average; " + pctOf(v.breadth) + " of liquid stocks above their 50-day average"
+    fun marketNA(haveNifty: Boolean) = if (!haveNifty) "No Nifty history with a 200-day average yet." else "Market breadth needs a full scan first."
+
+    fun newListing(v: PanelVals): String =
+        (if (v.listedKnown) "Listed " + dateTxt(v.listedDay) + ", " else "First traded bar " + dateTxt(v.listedDay) + ", ") + v.bars + " trading days ago" +
+            (if (ok(v.sinceListPct)) " (" + Fmt.pct(v.sinceListPct) + " from the listing-day open)" else "") + ". " + BASE_RATE
+    fun notNew(v: PanelVals): String =
+        (if (v.listedKnown) "Listed " + dateTxt(v.listedDay) + " — " else "More than a year of trading (" + v.bars + " days here) — ") + "the new-listing base rate does not apply"
+
+    fun pro(id: String, text: String) = text
+    fun con(id: String, text: String) = text
+
+    // ------------------------------------------------------------------ chair
+    fun chairText(label: String, headline: String, nFor: Int, nAgainst: Int, nNeutral: Int): String {
+        val h = headline.trim().trimEnd('.')
+        val head = if (h.isEmpty()) "The call comes from the tested score, not from the vote."
+            else "The call comes from the tested score, not from the vote: " + h.substring(0, 1).lowercase() + h.substring(1) + "."
+        return head + " The managers split " + nFor + " for, " + nAgainst + " against, " + nNeutral + " neutral; none showed a reliable edge on its own, so they explain the stock but cannot change the call."
+    }
+
+    fun flipUp(label: String, e: ScoreEntry?, naKind: String?, bars: Int, to20: Double, proven: Boolean): String {
+        val c = e?.comp
+        return when {
+            label == "BUY" -> if (proven) "Nothing higher: BUY is the top call." else "Nothing higher: BUY is the top call. It turns proven only once the live record on this phone meets the upgrade rule."
+            label == "WAIT" && e != null && c != null -> when {
+                e.score >= SetupScore.BUY_MIN && !(c.close > c.sma50) -> "A close above the 50-day average " + Fmt.rs(c.sma50) + ", with the score still 85 or more, would make it BUY."
+                e.score >= SetupScore.BUY_MIN && c.uclock -> "A day that does not close locked at the upper circuit, with the score still 85 or more, would make it BUY."
+                else -> "A score of 85 or more (now " + scoreTxt(e.score) + ", ranked " + e.rank + " of " + e.of + ")" +
+                    (if (!(c.close > c.sma50) && c.sma50 > 0) " and a close above the 50-day average " + Fmt.rs(c.sma50) else "") + " would make it BUY."
+            }
+            label == "AVOID" && e != null && c != null ->
+                (if (c.sma200 > 0) "A close above the 200-day average " + Fmt.rs(c.sma200) + ", or a" else "A") + " score of 55 or more (now " + scoreTxt(e.score) + "), would make it WAIT."
+            label == "NA" -> when (naKind) {
+                SetupScore.NA_SHORT -> "Gets a score after " + Fmt.plural(Math.max(1, SetupScore.MIN_RATED_BARS - bars), "more trading day") + " (needs " + SetupScore.MIN_RATED_BARS + "), if turnover stays at ₹" + Fmt.num(SetupScore.MIN_TO20_CR) + " cr a day or more."
+                SetupScore.NA_ILLIQUID -> "Turnover of ₹" + Fmt.num(SetupScore.MIN_TO20_CR) + " cr a day or more (now ₹" + Fmt.p1(if (ok(to20)) to20 else 0.0) + " cr) would get it a score."
+                SetupScore.NA_CHEAP -> "Needs a price of ₹" + Fmt.num(SetupScore.MIN_PRICE) + " or more, or a full year of history, to get a score."
+                SetupScore.NA_INCOMPLETE -> "Gets a score once its price history is complete."
+                else -> "Gets a score after the next full market scan."
+            }
+            else -> ""
+        }
+    }
+
+    fun flipDown(label: String, e: ScoreEntry?): String {
+        val c = e?.comp
+        return when {
+            label == "BUY" && e != null && c != null -> "A close below the 50-day average " + Fmt.rs(c.sma50) + ", or a score under 85 (now " + scoreTxt(e.score) + ", ranked " + e.rank + " of " + e.of +
+                "), would make it WAIT" + (if (c.sma200 > 0) "; AVOID needs a score under 55 and a close below the 200-day average " + Fmt.rs(c.sma200) + "." else ".")
+            label == "WAIT" && e != null && c != null -> when {
+                !(c.sma200 > 0) -> "A score under 55 (now " + scoreTxt(e.score) + ") would make it AVOID."
+                e.score < SetupScore.AVOID_BELOW -> "A close below the 200-day average " + Fmt.rs(c.sma200) + " would make it AVOID (the score, " + scoreTxt(e.score) + ", is already under 55)."
+                else -> "A score under 55 (now " + scoreTxt(e.score) + ") together with a close below the 200-day average " + Fmt.rs(c.sma200) + " would make it AVOID."
+            }
+            label == "AVOID" -> "Nothing lower: AVOID is the bottom call."
+            else -> ""
+        }
+    }
+
+    // ------------------------------------------------------------------ rebuttals: one template per sensible (manager, opponent) pair
+    fun rebuttal(me: String, stance: String, opp: String, v: PanelVals): String {
+        val f = stance == "FOR"
+        val nifty = { "the Nifty is " + ap(v.niftyDist) + " " + above(v.niftyDist) + " its 200-day average and " + pctOf(v.breadth) + " of liquid stocks are above their 50-day" }
+        return when (me) {
+            "trend" -> when (opp) {
+                "risk" -> if (f && ok(v.atrPct, v.dist200, v.slope200, v.stopPct)) "Yes, its daily range (ATR) is " + Fmt.p1(v.atrPct) + "% of the price, but price is " + ap(v.dist200) + " above a 200-day average that rose " + ap(v.slope200) + " in 21 days; the 5-ATR stop (" + Fmt.p1(v.stopPct) + "% below) is sized for those swings."
+                    else if (!f && ok(v.atrPct, v.dist200, v.slope200)) "A calm daily range (ATR " + Fmt.p1(v.atrPct) + "% of the price) does not fix the direction: price is " + ap(v.dist200) + " below a 200-day average that fell " + ap(v.slope200) + " in 21 days." else ""
+                "timing" -> if (f && ok(v.stretch, v.d50v200)) "Stretched " + atrs(v.stretch) + " above the 50-day average, but the trend underneath holds: the 50-day is " + ap(v.d50v200) + " above a rising 200-day."
+                    else if (!f && ok(v.dist200)) "Not stretched, but price is " + ap(v.dist200) + " below a falling 200-day average " + Fmt.rs(v.sma200) + "." else ""
+                "momentum" -> if (f && ok(v.momP, v.dist200)) "Its returns are ahead of only " + pctOf(v.momP) + " of liquid stocks, but price is " + ap(v.dist200) + " above a rising 200-day average."
+                    else if (!f && ok(v.momP, v.dist200, v.slope200)) "Returns are ahead of " + pctOf(v.momP) + " of liquid stocks, but price is " + ap(v.dist200) + " below a 200-day average that fell " + ap(v.slope200) + " in 21 days." else ""
+                "market" -> if (f && ok(v.niftyDist, v.breadth, v.dist200)) "The market is weak (" + nifty() + "), but this stock is " + ap(v.dist200) + " above its own rising 200-day average."
+                    else if (!f && ok(v.niftyDist, v.breadth, v.dist200)) "The market is healthy (" + nifty() + "), but this stock is " + ap(v.dist200) + " below its falling 200-day average." else ""
+                "liquidity" -> if (f && ok(v.to20, v.dist200)) "Thin trading (₹" + Fmt.p1(v.to20) + " cr a day) affects fills, not the trend: price is " + ap(v.dist200) + " above a rising 200-day average." else ""
+                "newlisting" -> if (f && ok(v.dist200)) "Only " + v.bars + " trading days since listing, but price is already " + ap(v.dist200) + " above a rising 200-day average." else ""
+                else -> ""
+            }
+            "momentum" -> when (opp) {
+                "risk" -> if (f && ok(v.vol, v.volP, v.r6, v.momP)) "It swings " + Fmt.p1(v.vol * 100.0) + "% a day, more than about " + pctOf(v.volP) + " of liquid stocks, but its 6-month return of " + Fmt.pct(v.r6 * 100.0) + " keeps it ahead of " + pctOf(v.momP) + " — and the score's risk-adjusted part already discounts those swings."
+                    else if (!f && ok(v.momP)) "Calm, but its returns are ahead of only " + pctOf(v.momP) + " of liquid stocks." else ""
+                "timing" -> if (f && ok(v.stretch, v.r6, v.momP)) "Stretched " + atrs(v.stretch) + " above the 50-day average — a stretch built by a 6-month return of " + Fmt.pct(v.r6 * 100.0) + ", ahead of " + pctOf(v.momP) + " of liquid stocks."
+                    else if (!f && ok(v.momP)) "Not stretched, but its returns are ahead of only " + pctOf(v.momP) + " of liquid stocks." else ""
+                "market" -> if (f && ok(v.niftyDist, v.breadth, v.momP)) "The market is weak (" + nifty() + "), yet this stock's returns are ahead of " + pctOf(v.momP) + " of liquid stocks."
+                    else if (!f && ok(v.momP)) "The market is healthy, but this stock's returns are ahead of only " + pctOf(v.momP) + " of liquid stocks." else ""
+                "trend" -> if (f && ok(v.dist200, v.momP)) "Price is " + ap(v.dist200) + " below a falling 200-day average, but its returns are still ahead of " + pctOf(v.momP) + " of liquid stocks."
+                    else if (!f && ok(v.momP)) "Price is above a rising 200-day average, but its returns are ahead of only " + pctOf(v.momP) + " of liquid stocks." else ""
+                "newlisting" -> if (f && ok(v.r6, v.momP)) "Only " + v.bars + " trading days of history, but its 6-month return of " + Fmt.pct(v.r6 * 100.0) + " is ahead of " + pctOf(v.momP) + " of liquid stocks." else ""
+                else -> ""
+            }
+            "risk" -> when (opp) {
+                "momentum", "trend" -> if (!f && ok(v.atrPct, v.stopPct, v.stopRs)) "The " + opp + " is real, but with a daily range (ATR) of " + Fmt.p1(v.atrPct) + "% the 5-ATR stop sits " + Fmt.p1(v.stopPct) + "% (" + Fmt.rs(v.stopRs) + " a share) below" +
+                        (if (v.qty >= 1 && ok(v.riskRs)) " — " + Fmt.rs0(v.riskRs) + " at risk at your size." else ".")
+                    else if (f && ok(v.atrPct, v.stopPct)) "The " + opp + " is weak, but the daily range is small (ATR " + Fmt.p1(v.atrPct) + "% of the price), so a 5-ATR stop is only " + Fmt.p1(v.stopPct) + "% away." else ""
+                else -> ""
+            }
+            "timing" -> when (opp) {
+                "trend", "momentum" -> if (!f && ok(v.stretch, v.sma50)) "The " + opp + " is real, but price is " + atrs(v.stretch) + " above the 50-day average " + Fmt.rs(v.sma50) +
+                        (if (ok(v.rsi2)) " (RSI(2) " + Fmt.p1(v.rsi2) + ")" else "") + (if (ok(v.stretchP90)) "; 90% of liquid stocks are within " + atrs(v.stretchP90) + "." else ".")
+                    else if (f && ok(v.stretch, v.sma50)) "Weak " + opp + ", but price is only " + atrs(v.stretch) + " from its 50-day average " + Fmt.rs(v.sma50) + " — not stretched." else ""
+                else -> ""
+            }
+            "market" -> when (opp) {
+                "trend", "momentum" -> if (ok(v.niftyDist, v.breadth)) {
+                    val what = if (opp == "trend") (if (!f) "The stock is in an uptrend" else "The stock is in a downtrend") else (if (!f) "The stock's returns are strong" else "The stock's returns are weak")
+                    if (!f) what + ", but " + nifty() + "." else what + ", but the market is healthy: " + nifty() + "."
+                } else ""
+                else -> ""
+            }
+            "liquidity" -> if (!f && ok(v.to20)) "Whatever the setup, at ₹" + Fmt.p1(v.to20) + " cr a day an order can move the price; the plan assumes a fill inside the entry zone, so use limit orders." else ""
+            "newlisting" -> if (!f) "With only " + v.bars + " trading days since listing the record is thin: stocks listed 2022–25 lagged the average liquid stock by about 4% per 60 trading days in their first year." else ""
+            else -> ""
+        }
+    }
 }

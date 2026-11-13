@@ -860,6 +860,12 @@
   var CALLS = { BUY: { cls: 'buy', rail: 'k-buy', icon: 'up' }, WAIT: { cls: 'wait', rail: 'k-trim', icon: 'clock' }, AVOID: { cls: 'avoid', rail: 'k-sell', icon: 'x' }, NA: { cls: 'na', rail: 'k-info', icon: 'info' } };
   var CAVEAT = 'Rule-based and tested on past data. Losses happen; the stop limits them, it does not remove them.';
   function pcs(v) { var n = N(v); return n === null ? '' : pc(n, true, true); }
+  /* a collapsed row on the verdict card: tap to open (state in ui.vOpen) */
+  function colRow(ui, key, label, sub, inner) {
+    var open = !!O(O(ui).vOpen)[key];
+    return '<div class="vcol' + (open ? ' open' : '') + '"><button type="button" class="vcb" data-c="vopen" data-id="' + key + '" aria-expanded="' + open + '"><b>' + esc(label) + '</b>' + (sub ? '<em>' + esc(sub) + '</em>' : '') + ic('chev') + '</button>' +
+      (open ? '<div class="vcc">' + inner + '</div>' : '') + '</div>';
+  }
   function histBlock(c, hz) {
     var h = O(c.hist), n = N(h.n), txt = T(h.text).trim();
     var hasStats = n !== null && n > 0;
@@ -916,8 +922,8 @@
     }
     if ((lab === 'WAIT' || lab === 'NA') && T(c.waitFor).trim()) h += '<div class="vwait">' + ic('clock') + '<div><b>What would make it a buy candidate</b><span>' + esc(T(c.waitFor).trim()) + '</span></div></div>';
     if (levels && T(c.exitRule).trim()) h += '<div class="vwait">' + ic('flag') + '<div><b>How the tested plan exits</b><span>' + esc(T(c.exitRule).trim()) + '</span></div></div>';
-    if (reasons.length) h += '<div class="vrh">' + (lab === 'AVOID' ? 'Why it fails' : 'Why this call') + '</div><ul class="vrs">' + reasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>';
-    h += histBlock(c, hz);
+    if (reasons.length) h += colRow(ui, 'why', lab === 'AVOID' ? 'Why it fails' : 'Why this call', reasons.length + (reasons.length === 1 ? ' reason' : ' reasons'), '<ul class="vrs">' + reasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>');
+    h += colRow(ui, 'hist', 'What happened before', hz > 0 ? 'over ' + cnt(hz) + ' trading days' : '', histBlock(c, hz));
     h += '<p class="vcav">' + ic('info') + '<span>' + esc(T(c.caveat).trim() || CAVEAT) + '</span></p>';
     if (levels) {
       h += '<div class="btns">' + btn('target-from-call', sym, 'Set these as my target', 'grow', { icon: 'target', disabled: !sym }) + '</div>' +
@@ -1063,9 +1069,9 @@
 
   /* ---------- full-screen chart chrome ---------- */
   var CF_RANGES = ['3M', '6M', '1Y', '2Y', 'All'];
-  function cfRangeChips(on) {
-    return CF_RANGES.map(function (k) {
-      return '<button type="button" class="rchip' + (k === on ? ' on' : '') + '" data-c="cf-range" data-id="' + k + '" aria-pressed="' + (k === on) + '"><span>' + k + '</span></button>';
+  function cfRangeChips(on, listing) {
+    return (listing ? ['3M', 'All'] : CF_RANGES).map(function (k) {
+      return '<button type="button" class="rchip' + (k === on ? ' on' : '') + '" data-c="cf-range" data-id="' + k + '" aria-pressed="' + (k === on) + '"><span>' + (listing && k === 'All' ? 'Since listing' : k) + '</span></button>';
     }).join('');
   }
   function cfToggles(ui) {
@@ -1104,7 +1110,7 @@
     var sym = T(data.id).trim() || T(O(ui.cf).sym).trim(), msg = cfMsg(ui);
     return '<div class="scrim"></div><section class="sheet full cfs" role="dialog" aria-modal="true" aria-label="' + esc((sym || 'Stock') + ' full-screen chart') + '">' +
       '<div class="sh cfh" id="cf-head">' + cfHead(S, ui, sym) + '</div>' +
-      '<div class="cfbar"><div class="rc" id="cf-rng" role="group" aria-label="Chart range">' + cfRangeChips(T(O(ui.cfOpts).rangeOn)) + '</div></div>' +
+      '<div class="cfbar"><div class="rc" id="cf-rng" role="group" aria-label="Chart range">' + cfRangeChips(T(O(ui.cfOpts).rangeOn), isObj(O(O(ui.stock).info).listing)) + '</div></div>' +
       '<div class="cfstage" id="cf-stage"><canvas id="cf-canvas" class="cfcv" role="img" aria-label="' + esc((sym || 'Stock') + ' price chart. Pinch to zoom, drag to pan, press and hold for a crosshair.') + '"></canvas>' +
       '<div class="cfro" id="cf-ro" hidden></div><div class="cfmsg" id="cf-msg"' + (msg ? '' : ' hidden') + '>' + msg + '</div></div>' +
       '<div class="cftog" id="cf-tog">' + cfToggles(ui) + '</div>' +
@@ -1381,8 +1387,11 @@
     var st = O(ui.stock), info = O(st.info), on = emaOn(ui), res = isObj(st.chart) ? st.chart : null;
     var want = N(st.want) || 130, loading = N(st.inflight) > 0;
     if (!res && T(st.err).trim() && !isObj(st.info)) return '';
-    var chips = '<div class="rng"><span class="rl">Price</span><span class="rc" role="group" aria-label="Chart range">' + RANGES.map(function (r) {
-      return '<button type="button" class="rchip' + (want === r[0] ? ' on' : '') + '" data-c="range" data-id="' + r[0] + '" aria-pressed="' + (want === r[0]) + '"><span>' + r[1] + '</span></button>';
+    var NL = isObj(info.listing), nb = N(O(info.listing).bars) || N(info.bars) || 0;
+    var rl = !NL ? RANGES : nb > 130 ? [[130, '6M'], [500, 'Since listing']] : [[500, 'Since listing']];
+    var chips = '<div class="rng"><span class="rl">Price</span><span class="rc" role="group" aria-label="Chart range">' + rl.map(function (r) {
+      var on = want === r[0] || (NL && nb <= 130);
+      return '<button type="button" class="rchip' + (on ? ' on' : '') + '" data-c="range" data-id="' + r[0] + '" aria-pressed="' + on + '"><span>' + r[1] + '</span></button>';
     }).join('') + '</span></div>';
     var lvls = [], lv = O(info.levels);
     if (N(lv.support) > 0) lvls.push({ k: 'sup', t: 'Support', v: lv.support });
@@ -1395,6 +1404,7 @@
     var ema = EMAS.map(function (k) {
       var v = N(O(info.ema)['e' + k]);
       if (!(v > 0) && res) { var a = nums(res['ema' + k]); v = a.length ? a[a.length - 1] : null; }
+      if (NL && !(v > 0)) return '';
       return '<button type="button" class="echip' + (on[k] ? ' on' : '') + '" data-c="ema" data-id="' + k + '" aria-pressed="' + (on[k] ? 'true' : 'false') + '" style="--c:' + EMA_COL[k] + '">' +
         '<span class="el"><i></i>EMA ' + k + '</span><span class="ev num">' + emaNum(v) + '</span></button>';
     }).join('');
@@ -1426,9 +1436,10 @@
   }
   function emaTable(d) {
     var e = O(d.ema), dist = O(d.emaDist), ltp = N(d.ltp), st = O(d.stack), g = O(d.golden);
+    var NL = isObj(d.listing);
     var rows = EMAS.map(function (k) {
       var v = N(e['e' + k]), dv = N(dist['e' + k]);
-      if (!(v > 0)) { v = null; dv = null; }
+      if (!(v > 0)) { v = null; dv = null; if (NL) return ''; }
       else if (dv === null && ltp > 0) dv = (ltp / v - 1) * 100;
       return '<div class="et"><span class="ek"><i style="background:' + EMA_COL[k] + '"></i>EMA ' + k + '</span><span class="num ev">' + (v === null ? DASH : px(v)) + '</span>' +
         '<span class="num ed ' + (dv === null ? 'mut' : tone(dv)) + '">' + (dv === null ? DASH : arrow(dv) + pc(Math.abs(dv), false, true)) + '</span></div>';
@@ -1436,8 +1447,8 @@
     var gl = g.state === 'ABOVE' ? tag('hold', '50 above 200', 'up') : g.state === 'BELOW' ? tag('sell', '50 below 200', 'down') : tag('neutral', '50 / 200');
     return '<section class="card sk-card" id="sk-ema"><h3 class="skh">Moving averages</h3>' +
       '<div class="et eh"><span>Average</span><span>Value</span><span>Price vs it</span></div>' + rows +
-      '<div class="sr"><div class="srl">' + (stackTag(st.label, T(st.label) === 'BULLISH' ? 'up' : T(st.label) === 'BEARISH' ? 'down' : 'minus') || tag('neutral', 'Stack')) + '<span class="srk">Order of the averages</span></div>' + (T(st.text).trim() ? '<p class="sk-p">' + esc(T(st.text).trim()) + '</p>' : '') + '</div>' +
-      '<div class="sr"><div class="srl">' + gl + '<span class="srk">50 / 200 EMA</span></div>' + (T(g.text).trim() ? '<p class="sk-p">' + esc(T(g.text).trim()) + '</p>' : '') + '</div></section>';
+      (NL && !(N(e.e200) > 0) ? '' : '<div class="sr"><div class="srl">' + (stackTag(st.label, T(st.label) === 'BULLISH' ? 'up' : T(st.label) === 'BEARISH' ? 'down' : 'minus') || tag('neutral', 'Stack')) + '<span class="srk">Order of the averages</span></div>' + (T(st.text).trim() ? '<p class="sk-p">' + esc(T(st.text).trim()) + '</p>' : '') + '</div>' +
+      '<div class="sr"><div class="srl">' + gl + '<span class="srk">50 / 200 EMA</span></div>' + (T(g.text).trim() ? '<p class="sk-p">' + esc(T(g.text).trim()) + '</p>' : '') + '</div>') + '</section>';
   }
   function checksCard(d) {
     var cs = A(d.checks).slice(0, 14);
@@ -1460,10 +1471,11 @@
     var vv = V.map(function (x) { return pv(vs[x[0]], x[2], bars); });
     var mx2 = Math.max.apply(null, [3].concat(vv.filter(function (x) { return x !== null; }).map(Math.abs)));
     var pts = function (a) { return a.toFixed(1) + ' pts'; };
-    return '<section class="card sk-card" id="sk-mom"><h3 class="skh">Momentum</h3><div class="mh">Price change over</div>' +
-      R.map(function (x, i) { return barRow(x[1], vals[i], mx, function (a) { return pc(a, false, true); }); }).join('') +
-      '<div class="mh m2">Compared with the Nifty <span>stock return minus Nifty return</span></div>' +
-      V.map(function (x, i) { return barRow(x[1], vv[i], mx2, pts); }).join('') + '</section>';
+    var NL = isObj(d.listing), r1 = [], r2 = [];
+    R.forEach(function (x, i) { if (!(NL && vals[i] === null)) r1.push(barRow(x[1], vals[i], mx, function (a) { return pc(a, false, true); })); });
+    V.forEach(function (x, i) { if (!(NL && vv[i] === null)) r2.push(barRow(x[1], vv[i], mx2, pts)); });
+    return '<section class="card sk-card" id="sk-mom"><h3 class="skh">Momentum</h3>' + (r1.length ? '<div class="mh">Price change over</div>' + r1.join('') : '<p class="sk-p mut">Not enough history yet for a return over a full week or more.</p>') +
+      (r2.length ? '<div class="mh m2">Compared with the Nifty <span>stock return minus Nifty return</span></div>' + r2.join('') : '') + '</section>';
   }
   function tile(k, v, s, cls) { return '<div class="stt"><div class="k">' + k + '</div><div class="v num ' + (cls || '') + '">' + v + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; }
   function statsCard(d) {
@@ -1485,6 +1497,7 @@
       tile('20-day high', h20 > 0 ? px(h20) : DASH, rel(h20)),
       tile('20-day low', l20 > 0 ? px(l20) : DASH, rel(l20))
     ];
+    if (isObj(d.listing)) tiles = tiles.filter(function (t) { return t.indexOf('class="v num ">' + DASH + '<') < 0; });
     return '<section class="card sk-card" id="sk-stats"><h3 class="skh">Key numbers</h3><div class="sg">' + tiles.join('') + '</div></section>';
   }
   function levelsCard(d) {
@@ -1520,7 +1533,7 @@
       return skCard('10 / 20 EMA', 4) + skCard('Moving averages', 5) + skCard('Technical checklist', 5) + skCard('Momentum', 4);
     }
     var d = st.info;
-    return crossCard(d) + emaTable(d) + checksCard(d) + momentumCard(d) + statsCard(d) + levelsCard(d) + heldCard(d) + setupsCard(d) +
+    return listingCard(d) + crossCard(d) + emaTable(d) + checksCard(d) + momentumCard(d) + statsCard(d) + levelsCard(d) + heldCard(d) + setupsCard(d) +
       '<section class="card sk-card" id="sk-sum"><h3 class="skh">In short</h3>' + (T(d.summary).trim() ? '<p class="sk-p">' + esc(T(d.summary).trim()) + '</p>' : '<p class="sk-p mut">No summary available.</p>') + '</section>' +
       '<p class="sk-foot">' + ic('info') + '<span>Data comes from the last scan or quote. It describes the chart and is not investment advice. Past patterns do not promise what happens next.</span></p>';
   }
@@ -1531,6 +1544,7 @@
     if (part === 'price') return stockPrice(ui);
     if (part === 'act') return stockActions(S, ui);
     if (part === 'verdict') return verdictCard(S, ui);
+    if (part === 'panel') return panelCard(S, ui);
     if (part === 'chart') return stockChartPart(ui);
     return stockBody(S, ui);
   }
@@ -1538,20 +1552,152 @@
     var sym = T(O(ui.stock).sym) || T(data.id);
     return '<div class="scrim"></div><section class="sheet full stk" role="dialog" aria-modal="true" aria-label="' + esc((sym || 'Stock') + ' stock page') + '">' +
       '<div class="sh stkh" id="st-head">' + stockHead(sym, ui) + '</div>' +
-      '<div class="sb" id="st-scroll"><div id="st-price">' + stockPrice(ui) + '</div><div id="st-act">' + stockActions(S, ui) + '</div><div id="st-verdict">' + verdictCard(S, ui) + '</div><div id="st-chart" class="st-chart">' + stockChartPart(ui) + '</div><div id="st-body">' + stockBody(S, ui) + '</div></div></section>';
+      '<div class="sb" id="st-scroll"><div id="st-price">' + stockPrice(ui) + '</div><div id="st-act">' + stockActions(S, ui) + '</div><div id="st-verdict">' + verdictCard(S, ui) + '</div><div id="st-panel">' + panelCard(S, ui) + '</div><div id="st-chart" class="st-chart">' + stockChartPart(ui) + '</div><div id="st-body">' + stockBody(S, ui) + '</div></div></section>';
+  }
+
+  /* =====================================================================================================
+     v5 (SPEC5): analyst panel, new-listing card
+     ===================================================================================================== */
+  var STANCE = { FOR: { cls: 'for', icon: 'check' }, AGAINST: { cls: 'ag', icon: 'x' }, NEUTRAL: { cls: 'ne', icon: 'minus' } };
+  var MGR_IC = { trend: 'setups', momentum: 'up', risk: 'shield', liquidity: 'layers', timing: 'clock', market: 'chart', newlisting: 'star' };
+  function mgrs(p) {
+    return A(O(p).managers).slice(0, 10).map(function (m, i) {
+      var st = T(m.stance).trim().toUpperCase(), sg = N(m.strength);
+      return { i: i, id: T(m.id).trim().toLowerCase(), name: T(m.name).trim() || T(m.id).trim() || 'Manager', stance: STANCE[st] ? st : 'NEUTRAL', strength: sg === null ? 0 : Math.max(0, Math.min(3, Math.round(sg))),
+        evidence: T(m.evidence).trim(), text: T(m.text).trim(), answers: T(m.answers).trim().toLowerCase(), rebuttal: T(m.rebuttal).trim(), metrics: A(m.metrics).filter(function (x) { return T(x.label).trim() && T(x.value).trim(); }).slice(0, 6) };
+    });
+  }
+  function strongest(ms, stance) {
+    var b = null; ms.forEach(function (m) { if (m.stance === stance && (!b || m.strength > b.strength)) b = m; });
+    return b;
+  }
+  function pnlOpen(ui, ms, m) {
+    var ov = O(O(ui).pnl);
+    if (m.i in ov) return !!ov[m.i];
+    var f = strongest(ms, 'FOR'), a = strongest(ms, 'AGAINST');
+    return (!!f && f.i === m.i) || (!!a && a.i === m.i);
+  }
+  function pips(n) { return '<span class="pips" role="img" aria-label="strength ' + n + ' of 3">' + [1, 2, 3].map(function (k) { return '<i' + (k <= n ? ' class="on"' : '') + '></i>'; }).join('') + '</span>'; }
+  function pnlRow(ui, ms, m) {
+    var o = pnlOpen(ui, ms, m), sc = STANCE[m.stance];
+    var h = '<div class="pm ' + sc.cls + (o ? ' open' : '') + '"><button type="button" class="pmb" data-c="pnl" data-id="' + m.i + '" aria-expanded="' + o + '">' +
+      '<span class="pmi">' + ic(MGR_IC[m.id] || 'info') + '</span><span class="pmn"><b class="clip">' + esc(m.name) + '</b>' + (m.evidence ? '<em>' + esc(m.evidence) + '</em>' : '') + '</span>' +
+      '<span class="pms ' + sc.cls + '">' + ic(sc.icon) + m.stance + '</span>' + pips(m.strength) + ic('chev') + '</button>';
+    if (o) {
+      var to = ms.filter(function (x) { return x.id && x.id === m.answers; })[0];
+      h += '<div class="pmx">' + (m.text ? '<p>' + esc(m.text) + '</p>' : '') +
+        (m.metrics.length ? '<div class="pmm">' + m.metrics.map(function (x) { return '<span><i>' + esc(T(x.label).trim()) + '</i><b class="num">' + esc(T(x.value).trim()) + '</b></span>'; }).join('') + '</div>' : '') +
+        (m.rebuttal ? '<p class="pmr"><b>Replies to ' + esc(to ? to.name : (m.answers || 'another manager')) + ':</b> ' + esc(m.rebuttal) + '</p>' : '') + '</div>';
+    }
+    return h + '</div>';
+  }
+  function voteBar(ms) {
+    return '<div class="vbar" aria-hidden="true">' + ms.map(function (m) { return '<i class="' + STANCE[m.stance].cls + '" style="height:' + (5 + m.strength * 9) + 'px"></i>'; }).join('') + '</div>';
+  }
+  function chairBlock(S, d, ui) {
+    var ch = O(O(d.panel).chair), lab = T(ch.label).trim().toUpperCase() || T(O(d.call).label).trim().toUpperCase(), k = CALLS[lab];
+    if (!k) return '';
+    var proven = ch.proven === true || (!('proven' in ch) && O(d.call).proven === true);
+    var pillText = lab === 'BUY' && !proven ? 'BUY CANDIDATE' : lab === 'NA' ? 'NOT RATED' : lab;
+    var pros = texts(ch.pros).slice(0, 4), cons = texts(ch.cons).slice(0, 4), up = T(ch.flipUp).trim(), dn = T(ch.flipDown).trim();
+    var list = function (t, arr, cls) { return '<div class="pcc ' + cls + '"><h4>' + t + '</h4>' + (arr.length ? '<ul>' + arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '<p class="mut">' + DASH + '</p>') + '</div>'; };
+    return '<div class="pch" id="st-chair"><div class="pchh"><span class="pk">Chair</span><span class="vpill ' + k.cls + '">' + ic(k.icon) + pillText + '</span></div>' +
+      (T(ch.text).trim() ? '<p class="pct">' + esc(T(ch.text).trim()) + '</p>' : '') +
+      (pros.length || cons.length ? '<div class="pcols">' + list('Pros', pros, 'pro') + list('Cons', cons, 'con') + '</div>' : '') +
+      (up || dn ? '<div class="pflip"><h4>What would change the call</h4>' + (up ? '<p class="fu">' + ic('up') + '<span><b>Upgrade</b> ' + esc(up) + '</span></p>' : '') + (dn ? '<p class="fd">' + ic('down') + '<span><b>Downgrade</b> ' + esc(dn) + '</span></p>' : '') + '</div>' : '') + '</div>';
+  }
+  function panelCard(S, ui) {
+    var st = O(O(ui).stock), d = st.info;
+    if (!isObj(d) || !isObj(d.panel)) return '';
+    var ms = mgrs(d.panel); if (!ms.length) return '';
+    var f = ms.filter(function (m) { return m.stance === 'FOR'; }).length, a = ms.filter(function (m) { return m.stance === 'AGAINST'; }).length, n = ms.length - f - a;
+    return '<section class="card apn" id="st-pnl" aria-label="Analyst panel"><h3 class="pnh">Analyst panel <span>· ' + ms.length + (ms.length === 1 ? ' manager' : ' managers') + '</span></h3>' +
+      voteBar(ms) + '<p class="pnt" id="pnl-tally"><b class="for">' + f + ' for</b> · <b class="ag">' + a + ' against</b> · <b class="ne">' + n + ' neutral</b></p>' +
+      '<p class="pnn">' + ic('info') + '<span>The call comes from the tested score. The panel explains it; the vote does not decide.</span></p>' +
+      '<div class="pml">' + ms.map(function (m) { return pnlRow(ui, ms, m); }).join('') + '</div>' + chairBlock(S, d, ui) + '</section>';
+  }
+
+  /* listing facts for stocks with fewer than 253 bars of history */
+  function listingCard(d) {
+    var L = d.listing; if (!isObj(L)) return '';
+    var ltp = N(L.ltp) > 0 ? N(L.ltp) : N(d.ltp), lp = N(L.listPrice), since = N(L.sinceListingPct);
+    if (since === null && lp > 0 && ltp > 0) since = (ltp / lp - 1) * 100;
+    var ld = N(L.listedDay), dl = N(L.daysListed), hi = N(L.highSince), lo = N(L.lowSince), dd = N(L.maxDdPct), av = N(L.avgValueCr), nr = N(L.barsToRated), bars = N(L.bars) > 0 ? N(L.bars) : N(d.bars);
+    var pos = N(L.rangePos);
+    if (hi > 0 && lo > 0 && hi > lo && ltp > 0) pos = (ltp - lo) / (hi - lo);
+    else if (pos !== null && pos > 1) pos = pos / 100;
+    if (pos !== null) pos = Math.max(0, Math.min(1, pos));
+    var badge = 'NEW · ' + (dayNum(ld) ? 'listed ' + dayTxt(ld) : 'listing date not known') + (dl !== null && dl >= 0 ? ' · ' + cnt(dl) + (dl === 1 ? ' day' : ' days') : '');
+    var row = function (k, v, s, cls) { return '<div class="lst"><div class="k">' + k + '</div><div class="v num ' + (cls || '') + '">' + v + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; };
+    var tiles = [];
+    if (hi > 0) tiles.push(row('High since listing', px(hi), dayNum(L.highDay) ? dayTxt(L.highDay, true) : ''));
+    if (lo > 0) tiles.push(row('Low since listing', px(lo), dayNum(L.lowDay) ? dayTxt(L.lowDay, true) : ''));
+    if (dd !== null) tiles.push(row('Worst fall from a high', dd === 0 ? '0%' : '−' + pc(Math.abs(dd), false, true), 'peak to trough', dd === 0 ? '' : 'down'));
+    if (av !== null && av > 0) tiles.push(row('Average traded', croreTxt(av), 'per day'));
+    return '<section class="card sk-card lcard" id="sk-listing"><div class="lbadge">' + ic('star') + '<b>' + esc(badge) + '</b></div>' +
+      '<div class="lpx"><div><div class="k">Listing price</div><div class="v num">' + (lp > 0 ? px(lp) : DASH) + '</div></div><span class="la">' + ic('chev') + '</span><div><div class="k">Now</div><div class="v num">' + (ltp > 0 ? px(ltp) : DASH) + '</div></div>' +
+      (since !== null ? '<div class="lret ' + tone(since) + '"><span class="num">' + arrow(since) + pc(Math.abs(since), false, true) + '</span><small>since listing</small></div>' : '') + '</div>' +
+      (pos !== null ? '<div class="lrng"><div class="lrt" role="img" aria-label="Price is ' + Math.round(pos * 100) + ' percent of the way from the low to the high since listing"><i style="left:' + (pos * 100).toFixed(1) + '%"></i></div><div class="lrs"><span>Low ' + (lo > 0 ? pxBare(lo) : DASH) + '</span><span>High ' + (hi > 0 ? pxBare(hi) : DASH) + '</span></div></div>' : '') +
+      (tiles.length ? '<div class="lg">' + tiles.join('') + '</div>' : '') +
+      (nr !== null && nr > 0 ? '<p class="lnr">' + ic('clock') + '<span>A rating becomes possible in <b class="num">' + cnt(nr) + '</b> trading days' + (bars > 0 ? ' (' + cnt(bars) + ' of 253 so far)' : '') + '.</span></p>' : '') +
+      (T(L.baseRate).trim() ? '<p class="lbr"><b>Base rate</b> ' + esc(T(L.baseRate).trim()) + '</p>' : '') + '</section>';
   }
 
   /* ---------- search sheet ---------- */
   function lookupSym(q) { var x = T(q).replace(/\s+/g, '').toUpperCase(); return /^[A-Z0-9&\-]{1,20}$/.test(x) ? x : ''; }
-  function srRow(x, icon) {
+  function srRow(x, icon, now) {
     var sym = T(x.sym).trim(); if (!sym) return '';
-    var nm = T(x.name).trim();
+    var nm = T(x.name).trim(), ld = dayNum(x.listedDay), isNew = x.isNew === true && !!ld;
+    var yr = N(now) !== null && ts(now) !== null ? ist(ts(now)).getUTCFullYear() : new Date().getFullYear();
     return '<button type="button" class="srr" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' + (icon ? '<span class="sri">' + ic(icon) + '</span>' : '') +
-      '<span class="ssym"><b class="clip">' + esc(sym) + '</b><span class="clip">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
+      '<span class="ssym"><b class="clip">' + esc(sym) + (T(x.board).trim().toUpperCase() === 'SME' ? ' <i class="sme">SME</i>' : '') + '</b><span class="clip">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
+      (isNew ? '<span class="nchip"><b>NEW</b><small>listed ' + dayTxt(x.listedDay, ld.y === yr) + '</small></span>' : '') +
       (x.tracked === true ? '<span class="trk" title="Scanned every 15 minutes">tracked</span>' : '') + ic('chev') + '</button>';
+  }
+  /* freshness line + quick filters, shown above every search state */
+  function listMetaLine(ui) {
+    var L = ui.listMeta; if (!isObj(L)) return '';
+    var n = N(L.count), up = ts(L.updatedAt), now = ts(ui.now) !== null ? ts(ui.now) : Date.now(), stale = L.stale === true, pendR = pend(ui, 'refreshSymbols');
+    var cntTxt = n !== null && n > 0 ? ' · ' + grp(String(Math.round(n))) + ' stocks' : '';
+    var when;
+    if (up !== null) {
+      var dd = dayNo(now) - dayNo(up);
+      when = 'updated ' + (dd <= 0 ? 'today' : dd === 1 ? 'yesterday' : dm(up, now)) + ' ' + hm(up);
+    } else when = T(L.source) === 'bundled' ? 'is the copy bundled with the app' : 'update time unknown';
+    return '<div class="slist' + (stale ? ' stale' : '') + '" id="sr-list">' + ic(stale ? 'warn' : 'check') + '<span>Stock list ' + esc(when) + cntTxt + (stale ? '. It may miss new listings.' : '') + '</span>' +
+      (stale ? '<button type="button" class="btn sm" data-c="refresh-symbols"' + (pendR ? ' disabled' : '') + '>' + (pendR ? '<span class="spin"></span>Refreshing' : ic('refresh') + 'Refresh') + '</button>' : '') + '</div>';
+  }
+  function sFilters(ui) {
+    var f = T(O(ui.search).filter) || 'all', nc = N(O(ui.listMeta).newCount);
+    var L = [['all', 'All'], ['new', 'New listings' + (nc !== null && nc > 0 ? ' (' + Math.round(nc) + ')' : '')], ['watch', 'Watchlist'], ['held', 'Held']];
+    return '<div class="sfs" role="group" aria-label="Quick filters">' + L.map(function (x) {
+      return '<button type="button" class="sfc' + (f === x[0] ? ' on' : '') + '" data-c="sfilter" data-id="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + esc(x[1]) + '</button>';
+    }).join('') + '</div>';
+  }
+  function filterBody(S, ui, f) {
+    var ss = O(ui.search), q = T(ss.q).trim().toLowerCase(), rows, empty;
+    if (f === 'new') {
+      if (!Array.isArray(ss.newList)) {
+        if (T(ss.newErr).trim()) return '<div class="sempty">' + ic('warn') + '<b>New listings are not available</b><span>' + esc(T(ss.newErr).trim()) + '</span></div>';
+        return '<div class="srl2">' + skel('srow0') + skel('srow0') + '</div>';
+      }
+      rows = A(ss.newList).filter(function (x) { return T(x.sym).trim(); }).map(function (x, i) { return { x: Object.assign({}, x, { isNew: true }), i: i }; });
+      rows.sort(function (a, b) { return (N(b.x.listedDay) || 0) - (N(a.x.listedDay) || 0) || a.i - b.i; });
+      rows = rows.map(function (r) { return r.x; });
+      empty = 'No stocks listed in the last year are in the stock list yet.';
+    } else if (f === 'watch') { rows = A(S.myWatch); empty = 'Your watchlist is empty. Open any stock and tap Add to watchlist.'; }
+    else { rows = A(S.holdings); empty = 'You have no holdings added yet.'; }
+    if (q) rows = rows.filter(function (x) { return (T(x.sym) + ' ' + T(x.name)).toLowerCase().indexOf(q) >= 0; });
+    rows = rows.filter(function (x) { return T(x.sym).trim(); });
+    if (!rows.length) return '<div class="sempty">' + ic('search') + '<b>' + (q ? 'No match in this list' : 'Nothing here') + '</b><span>' + esc(q ? 'Clear the filter to search all NSE stocks.' : empty) + '</span></div>';
+    return '<div class="srl2">' + rows.slice(0, 100).map(function (x) { return srRow(x, null, ui.now); }).join('') + '</div>';
   }
   function searchBody(S, ui) {
     S = O(S); ui = O(ui);
+    var f = T(O(ui.search).filter) || 'all';
+    return listMetaLine(ui) + sFilters(ui) + (f === 'new' || f === 'watch' || f === 'held' ? filterBody(S, ui, f) : searchAll(S, ui));
+  }
+  function searchAll(S, ui) {
     var ss = O(ui.search), q = T(ss.q).trim();
     if (!q) {
       var rec = A(ui.recent).filter(function (x) { return T(x.sym).trim(); }).slice(0, 8);
@@ -1578,7 +1724,7 @@
       return '<div class="sempty">' + ic('search') + '<b>No NSE stock matches “' + esc(q.slice(0, 40)) + '”</b><span>' +
         (look ? 'Check the spelling, or look it up by this symbol anyway.' : 'Check the spelling, or try the stock’s symbol.') + '</span>' + lookBtn + '</div>';
     }
-    return '<div class="srl2' + (ss.loading === true && T(ss.shown) !== q ? ' stale' : '') + '">' + res.slice(0, 25).map(function (x) { return srRow(x); }).join('') + '</div>';
+    return '<div class="srl2' + (ss.loading === true && T(ss.shown) !== q ? ' stale' : '') + '">' + res.slice(0, 25).map(function (x) { return srRow(x, null, ui.now); }).join('') + '</div>';
   }
   function searchSheet(S, ui) {
     var ss = O(ui.search), q = T(ss.q);
@@ -1779,6 +1925,7 @@
     targetCalc: targetCalc, targetOf: function (S, sym) { return targetOf(S, sym); }, myTarget: function (S, ui) { return myTarget(O(S), O(ui)); }, scoreRing: scoreRing,
     header: function (S, ui) { return header(O(S), O(ui)); },
     tabbar: function (S, ui) { return tabbar(O(S), O(ui)); },
+    panelOpen: function (ui, i) { var ms = mgrs(O(O(O(ui).stock).info).panel); var m = ms[i]; return m ? pnlOpen(ui, ms, m) : false; },
     stockPart: stockPart, searchBody: searchBody, view: view, sheet: sheet, deviceList: deviceList, deviceIssues: deviceIssues,
     takeCalc: takeCalc, closeCalc: closeCalc, settingsCalc: settingsCalc, isBusy: function (S) { return isBusy(O(S)); },
     actItems: function (S) { return actItems(O(S)); }

@@ -16,7 +16,7 @@
   var TABS = { today: 1, setups: 1, trades: 1, portfolio: 1, alerts: 1 };
   var S = {}, lastJson = null, lastDevJson = null;
   var ui = { tab: TABS[qs.tab] ? qs.tab : 'today', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now(),
-    recent: loadRecent(), search: { q: '', sent: null, shown: '', results: null, loading: false, err: '' }, emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, watchEdit: false, stock: null,
+    recent: loadRecent(), search: { q: '', sent: null, shown: '', results: null, loading: false, err: '', filter: 'all', newList: null, newErr: '' }, emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, watchEdit: false, stock: null, pnl: {}, vOpen: {}, listMeta: null,
     cf: null, cfOpts: { levels: true, vol: true, rangeOn: '6M' }, confirmTarget: {}, cfBoot: null, afterInfo: null, lastTarget: null };
   var cache = { top: null, view: null, tabs: null };
   var scrollPos = {};
@@ -108,11 +108,11 @@
   var DONE = {
     scanNow: 'Scan finished', runBacktest: 'Re-test finished', addHolding: 'Holding added', removeHolding: 'Holding removed',
     takeTrade: 'Trade saved. Follow-ups are on.', skipSignal: 'Skipped', closeTrade: 'Trade closed', saveSettings: 'Settings saved', clearFeed: 'Alerts cleared',
-    setTarget: 'Target saved. You will get an alert when it is reached.', clearTarget: 'Target removed', replayTrack: 'Replay finished', resetTrack: 'Live record reset'
+    setTarget: 'Target saved. You will get an alert when it is reached.', clearTarget: 'Target removed', replayTrack: 'Replay finished', resetTrack: 'Live record reset', refreshSymbols: 'Stock list refreshed'
   };
   var NAMES = {
     scanNow: 'Scan', runBacktest: 'Re-test', addHolding: 'Add holding', removeHolding: 'Remove holding', importHoldings: 'Import',
-    takeTrade: 'Save trade', skipSignal: 'Skip', closeTrade: 'Close trade', saveSettings: 'Save settings', clearFeed: 'Clear alerts', setTarget: 'Set target', clearTarget: 'Clear target', replayTrack: 'Replay', resetTrack: 'Reset record'
+    takeTrade: 'Save trade', skipSignal: 'Skip', closeTrade: 'Close trade', saveSettings: 'Save settings', clearFeed: 'Clear alerts', setTarget: 'Set target', clearTarget: 'Clear target', replayTrack: 'Replay', resetTrack: 'Reset record', refreshSymbols: 'Refresh stock list'
   };
   function clearPending(name, quiet) {
     var hit = false;
@@ -155,6 +155,13 @@
       var ok = res.ok === true;
       var err = typeof res.error === 'string' && res.error.trim() ? res.error.trim() : 'Something went wrong';
       if (name === 'search') { onSearchResult(res, ok, err); return; }
+      if (name === 'newListings') { onNewListings(res, ok, err); return; }
+      if (name === 'refreshSymbols') {
+        clearPending(name, true);
+        if (ok) { toast(DONE.refreshSymbols, 'ok'); askListMeta(); if (ui.search && ui.search.filter === 'new') loadNewListings(); } else toast('Refresh failed: ' + err, 'err');
+        if (!ok && ui.listMeta) ui.listMeta = Object.assign({}, ui.listMeta);
+        render(); paintSearchBody(); return;
+      }
       if (name === 'stockInfo') { onInfoResult(res, ok, err); return; }
       if (name === 'addWatch' || name === 'removeWatch') { onWatchResult(name, ok, err); return; }
       if (name === 'getChart' && chartReply(res, ok, err)) return;
@@ -446,6 +453,7 @@
   }
   function onSearchResult(res, ok, err) {
     var s = ui.search;
+    if (ok && res.list && typeof res.list === 'object' && !Array.isArray(res.list)) { ui.listMeta = res.list; paintSearchBody(); }
     if (!s || s.sent === null) return;
     if (typeof res.q === 'string' && res.q !== s.sent) return;       // stale reply for an older query
     s.loading = false; s.shown = s.sent;
@@ -466,13 +474,25 @@
   }
   function openSearch(noFocus) {
     if (sheet && sheet.kind === 'search') return;
-    ui.search = { q: '', sent: null, shown: '', results: null, loading: false, err: '' };
+    ui.search = { q: '', sent: null, shown: '', results: null, loading: false, err: '', filter: 'all', newList: null, newErr: '' };
     enterPending = false;
     openSheet('search', {}, noFocus);
+    askListMeta();
+  }
+  function askListMeta() { try { bridge().action('search', JSON.stringify({ q: '' })); } catch (e) { /* ignore */ } }
+  function onNewListings(res, ok, err) {
+    var s = ui.search; if (!s) return;
+    if (ok && Array.isArray(res.results)) { s.newList = res.results; s.newErr = ''; } else { s.newList = null; s.newErr = err; }
+    paintSearchBody();
+  }
+  function loadNewListings() {
+    var s = ui.search; if (!s) return;
+    s.newErr = '';
+    try { bridge().action('newListings', JSON.stringify({ days: 365 })); } catch (e) { s.newErr = 'Could not reach the app. Try again.'; }
   }
 
   /* ---------- stock page ---------- */
-  var PARTS = { head: 'st-head', price: 'st-price', act: 'st-act', verdict: 'st-verdict', chart: 'st-chart', body: 'st-body' };
+  var PARTS = { head: 'st-head', price: 'st-price', act: 'st-act', verdict: 'st-verdict', panel: 'st-panel', chart: 'st-chart', body: 'st-body' };
   var bootScroll = null;
   function stockOpen() { return !!sheet && sheet.kind === 'stock' && !!ui.stock; }
   function paintStock(parts) {
@@ -505,7 +525,7 @@
     st.err = ''; st.info = null;
     if (st.itimer) clearTimeout(st.itimer);
     st.itimer = setTimeout(function () {
-      if (ui.stock === st && st.itok === tok && !st.info && !st.err) { st.err = 'No reply after 20 seconds. Check your connection and try again.'; paintStock(['head', 'price', 'act', 'verdict', 'chart', 'body']); }
+      if (ui.stock === st && st.itok === tok && !st.info && !st.err) { st.err = 'No reply after 20 seconds. Check your connection and try again.'; paintStock(['head', 'price', 'act', 'verdict', 'panel', 'chart', 'body']); }
     }, 20000);
     try { bridge().action('stockInfo', JSON.stringify({ sym: st.sym })); }
     catch (e) { st.err = 'Could not reach the app. Try again.'; }
@@ -571,6 +591,7 @@
     name = String(name || '').trim();
     if (!name) { var r = (ui.recent || []).filter(function (x) { return x.sym === sym; })[0]; name = r ? r.name : ''; }
     if (!name) { var h = SE.A(S.holdings).concat(SE.A(S.myWatch), SE.A(S.watch)).filter(function (x) { return SE.T(x.sym).toUpperCase() === sym; })[0]; name = h ? SE.T(h.name) : ''; }
+    ui.pnl = {}; ui.vOpen = {};
     ui.stock = { sym: sym, name: name, info: null, err: '', chart: null, chartErr: '', range: 0, want: 130, inflight: 0 };
     ui.afterInfo = null;
     noteRecent(sym, name);
@@ -586,7 +607,7 @@
     if (st.itimer) { clearTimeout(st.itimer); st.itimer = null; }
     if (ok) { st.info = res; st.err = ''; if (!st.name && typeof res.name === 'string') st.name = res.name; if (res.name) noteRecent(st.sym, String(res.name)); }
     else { st.info = null; st.err = err; }
-    paintStock(['head', 'price', 'act', 'verdict', 'chart', 'body']);
+    paintStock(['head', 'price', 'act', 'verdict', 'panel', 'chart', 'body']);
     if (sheet && sheet.kind === 'chartfull') cfMeta();
     if (ok && typeof ui.afterInfo === 'function') { var fn = ui.afterInfo; ui.afterInfo = null; try { fn(); } catch (e) { /* ignore */ } }
   }
@@ -594,7 +615,7 @@
     var st = ui.stock; if (!st) return;
     requestInfo();
     if (!st.chart && !st.inflight) requestChart(st.want || 130);
-    paintStock(['head', 'price', 'act', 'verdict', 'chart', 'body']);
+    paintStock(['head', 'price', 'act', 'verdict', 'panel', 'chart', 'body']);
   }
 
   /* ---------- watchlist ---------- */
@@ -693,7 +714,7 @@
   function paintCfTog() { var el = $('cf-tog'); if (el) el.innerHTML = SE.cfToggles(ui); }
   function paintCfRange() {
     var el = $('cf-rng'); if (!el) return;
-    var h = SE.cfRangeChips(ui.cfOpts.rangeOn);
+    var h = SE.cfRangeChips(ui.cfOpts.rangeOn, !!(ui.stock && ui.stock.info && ui.stock.info.listing));
     if (el._h !== h) { el.innerHTML = h; el._h = h; }
   }
   function cfMsg() {
@@ -876,6 +897,10 @@
       case 'stock': openStock(id, el && el.getAttribute('data-name')); break;
       case 'lookup': openStock(id, ''); break;
       case 'search': openSearch(); break;
+      case 'sfilter': if (ui.search && (id === 'all' || id === 'new' || id === 'watch' || id === 'held')) { ui.search.filter = id; if (id === 'new' && !Array.isArray(ui.search.newList)) loadNewListings(); paintSearchBody(); } break;
+      case 'refresh-symbols': act('refreshSymbols', {}, 'refreshSymbols'); paintSearchBody(); break;
+      case 'pnl': { var pk = Number(id); if (pk >= 0 && ui.stock && ui.stock.info) { var ms0 = SE.panelOpen(ui, pk); ui.pnl[pk] = !ms0; paintStock(['panel']); } break; }
+      case 'vopen': if (id === 'why' || id === 'hist') { ui.vOpen[id] = !ui.vOpen[id]; paintStock(['verdict']); } break;
       case 'search-clear': {
         var qi = elSheet.querySelector('input[name="q"]');
         if (qi) { qi.value = ''; onSearchInput(''); try { qi.focus(); } catch (e) { /* ignore */ } }
@@ -974,6 +999,7 @@
       else if (qs.sheet === 'remove' || qs.sheet === 'sold') { first = SE.A(S.holdings)[0]; openSheet(qs.sheet, { id: first ? SE.T(first.sym) : '' }, true); }
       else if (qs.sheet === 'search') {
         openSearch(true);
+        if (qs.filter === 'new' && ui.search) { ui.search.filter = 'new'; loadNewListings(); paintSearchBody(); }
         if (qs.q) { var qi2 = elSheet.querySelector('input[name="q"]'); if (qi2) { qi2.value = qs.q; onSearchInput(qs.q); } }
       }
       else if (qs.sheet === 'stock') {

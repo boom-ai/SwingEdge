@@ -60,6 +60,12 @@ class SwingApp(private val p: Platform) {
     @Volatile private var scanCtx: Ctx? = null
     @Volatile private var symIndex: SymbolIndex? = null
     private val idxLock = Any()
+    /** SPEC5 stock list behind [symIndex] (replaced as a whole, with the index, under [idxLock]). */
+    @Volatile private var stockList: StockListData? = null
+    /** Day of the last download attempt (once per day), and whether the latest attempt failed. */
+    @Volatile private var listTriedDay = 0
+    @Volatile private var listFailed = false
+    private val listLock = ReentrantLock()
 
     /** Daily history (and the last quote) of symbols looked up outside the scanned set; small in-memory LRU. */
     private class Looked(val daily: Series?, val key: Int, val quote: Intraday?, val quoteAt: Long)
@@ -134,7 +140,8 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings") return readAction(name, argsJson)
+        if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
             val args = Json.parseObject(argsJson) ?: emptyMap()
@@ -284,6 +291,8 @@ class SwingApp(private val p: Platform) {
                 done.add("EOD")
             }
         }
+        // SPEC5: the stock list, once per calendar day from 07:30 (not reported in the status: it changes nothing the user sees)
+        if (min >= StockList.REFRESH_MIN && listTriedDay != day) refreshSymbols(false)
         return if (done.isEmpty()) "Nothing due" else done.joinToString(" · ")
     }
 
@@ -1326,17 +1335,89 @@ class SwingApp(private val p: Platform) {
 
     private fun asset(name: String): String? = try { p.asset(name) } catch (t: Throwable) { null }
 
-    /** Built once, lazily; safe to call from any thread. */
+    /** Built once, lazily (then replaced as a whole by a list refresh); safe to call from any thread. */
     private fun searchIndex(): SymbolIndex {
         symIndex?.let { return it }
         synchronized(idxLock) {
             symIndex?.let { return it }
             loadUniverse()
-            val ix = try { SymbolIndex.build(asset("symbols.csv"), universe, names, asset("aliases.csv")) }
-            catch (t: Throwable) { log("search index failed: $t"); SymbolIndex.build(null, universe, names, null) }
+            val list = stockList ?: initialList().also { stockList = it }
+            val ix = try { SymbolIndex.build(list.rows, universe, names, asset("aliases.csv")) }
+            catch (t: Throwable) { log("search index failed: $t"); SymbolIndex.build(emptyList(), universe, names, null) }
             symIndex = ix
             return ix
         }
+    }
+
+    /** The saved download if it is still valid, else the bundled asset. */
+    private fun initialList(): StockListData {
+        try {
+            StockList.decodeSaved(try { p.read(StockList.SAVED_FILE) } catch (t: Throwable) { null })?.let { return it }
+        } catch (t: Throwable) {}
+        val rows = try { StockList.parse(asset("symbols.csv")).rows } catch (t: Throwable) { emptyList<ListRow>() }
+        return StockListData(rows, StockList.SRC_BUNDLED, 0L)
+    }
+
+    private fun currentList(): StockListData = listSnapshot().second
+
+    /** The index and the list it was built from, read together (the swap holds [idxLock] only for the two assignments). */
+    private fun listSnapshot(): Pair<SymbolIndex, StockListData> {
+        val ix0 = searchIndex()
+        synchronized(idxLock) { return Pair(symIndex ?: ix0, stockList ?: StockListData(emptyList(), StockList.SRC_BUNDLED, 0L)) }
+    }
+
+    /**
+     * Downloads the stock list (NSE, else the GitHub mirror) and swaps in a new index. Without [force] it runs once per
+     * calendar day; with it (the action) it runs unless today's download already succeeded. Searches keep using the old
+     * index until the new one is complete. Returns true when a new list was installed.
+     */
+    private fun refreshSymbols(force: Boolean): Boolean {
+        listLock.lock()
+        try {
+            val now = now()
+            val day = Clock.epochDay(now)
+            val cur = currentList()
+            val doneToday = cur.updatedAt > 0 && Clock.epochDay(cur.updatedAt) == day && cur.source != StockList.SRC_BUNDLED
+            if (doneToday) { listTriedDay = day; return false }
+            if (!force && listTriedDay == day) return false
+            listTriedDay = day
+            val got = StockList.download({ urls -> httpAll(urls) }, cur.rows, now)
+            if (got == null) {
+                listFailed = true
+                log("stock list: no valid download, keeping the ${cur.source} list (${cur.rows.size} rows)")
+                return false
+            }
+            try { p.write(StockList.SAVED_FILE, StockList.encode(got)) } catch (t: Throwable) { log("stock list not saved: $t") }
+            loadUniverse()
+            val ix = SymbolIndex.build(got.rows, universe, names, asset("aliases.csv"))
+            synchronized(idxLock) { stockList = got; symIndex = ix }
+            listFailed = false
+            log("stock list: ${got.rows.size} rows from ${got.source}")
+            return true
+        } catch (t: Throwable) {
+            log("stock list refresh failed: $t")
+            return false
+        } finally {
+            listLock.unlock()
+        }
+    }
+
+    private fun refreshSymbolsAction(): String {
+        return try {
+            refreshSymbols(true)
+            val meta = listMeta(now())
+            Json.stringify(ok("updated" to !listFailed, "message" to (if (listFailed) ScoreTexts.LIST_FAILED else ""), "list" to meta))
+        } catch (t: Throwable) {
+            "{\"ok\":false,\"error\":\"failed\"}"
+        }
+    }
+
+    /** Search result `list` object. stale: a download older than 3 days, or the bundled list after a failed download. */
+    private fun listMeta(now: Long, snap: Pair<SymbolIndex, StockListData> = listSnapshot()): Map<String, Any?> {
+        val ix = snap.first
+        val l = snap.second
+        val stale = if (l.updatedAt > 0) now - l.updatedAt > StockList.STALE_MS else listFailed
+        return linkedMapOf("count" to l.rows.size, "updatedAt" to l.updatedAt, "source" to l.source, "stale" to stale, "newCount" to ix.newCount(Clock.epochDay(now)))
     }
 
     /** Best company name: universe name unless it just repeats the symbol, else the full symbol list. */
@@ -1351,7 +1432,15 @@ class SwingApp(private val p: Platform) {
         try {
             a = Json.parseObject(argsJson) ?: emptyMap()
             val res = when (name) {
-                "search" -> ok("q" to a.str("q"), "results" to searchIndex().find(a.str("q")))
+                "search" -> {
+                    val now = now()
+                    val snap = listSnapshot()
+                    ok("q" to a.str("q"), "results" to snap.first.find(a.str("q"), SymbolIndex.MAX_RESULTS, Clock.epochDay(now)), "list" to listMeta(now, snap))
+                }
+                "newListings" -> {
+                    val days = a.int("days", SymbolIndex.NEW_DAYS).let { if (it <= 0) SymbolIndex.NEW_DAYS else minOf(it, 36500) }
+                    ok("results" to searchIndex().newListings(Clock.epochDay(now()), days))
+                }
                 "stockInfo" -> stockInfo(a)
                 else -> chart(a)
             }
@@ -1360,7 +1449,7 @@ class SwingApp(private val p: Platform) {
             log("action $name failed: $t")
             return try {
                 val e = "Something went wrong: " + (t.message ?: t.javaClass.simpleName)
-                Json.stringify(if (name == "search") err(e) else errSym(HoldingsImport.cleanSymbol(a.str("sym")), e))
+                Json.stringify(if (name == "search" || name == "newListings") err(e) else errSym(HoldingsImport.cleanSymbol(a.str("sym")), e))
             } catch (x: Throwable) { "{\"ok\":false,\"error\":\"failed\"}" }
         }
     }
@@ -1479,6 +1568,20 @@ class SwingApp(private val p: Platform) {
             got.s, indexSeries(), got.live, got.asOf, now, scanCtx, r.regime, weight, r.verdicts)))
         m["call"] = try { callFor(sym, got.s, r) } catch (t: Throwable) { log("call $sym: $t"); BuyCall.call(null, SetupScore.empty(0, 0), ScoreTexts.NA_NO_TABLE, 0.0, 0.0, 0, 0.0, 0.0, 0.0) }
         m["myTarget"] = r.targets[sym] ?: NO_TARGET
+        // SPEC5: the analyst panel explains; it reads the finished call and never changes it
+        val today = Clock.epochDay(now)
+        val listed = try { searchIndex().listedOf(sym) } catch (t: Throwable) { 0 }
+        @Suppress("UNCHECKED_CAST") val call = m["call"] as Map<String, Any?>
+        m["panel"] = try {
+            val t = scoreTable
+            val own = if (universeSet.contains(sym)) t?.entries?.get(sym) else null
+            val e = if (own != null) own else if (t != null && t.usable) SetupScore.insert(t, sym, SetupScore.compute(got.s)) else null
+            Panel.build(PanelInput(got.s, e, t, call, indexSeries(), scanCtx?.breadth ?: Double.NaN, r.sizing[0], r.sizing[1], r.sizing[2], listed, today))
+        } catch (t: Throwable) {
+            log("panel $sym: $t")
+            Panel.empty((call["label"] as? String) ?: "NA", call["proven"] == true, if (got.s.n > 0) StockPage.yyyymmdd(got.s.d[got.s.n - 1]) else 0)
+        }
+        m["listing"] = Panel.listing(got.s, listed, today)
         return m
     }
 

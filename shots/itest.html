@@ -77,7 +77,7 @@ document.getElementById('f').onload=async()=>{
   ok(d.activeElement===inp(),'search input is auto-focused');
   ok(qa('#sheet-root .qchip').length>=3,'empty query shows holdings/watchlist chips: '+qa('#sheet-root .qchip').length);
   typeQ('ta');typeQ('tat');typeQ('tata');await sleep(500);
-  ok(log.filter(c=>c.n==='search').every(c=>c.a.q==='tata')&&log.filter(c=>c.n==='search').length>=1,'typing is debounced: only the final query was sent: '+JSON.stringify(log.filter(c=>c.n==='search').map(c=>c.a.q)));
+  ok(log.filter(c=>c.n==='search'&&c.a.q).every(c=>c.a.q==='tata')&&log.filter(c=>c.n==='search'&&c.a.q).length>=1,'typing is debounced: only the final query was sent: '+JSON.stringify(log.filter(c=>c.n==='search').map(c=>c.a.q)));
   ok(qa('#sheet-root .srr').length>=4&&!!q('#sheet-root .srr[data-id="TATAMOTORS"]'),'results appear as you type: '+qa('#sheet-root .srr').length);
   ok(qa('#sheet-root .trk').length>0&&/Tata Motors Ltd/.test(q('#sr-body').textContent),'rows show company name and the tracked tag');
   typeQ('reli');await sleep(500);ok(!!q('#sheet-root .srr[data-id="RELIANCE"]'),'second query result shown');
@@ -155,7 +155,7 @@ document.getElementById('f').onload=async()=>{
   click('[data-c="watch-edit"]');ok(qa('#view .wrm').length===0,'Done leaves edit mode');
   click('#view .wsec [data-c="search"]');ok(!!inp(),'"Add stock" opens the search');hist();await sleep(150);
   // ===== v3: verdict card, targets, ideas, interactive charts =====
-  const reps={};const oar=w.onActionResult;w.onActionResult=function(n,j){try{const o=JSON.parse(j);if(n==='stockInfo'&&o&&o.sym)reps['i:'+o.sym]=o;if(n==='getChart'&&o&&o.sym&&o.c&&o.c.length>=500)reps['c:'+o.sym]=o;}catch(e){}return oar.apply(this,arguments);};
+  const reps={};const oar=w.onActionResult;w.onActionResult=function(n,j){try{const o=JSON.parse(j);if(n==='stockInfo'&&o&&o.sym)reps['i:'+o.sym]=o;if(n==='newListings')reps.nl=o;if(n==='getChart'&&o&&o.sym&&o.c&&o.c.length>=500)reps['c:'+o.sym]=o;}catch(e){}return oar.apply(this,arguments);};
   const sect=async(name,fn)=>{try{await fn();}catch(e){ok(false,'EXCEPTION in '+name+': '+(e&&e.stack||e));while(!q('#sheet-root').hidden){hist();await sleep(150);}}};
   const mkT=(el,id,x,y)=>new w.Touch({identifier:id,target:el,clientX:x,clientY:y,pageX:x,pageY:y,screenX:x,screenY:y});
   const tev=(el,type,list,changed)=>el.dispatchEvent(new w.TouchEvent(type,{bubbles:true,cancelable:true,touches:list,targetTouches:list,changedTouches:changed||list}));
@@ -182,7 +182,7 @@ document.getElementById('f').onload=async()=>{
     await openSym('RELIANCE');
     const c=reps['i:RELIANCE']&&reps['i:RELIANCE'].call;const v=q('#st-verdict');
     ok(!!c&&!!v&&/BUY/.test(v.textContent),'BUY verdict card shown for RELIANCE (call.verdict='+(c&&c.verdict)+')');
-    ok(/What happened before/.test(v.textContent)&&qa('#st-verdict .vt').length===4,'hist block with 4 stat tiles');
+    ok(/What happened before/.test(v.textContent)&&!q('#st-verdict .vt'),'hist block is a collapsed row');click('#st-verdict [data-c="vopen"][data-id="hist"]');ok(qa('#st-verdict .vt').length===4,'hist block opens with 4 stat tiles');
     ok(/Rule-based and tested on past data/.test(v.textContent)||/tested/i.test(v.textContent),'caveat shown');
     ok(!/guaranteed|sure shot|risk-free/i.test(q('#sheet-root').textContent),'no forbidden wording on the page');
     ok(!!q('#st-vcard [data-c="target-from-call"]')&&!/Buy now|Place order/i.test(v.textContent),'"Set these as my target" present, no order button');
@@ -190,6 +190,70 @@ document.getElementById('f').onload=async()=>{
     click('#st-vcard [data-c="target-from-call"]');
     ok(!!q('#sheet-root input[name="target"]')&&Number(q('[name=target]').value)===Number(c.t1)&&Number(q('[name=stop]').value)===Number(c.stop),'target sheet prefilled with t1/stop: '+q('[name=target]').value+'/'+q('[name=stop]').value);
     hist();await sleep(150);ok(stockOpen(),'Back returns to the stock page from the target sheet');
+    await closeAll();
+  });
+  await sect('analyst panel (SPEC5)',async()=>{
+    await openSym('MARUTI');
+    const P=reps['i:MARUTI']&&reps['i:MARUTI'].panel,pn=q('#st-pnl');
+    ok(!!P&&!!pn,'panel card rendered');
+    const nm=P.managers.length;
+    ok(new RegExp('Analyst panel\\s*· '+nm+' managers').test(pn.querySelector('.pnh').textContent),'title shows manager count: '+pn.querySelector('.pnh').textContent);
+    ok(qa('#st-pnl .pm').length===nm&&P.managers.every(m=>qa('#st-pnl .pmn b').some(b=>b.textContent===m.name)),'one chip row per manager ('+nm+')');
+    ok(qa('#st-pnl .vbar i').length===nm,'vote bar has one segment per manager');
+    ok(/\d+ for\s*·\s*\d+ against\s*·\s*\d+ neutral/.test(q('#pnl-tally').textContent),'vote tally line: '+q('#pnl-tally').textContent);
+    ok(qa('#st-pnl .pms').every(e=>/FOR|AGAINST|NEUTRAL/.test(e.textContent))&&qa('#st-pnl .pips').length===nm,'stance word + 3-pip strength on every row');
+    ok(P.managers.every(m=>!m.evidence||qa('#st-pnl .pmn em').some(e=>e.textContent===m.evidence)),'evidence tag shown for every manager');
+    ok(/does not decide/.test(q("#st-pnl").textContent),'one muted line says the vote does not decide');
+    const op0=qa('#st-pnl .pm.open').length;ok(op0>=1&&op0<=2,'strongest FOR vs AGAINST expanded by default: '+op0);
+    const pn1=q('#st-pnl');ok(/Replies to/.test(pn1.textContent),'rebuttal shown as "Replies to ‹name›"');
+    const shut=q('#st-pnl .pm:not(.open) .pmb');click(shut);
+    ok(qa('#st-pnl .pm.open').length===op0+1&&!!q('#st-pnl .pm.open .pmx'),'tapping a manager expands it in place');
+    w.onStateChanged();await sleep(80);ok(qa('#st-pnl .pm.open').length===op0+1,'expanded rows survive a state refresh');
+    click('#st-pnl .pm.open .pmb');ok(qa('#st-pnl .pm.open').length===op0,'tapping again collapses it');
+    const pill=q('#st-pnl .pch .vpill'),vp=q('#st-vcard .vpill');
+    ok(!!pill&&pill.textContent.trim()===vp.textContent.trim()&&/BUY CANDIDATE/.test(pill.textContent),'chair pill mirrors the call: '+(pill&&pill.textContent));
+    ok(/What would change the call/.test(pn.textContent)&&qa('#st-pnl .pcc').length===2,'chair shows Pros/Cons and what would change the call');
+    const pn2=q('#st-pnl');ok(q('#st-verdict').compareDocumentPosition(pn2)&4&&pn2.compareDocumentPosition(q('#st-chart'))&4,'panel sits between the verdict card and the chart');
+    ok(qa('#st-vcard .vcb').length===2&&!q('#st-vcard .vrs')&&!q('#st-vcard .vhist'),'"Why this call" and "What happened before" start collapsed');
+    click('#st-vcard [data-c="vopen"][data-id="why"]');ok(!!q('#st-vcard .vrs li')&&q('#st-vcard [data-id="why"]').getAttribute('aria-expanded')==='true','"Why this call" opens on tap');
+    ok(!!q('#st-vcard .vzone')&&!!q('#st-vcard .lv')&&/How the tested plan exits/.test(q('#st-vcard').textContent)&&!!q('#st-vcard .vevid'),'levels, size, tested record and exit rule stay visible');
+    await closeAll();
+  });
+  await sect('new listing (SPEC5)',async()=>{
+    await openSym('NEWIPO');
+    const I=reps['i:NEWIPO'],L=I.listing,b=q('#st-body');
+    ok(!!L&&!!q('#sk-listing'),'listing card shown for a stock with '+I.bars+' bars');
+    ok(/NEW · listed/.test(q('#sk-listing .lbadge').textContent)&&new RegExp(L.daysListed+' days').test(q('#sk-listing .lbadge').textContent),'badge: '+q('#sk-listing .lbadge').textContent);
+    ok(/Listing price/.test(q('#sk-listing').textContent)&&/since listing/.test(q('#sk-listing').textContent)&&!!q('#sk-listing .lrt i')&&/High since listing/.test(q('#sk-listing').textContent)&&/Worst fall/.test(q('#sk-listing').textContent)&&/cr/.test(q('#sk-listing').textContent),'listing price, return, range bar, high/low, drawdown, value traded');
+    ok(new RegExp('rating becomes possible in '+L.barsToRated+' trading days').test(q('#sk-listing').textContent)&&/Base rate/.test(q('#sk-listing').textContent),'rating countdown and base rate sentence');
+    ok(!q('#sk-ema')||!/EMA 200/.test(q('#sk-ema').textContent),'EMA 200 row is hidden, not shown as a dash');
+    ok(!/—/.test(q('#sk-ema')?q('#sk-ema').textContent:'')&&!qa('#sk-mom .mr .mv').some(e=>e.textContent==='—'),'no dash rows in averages or momentum');
+    ok(qa('#st-chart .rchip').some(e=>/Since listing/.test(e.textContent)),'chart offers a "Since listing" range');
+    ok(/NOT RATED/.test(q('#st-pnl .pch .vpill').textContent)&&/New listing/.test(q('#st-pnl').textContent),'panel: chair says NOT RATED, new-listing manager present');
+    await closeAll();await openSym('SMEKRAFT');
+    ok(!!q('#sk-listing')&&!/EMA (100|200)/.test(q('#sk-ema')?q('#sk-ema').textContent:''),'60-bar stock hides the EMA 100/200 rows');
+    await closeAll();
+  });
+  await sect('search list meta, filters (SPEC5)',async()=>{
+    click('[data-c="tab"][data-id="today"]');click('.topbar [data-c="search"]');await sleep(350);
+    ok(/Stock list updated/.test(q('#sr-list').textContent)&&/3,218 stocks/.test(q('#sr-list').textContent)&&!q('#sr-list.stale'),'freshness line: '+q('#sr-list').textContent);
+    ok(qa('#sheet-root .sfc').map(e=>e.textContent.replace(/ \(\d+\)/,'')).join('|')==='All|New listings|Watchlist|Held','quick filters: '+qa('#sheet-root .sfc').map(e=>e.textContent).join('|'));
+    typeQ('kraft');await sleep(500);
+    ok(!!q('#sheet-root .srr[data-id="SMEKRAFT"] .nchip')&&/listed \d+ \w+/.test(q('#sheet-root .srr[data-id="SMEKRAFT"] .nchip').textContent)&&!!q('#sheet-root .srr[data-id="SMEKRAFT"] .sme'),'NEW chip with listing date and SME tag on the row');
+    click('[data-c="search-clear"]');
+    w.onActionResult('search',JSON.stringify({ok:true,q:'',results:[],list:{count:3187,updatedAt:Date.now()-4*864e5,source:'saved',stale:true,newCount:3}}));
+    ok(!!q('#sr-list.stale')&&!!q('[data-c="refresh-symbols"]'),'stale list: amber line + Refresh button');
+    const n0=log.filter(c=>c.n==='refreshSymbols').length;click('[data-c="refresh-symbols"]');
+    ok(log.filter(c=>c.n==='refreshSymbols').length===n0+1&&q('[data-c="refresh-symbols"]').disabled,'Refresh calls refreshSymbols');
+    await sleep(1500);ok(!q('#sr-list.stale')&&!q('[data-c="refresh-symbols"]')&&/updated/.test(q('#sr-list').textContent),'list is fresh again after the refresh');
+    const nn=log.filter(c=>c.n==='newListings').length;click('.sfc[data-id="new"]');await sleep(400);
+    const cl=log.filter(c=>c.n==='newListings');ok(cl.length===nn+1&&cl[cl.length-1].a.days===365,'New listings filter calls newListings {days:365}');
+    ok(qa('#sheet-root .srr').length>=4&&qa('#sheet-root .srr').every(r=>!!r.querySelector('.nchip')),'new listings render with their listing dates: '+qa('#sheet-root .srr').length);
+    w.onActionResult('newListings',JSON.stringify({ok:true,results:[{sym:'OLDER',name:'Older Co',listedDay:20260105,board:'EQ'},{sym:'NEWEST',name:'Newest Co',listedDay:20260918,board:'SME'},{sym:'MID',name:'Mid Co',listedDay:20260412,board:'EQ'}]}));
+    ok(qa('#sheet-root .srr').map(r=>r.getAttribute('data-id')).join(',')==='NEWEST,MID,OLDER','newest listing first: '+qa('#sheet-root .srr').map(r=>r.getAttribute('data-id')).join(','));
+    click('.sfc[data-id="watch"]');ok(qa('#sheet-root .srr').length>=1,'Watchlist filter lists the watchlist');
+    click('.sfc[data-id="held"]');ok(qa('#sheet-root .srr').length>=1,'Held filter lists holdings');
+    click('.sfc[data-id="all"]');ok(!!q('#sheet-root .qchips')||!!q('#sheet-root .sempty'),'All filter returns to the normal search');
     await closeAll();
   });
   await sect('verdict WAIT/AVOID/absent',async()=>{

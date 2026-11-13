@@ -1,0 +1,46 @@
+/home/claude/research/scripts/60_panel.py:19: RuntimeWarning: divide by zero encountered in divide
+  ext = (C - SMA50) / ATR; pEXT = xr(ext, Rated)
+/home/claude/research/scripts/60_panel.py:40: RuntimeWarning: Mean of empty slice
+  exFOR=np.nanmean(f) * 100, exAG=np.nanmean(x) * 100, spread=np.nanmean(d) * 100, t=nw_t(d, 60),
+              manager per univ  shareFOR  shareAG  exFOR  exAG  spread     t   tAG
+                Trend  IS  all        42       24   0.54 -2.18    2.72  2.69 -3.21
+                Trend  IS  BUY       100        0   3.90   NaN     NaN   NaN   NaN
+                Trend OOS  all        48       16   1.00 -2.16    3.17  2.77 -2.50
+                Trend OOS  BUY       100        0   1.60   NaN     NaN   NaN   NaN
+          Momentum/RS  IS  all        27       26   1.57 -1.40    2.97  3.01 -2.33
+          Momentum/RS  IS  BUY       100        0   3.93   NaN     NaN   NaN   NaN
+          Momentum/RS OOS  all        27       27   0.98 -1.16    2.14  1.42 -1.56
+          Momentum/RS OOS  BUY       100        0   1.61   NaN     NaN   NaN   NaN
+     Risk(vol126 pct)  IS  all        33       34   0.04 -0.21    0.25  0.17 -0.30
+     Risk(vol126 pct)  IS  BUY        20       51   3.41  3.13    1.06  0.45  2.00
+     Risk(vol126 pct) OOS  all        33       34  -0.61  0.73   -1.34 -0.67  0.68
+     Risk(vol126 pct) OOS  BUY         6       71  -0.72  1.55   -3.18 -0.80  0.88
+       Risk(ATR% pct)  IS  all        33       34   0.05 -0.17    0.22  0.19 -0.29
+       Risk(ATR% pct)  IS  BUY        25       44   6.84  3.95    3.48  0.87  2.48
+       Risk(ATR% pct) OOS  all        33       34  -0.74  0.77   -1.50 -0.92  0.92
+       Risk(ATR% pct) OOS  BUY         9       66   1.44  1.70   -0.83 -0.24  0.98
+  Liquidity(TO20 pct)  IS  all        34       33  -0.88  0.40   -1.28 -2.16  1.25
+  Liquidity(TO20 pct)  IS  BUY        33       33   1.14  4.86   -3.82 -1.79  2.68
+  Liquidity(TO20 pct) OOS  all        34       33  -0.41  0.78   -1.19 -1.21  1.75
+  Liquidity(TO20 pct) OOS  BUY        34       37   0.33  2.48   -2.16 -0.93  1.36
+Timing(ext SMA50/ATR)  IS  all        29       10  -0.52  1.37   -1.89 -3.49  2.48
+Timing(ext SMA50/ATR)  IS  BUY        32       37   2.52  4.26   -1.78 -1.12  3.32
+Timing(ext SMA50/ATR) OOS  all        29       10   0.05  0.74   -0.69 -1.27  1.37
+Timing(ext SMA50/ATR) OOS  BUY        28       34   4.25  0.19    4.42  2.94  0.17
+         Timing(RSI2)  IS  all        29       29  -0.12  0.21   -0.32 -1.53  1.09
+         Timing(RSI2)  IS  BUY        19       39   4.83  4.12    0.49  0.56  3.26
+         Timing(RSI2) OOS  all        29       29  -0.24 -0.17   -0.07 -0.23 -0.83
+         Timing(RSI2) OOS  BUY        18       40   1.65  0.66    1.37  1.79  0.58
+Participation(voldry)  IS  all        28       29   0.26  0.03    0.24  0.64  0.12
+Participation(voldry)  IS  BUY        28       32   4.29  3.60    0.55  0.38  2.54
+Participation(voldry) OOS  all        29       34   0.12 -0.04    0.16  0.34 -0.15
+Participation(voldry) OOS  BUY        29       35   0.52  1.92   -1.40 -1.22  1.07
+REGIME IS FOR days 0.61 EW fwd60 2.8507798309748984 AG days 0.13 8.328764965236477 neutral 2.5235413223568903
+REGIME OOS FOR days 0.66 EW fwd60 4.994879918666706 AG days 0.11 8.571043453168361 neutral 0.7718379865664233
+NEWLIST IS stock-days 6969 stocks 106 ex 1.225715616736901 t 0.5411365931921728
+NEWLIST OOS stock-days 11214 stocks 183 ex -3.885526686421218 t -3.534568262725717
+cuts since [0.25348712 0.85849596] dd from listing high [-0.14181913 -0.04858159]
+NL since IS T1/T2/T3 (ex,t,n) [(np.float64(1.49), np.float64(0.54), 2323), (np.float64(5.22), np.float64(2.01), 2323), (np.float64(-2.47), np.float64(-0.7), 2323)] T3-T1 -2.05 t -0.44
+NL since OOS T1/T2/T3 (ex,t,n) [(np.float64(-4.46), np.float64(-3.01), 4855), (np.float64(-4.07), np.float64(-2.86), 3851), (np.float64(-1.53), np.float64(-0.41), 2508)] T3-T1 2.88 t 0.73
+NL ddHigh IS T1/T2/T3 (ex,t,n) [(np.float64(-4.2), np.float64(-1.95), 2323), (np.float64(1.5), np.float64(0.7), 2323), (np.float64(5.35), np.float64(1.95), 2323)] T3-T1 11.49 t 3.56
+NL ddHigh OOS T1/T2/T3 (ex,t,n) [(np.float64(-4.62), np.float64(-3.47), 4787), (np.float64(-2.11), np.float64(-1.77), 3411), (np.float64(-3.01), np.float64(-1.78), 3016)] T3-T1 1.24 t 0.65

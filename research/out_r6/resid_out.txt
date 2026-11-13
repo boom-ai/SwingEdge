@@ -1,0 +1,6 @@
+WAIT band 55-85: trendAGAINST vs rest IS -1.84 t -1.75 share 2.3
+WAIT band 55-85: trendAGAINST vs rest OOS 0.21 t 0.24 share 0.5
+Timing(ext SMA50/ATR)  IS  -0.42  0.37   -0.78 -1.64  0.84
+Timing(ext SMA50/ATR) OOS   0.10  0.17   -0.06 -0.15  0.42
+Participation(voldry)  IS   0.31 -0.15    0.46  1.40 -0.77
+Participation(voldry) OOS   0.19 -0.18    0.37  0.77 -0.70

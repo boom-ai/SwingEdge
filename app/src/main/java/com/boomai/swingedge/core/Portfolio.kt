@@ -31,6 +31,25 @@ object Advisor {
      * @param weightPct this holding's share of the portfolio value in %, or 0 if unknown
      */
     fun check(s: Series?, index: Series?, sessionFraction: Double, weightPct: Double): Advice {
+        if (s != null && s.n >= 2 && s.n < Params.PF_MIN_BARS) {
+            // recent listing: show its price and the facts, without a trend verdict
+            val n = s.n
+            var hi = s.h[0]; var lo = s.l[0]
+            for (k in 0 until n) { if (s.h[k] > hi) hi = s.h[k]; if (s.l[k] < lo) lo = s.l[k] }
+            val c = s.c[n - 1]
+            val first = if (s.o[0] > 0) s.o[0] else s.c[0]
+            val since = if (first > 0) (c / first - 1) * 100.0 else 0.0
+            return Advice(
+                WATCH, "Listed recently — $n trading days of prices, too few for a trend verdict",
+                0.0, 0.0,
+                listOf(
+                    "Since its first trading day (open " + Fmt.rs(first) + "): " + (if (since >= 0) "+" else "") + Fmt.p1(since) + "%",
+                    "Range so far " + Fmt.rs(lo) + " – " + Fmt.rs(hi) + "; now " + Fmt.p1(if (hi > 0) (c / hi - 1) * 100.0 else 0.0) + "% from the high",
+                    "A SELL / HOLD verdict needs " + Params.PF_MIN_BARS + " trading days of prices (" + (Params.PF_MIN_BARS - n) + " to go)"
+                ),
+                true, false
+            )
+        }
         if (s == null || s.n < Params.PF_MIN_BARS) {
             val have = s?.n ?: 0
             return Advice(

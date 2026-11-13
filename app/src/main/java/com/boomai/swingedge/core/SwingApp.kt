@@ -64,6 +64,8 @@ class SwingApp(private val p: Platform) {
     @Volatile private var stockList: StockListData? = null
     /** Day of the last download attempt (once per day), and whether the latest attempt failed. */
     @Volatile private var listTriedDay = 0
+    /** when a symbol's history download last failed (retried after RETRY_FAILED_MS or on a manual scan) */
+    private val failedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
     @Volatile private var listFailed = false
     private val listLock = ReentrantLock()
 
@@ -363,14 +365,24 @@ class SwingApp(private val p: Platform) {
 
     /** Fetches daily history (when not yet fetched under [dailyKey]) and intraday bars for [syms]; fills `live` and `quotes`. Returns symbols with a quote. */
     private fun fetchSymbols(syms: List<String>, today: Int, dailyKey: Int, force: Boolean, pct0: Int, pct1: Int, quoteOnly: Set<String>? = null): Int {
-        val needDaily = syms.filter { val k = cache.keyOf(it); k != dailyKey || (force && cache.get(it) == null) }
+        val nowMs = p.now()
+        // a download that failed is retried on a manual scan, and otherwise after RETRY_FAILED_MS (it is never "remembered for the day")
+        val needDaily = syms.filter { sym ->
+            val k = cache.keyOf(sym)
+            val got = cache.get(sym)
+            val failed = got == null || got.n == 0
+            k != dailyKey || (failed && (force || nowMs - (failedAt[sym] ?: 0L) >= RETRY_FAILED_MS))
+        }
         val mid = if (needDaily.isEmpty()) pct0 else pct0 + (pct1 - pct0) * 6 / 10
         if (needDaily.isNotEmpty()) {
             val got = fetchParsed(needDaily, { h, s -> Yahoo.dailyUrl(h, s) }, { s, t -> Yahoo.daily(s, t, today) }, "Loading price history…", pct0, mid)
             for (sym in needDaily) {
                 val s = got[sym]
-                if (s != null) cache.put(sym, s, dailyKey)
-                else if (cache.get(sym) == null) cache.put(sym, Series(sym, 1), dailyKey) // remember the failure for today
+                if (s != null) { cache.put(sym, s, dailyKey); failedAt.remove(sym) }
+                else {
+                    failedAt[sym] = nowMs
+                    if (cache.get(sym) == null) cache.put(sym, Series(sym, 1), dailyKey) // placeholder; retried later (see needDaily)
+                }
             }
         }
         // Live quotes for everything only when needed (buy window with a LIVE strategy, or a manual scan);
@@ -403,6 +415,7 @@ class SwingApp(private val p: Platform) {
         setBusy("Scanning…", 1)
         loadUniverse()
         cache.ensureLoaded()
+        fixSymbols()
         val idxSym = Params.INDEX_SYMBOL
 
         // 1. the index first: tells us whether we are online and whether the exchange is trading today
@@ -799,7 +812,7 @@ class SwingApp(private val p: Platform) {
 
     private fun setTarget(a: Map<String, Any?>, now: Long): Map<String, Any?> {
         loadUniverse()
-        val sym = HoldingsImport.cleanSymbol(a.str("sym"))
+        val sym = realSym(HoldingsImport.cleanSymbol(a.str("sym")))
         if (!validSym(sym)) return err("Enter a valid NSE symbol, e.g. RELIANCE")
         val tg = priceArg(a, "target")
         val sp = priceArg(a, "stop")
@@ -1160,7 +1173,7 @@ class SwingApp(private val p: Platform) {
             }
             "addHolding" -> {
                 loadUniverse()
-                val sym = HoldingsImport.cleanSymbol(a.str("sym"))
+                val sym = realSym(HoldingsImport.cleanSymbol(a.str("sym")))
                 val qty = a.num("qty", Double.NaN)
                 val avg = a.num("avg", Double.NaN)
                 if (sym.isEmpty() || sym.length > 25 || !Regex("^[A-Z0-9&][A-Z0-9&\\-]*$").matches(sym)) return err("Enter a valid NSE symbol, e.g. RELIANCE")
@@ -1180,8 +1193,8 @@ class SwingApp(private val p: Platform) {
                 val res = HoldingsImport.parse(a.str("text"), nameToSym, universe.toHashSet())
                 var added = 0
                 var updated = 0
-                for (r in res.rows) if (upsertHolding(r.sym, r.qty, r.avg)) added++ else updated++
-                if (res.rows.isNotEmpty()) refreshHoldings(res.rows.map { it.sym }, now, day)
+                for (r in res.rows) if (upsertHolding(realSym(r.sym), r.qty, r.avg)) added++ else updated++
+                if (res.rows.isNotEmpty()) refreshHoldings(res.rows.map { realSym(it.sym) }, now, day)
                 if (res.rows.isEmpty()) {
                     val m = LinkedHashMap(err("No holdings found in that text. Expected columns like Symbol, Quantity, Average price."))
                     m["added"] = 0; m["updated"] = 0; m["skipped"] = res.skipped
@@ -1254,7 +1267,7 @@ class SwingApp(private val p: Platform) {
             }
             "addWatch" -> {
                 loadUniverse()
-                val sym = HoldingsImport.cleanSymbol(a.str("sym"))
+                val sym = realSym(HoldingsImport.cleanSymbol(a.str("sym")))
                 if (!validSym(sym)) return err("Enter a valid NSE symbol, e.g. RELIANCE")
                 if (st.watch.contains(sym)) return ok("sym" to sym)
                 if (st.watch.size >= AppState.MAX_WATCH) return err("Your watchlist is full (" + AppState.MAX_WATCH + " stocks) — remove one first")
@@ -1278,6 +1291,51 @@ class SwingApp(private val p: Platform) {
     }
 
     /** @return true if a new holding was added, false if an existing one was replaced. */
+    /** The real NSE symbol for what the user typed (e.g. OLA -> OLAELEC); unchanged when it already exists or nothing fits uniquely. */
+    private fun realSym(sym: String): String = try { searchIndex().resolve(sym) ?: sym } catch (t: Throwable) { sym }
+
+    /**
+     * Renames holdings, watchlist entries and targets whose symbol is not an NSE symbol but maps to exactly one
+     * (e.g. a holding typed as OLA becomes OLAELEC). Duplicates are merged. Runs at the start of every scan.
+     */
+    private fun fixSymbols() {
+        try {
+            val ix = searchIndex()
+            if (ix.size < 1000) return
+            val renamed = ArrayList<String>()
+            for (h in st.holdings.toList()) {
+                if (ix.has(h.sym)) continue
+                val to = ix.resolve(h.sym) ?: continue
+                if (to == h.sym) continue
+                val ex = st.holdings.firstOrNull { it.sym == to }
+                if (ex != null) {
+                    val q = ex.qty + h.qty
+                    if (q > 0 && ex.avg > 0 && h.avg > 0) ex.avg = (ex.avg * ex.qty + h.avg * h.qty) / q
+                    ex.qty = q
+                    st.holdings.remove(h)
+                } else {
+                    h.sym = to; h.name = nameOf(to); h.dataOk = false; h.ltp = 0.0
+                }
+                renamed.add(h.sym + " -> " + to)
+            }
+            for (i in st.watch.indices.reversed()) {
+                val w = st.watch[i]
+                if (ix.has(w)) continue
+                val to = ix.resolve(w) ?: continue
+                if (to == w) continue
+                if (st.watch.contains(to)) st.watch.removeAt(i) else st.watch[i] = to
+            }
+            for (t in st.targets) {
+                if (ix.has(t.sym)) continue
+                val to = ix.resolve(t.sym) ?: continue
+                if (to != t.sym && st.targets.none { it.sym == to }) t.sym = to
+            }
+            if (renamed.isNotEmpty()) feed("info", "Fixed stock symbols", ScoreTexts.renamedLine(renamed.map { it.substringBefore(" ->") }, renamed.map { it.substringAfter("-> ") }))
+        } catch (t: Throwable) {
+            p.log("fixSymbols: " + t)
+        }
+    }
+
     private fun upsertHolding(sym: String, qty: Double, avg: Double): Boolean {
         val ex = st.holdings.firstOrNull { it.sym == sym }
         if (ex != null) {
@@ -1739,6 +1797,8 @@ class SwingApp(private val p: Platform) {
     }
 
     companion object {
+        /** a failed price-history download is retried after this long (or at once on a manual scan) */
+        const val RETRY_FAILED_MS = 20L * 60 * 1000
         const val STATE_FILE = "state.json"
         const val FORWARD_FILE = "forward.json"
         const val REPLAY_FILE = "replay.json"

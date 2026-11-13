@@ -716,7 +716,9 @@ object SimTests {
         T.eq(scans, 26, "25 quarter-hour scans + the 15:40 end-of-day run")
         T.eq(p.urls.count { it.contains("/UP01.NS?range=2y") }, 0, "daily history not fetched again the same day")
         T.eq(p.urls.count { it.contains("query1") && it.contains("/UP01.NS?range=5d&interval=15m") }, 26, "intraday fetched on every scan")
-        T.check(p.urls.count { it.contains("/DEAD.NS?range=2y") } == 0 && p.urls.count { it.contains("/ERRSYM.NS?range=2y") } == 0, "symbols without history are not hammered all day")
+        // failed history downloads are retried, but at most every 20 minutes (26 scans over ~6.5 h -> well under 26 tries)
+        val deadTries = p.urls.count { it.contains("query1") && it.contains("/DEAD.NS?range=2y") }
+        T.check(deadTries in 1..20, "symbols without history are retried, but not on every scan ($deadTries)")
         // after the close
         p.setTime(d0, 18 * 60)
         val n0 = p.urlCount

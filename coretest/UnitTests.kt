@@ -636,7 +636,7 @@ object UnitTests {
         a = Advisor.check(lag, strongNifty, 1.0, 10.0)
         T.eq(a.verdict, "SELL", "deep 3-month lag vs Nifty under the 50DMA -> SELL: ${a.headline}")
         a = Advisor.check(trend("NEW", 30, 100.0, 0.1), nifty, 1.0, 10.0)
-        T.check(a.verdict == "WATCH" && !a.dataOk && a.reasons.size >= 2, "under 60 bars -> WATCH, dataOk false")
+        T.check(a.verdict == "WATCH" && a.dataOk && a.stop == 0.0 && a.reasons.size >= 2 && a.headline.contains("Listed recently"), "under 60 bars -> WATCH with its price shown (recent listing)")
         a = Advisor.check(null, null, 1.0, 0.0)
         T.check(a.verdict == "WATCH" && !a.dataOk, "no data -> WATCH")
         a = Advisor.check(trend("MID", 120, 200.0, 0.1, zig = 0.6), null, 0.5, 0.0)

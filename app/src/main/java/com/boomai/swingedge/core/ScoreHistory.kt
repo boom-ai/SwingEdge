@@ -445,3 +445,7 @@ object PanelTexts {
         }
     }
 }
+
+private const val RENAMED_NOTE = "These were not NSE symbols, so no prices could be loaded. They now use the exchange symbols; prices and verdicts follow from the next scan."
+fun ScoreTexts.renamedLine(from: List<String>, to: List<String>): String =
+    from.indices.joinToString(", ") { from[it] + " → " + to[it] } + ". " + RENAMED_NOTE

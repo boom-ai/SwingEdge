@@ -26,6 +26,47 @@ class SymbolIndex private constructor(
         return names[k]
     }
 
+    fun has(sym: String): Boolean = bySym.containsKey(sym)
+
+    /**
+     * Maps what a user typed or a broker exported to the real NSE symbol: the symbol itself when it exists; else the
+     * single symbol that starts with it ("OLA" -> "OLAELEC"); else the single company whose name starts with those words
+     * ("SESHAASAI" -> "STYL", "GLOBAL HEALTH" -> "GLOBALHEALTH"). Null when nothing or more than one stock fits, so a
+     * wrong guess is never made.
+     */
+    fun resolve(raw: String): String? {
+        try {
+            val up = raw.trim().uppercase()
+            if (up.isEmpty()) return null
+            if (bySym.containsKey(up)) return up
+            val key = compact(up)
+            if (key.length < 3) return null
+            var hit = -1; var many = false
+            for (k in syms.indices) if (symKey[k] == key) { if (hit >= 0) many = true; hit = k }
+            if (hit >= 0 && !many) return syms[hit]
+            hit = -1; many = false
+            for (k in syms.indices) if (symKey[k].startsWith(key)) { if (hit >= 0 && syms[hit] != syms[k]) many = true; hit = k }
+            if (hit >= 0 && !many) return syms[hit]
+            val qw = up.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in STOP }
+            if (qw.isEmpty()) return null
+            hit = -1; many = false
+            for (k in syms.indices) {
+                var any = false
+                for (v in nameWords[k]) {
+                    if (v.size < qw.size) continue
+                    var okAll = true
+                    for (w in qw.indices) { val same = if (w == qw.size - 1) v[w].startsWith(qw[w]) else v[w] == qw[w]; if (!same) { okAll = false; break } }
+                    if (okAll) { any = true; break }
+                }
+                if (!any) for (nk in nameKey[k]) if (nk.startsWith(key.lowercase())) { any = true; break }
+                if (any) { if (hit >= 0 && syms[hit] != syms[k]) many = true; hit = k }
+            }
+            return if (hit >= 0 && !many) syms[hit] else null
+        } catch (t: Throwable) {
+            return null
+        }
+    }
+
     /** Listing day (IST epoch day) from the stock list, 0 when unknown. */
     fun listedOf(sym: String): Int { val k = bySym[sym] ?: return 0; return listed[k] }
     fun boardOf(sym: String): String { val k = bySym[sym] ?: return StockList.EQ; return board[k] }

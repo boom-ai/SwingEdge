@@ -7,7 +7,8 @@ import java.util.Random
 object V5Tests {
     fun all(): List<Pair<String, () -> Unit>> = listOf(
         "v5-list-parse" to ::parse, "v5-list-refresh" to ::refresh, "v5-search-meta" to ::searchMeta,
-        "v5-panel-rules" to ::panelRules, "v5-panel-app" to ::panelApp, "v5-listing" to ::listing, "v5-list-concurrent" to ::concurrent
+        "v5-panel-rules" to ::panelRules, "v5-panel-app" to ::panelApp, "v5-listing" to ::listing, "v5-list-concurrent" to ::concurrent,
+        "v5-resolve-symbols" to ::resolveSymbols, "v5-holding-retry" to ::holdingRetry
     )
 
     private fun day(y: Int, m: Int, d: Int) = java.time.LocalDate.of(y, m, d).toEpochDay().toInt()
@@ -438,5 +439,53 @@ object V5Tests {
         T.check(worst < 250, "search never waited for the download (worst ${"%.1f".format(worst)} ms over $count calls)")
         T.eq(p.listHits.size, 2, "concurrent refresh + tick downloaded once")
         T.eq(syms(act(app, "search", """{"q":"newco"}""")), listOf("NEWCO"), "new list in place")
+    }
+
+    // ------------------------------------------------------------------ user's real case: wrong symbols, failed downloads
+    fun resolveSymbols() {
+        val f = java.io.File("app/src/main/assets/symbols.csv")
+        if (!f.exists()) { T.check(false, "bundled symbols.csv readable from the repo root"); return }
+        val ix = SymbolIndex.build(StockList.parse(f.readText()).rows, emptyList(), emptyMap(), null)
+        T.check(ix.size > 3000, "real list loaded: " + ix.size)
+        T.eq(ix.resolve("OLA"), "OLAELEC", "OLA -> OLAELEC (Ola Electric)")
+        T.eq(ix.resolve("SESHAASAI"), "STYL", "SESHAASAI -> STYL (Seshaasai Technologies)")
+        T.eq(ix.resolve("BEHARI LAL ENG"), "BLEL", "broker name -> BLEL")
+        T.eq(ix.resolve("GLOBALHEALTH"), "MEDANTA", "old symbol GLOBALHEALTH -> MEDANTA (Global Health Ltd renamed its symbol)")
+        T.eq(ix.resolve("MEDANTA"), "MEDANTA", "real symbol unchanged")
+        T.eq(ix.resolve("BLEL"), "BLEL", "real symbol unchanged (2026 listing)")
+        T.eq(ix.resolve("reliance"), "RELIANCE", "case-insensitive")
+        T.eq(ix.resolve("TATA"), null, "ambiguous -> no guess")
+        T.eq(ix.resolve("ZZQXW"), null, "unknown -> no guess")
+        T.eq(ix.resolve(""), null, "empty -> null")
+    }
+
+    fun holdingRetry() {
+        val p = FakePlatform.standard()
+        val app = SwingApp(p)
+        val d = day(2026, 10, 6)
+        p.setTime(d, 10 * 60)
+        p.offline = true
+        app.action("addHolding", "{\"sym\":\"UP01\",\"qty\":10,\"avg\":100}")
+        app.tick("alarm")
+        var h = Json.parseObject(app.stateJson())!!.list("holdings").map { it.asObj() }.first { it.str("sym") == "UP01" }
+        T.check(!h.bool("dataOk"), "offline: no data yet")
+        // back online: a manual scan must load it at once, not "tomorrow"
+        p.offline = false
+        p.setTime(d, 10 * 60 + 5)
+        act(app, "scanNow", "{}")
+        h = Json.parseObject(app.stateJson())!!.list("holdings").map { it.asObj() }.first { it.str("sym") == "UP01" }
+        T.check(h.bool("dataOk") && h.num("ltp") > 0, "after the failure, Scan now loads the holding's prices")
+        // and the automatic path: a failed download is retried by a later scheduled scan
+        val app2 = SwingApp(FakePlatform.standard().also { it.setTime(d, 10 * 60); it.offline = true })
+        val p2 = FakePlatform.standard(); p2.setTime(d, 10 * 60)
+        val a2 = SwingApp(p2)
+        a2.action("addHolding", "{\"sym\":\"UP02\",\"qty\":5,\"avg\":100}")
+        p2.offline = true; a2.tick("alarm")
+        p2.offline = false
+        var t = Clock.msAt(d, 10 * 60)
+        repeat(4) { t = Clock.nextWake(t); p2.nowMs = t; a2.tick("alarm") }
+        h = Json.parseObject(a2.stateJson())!!.list("holdings").map { it.asObj() }.first { it.str("sym") == "UP02" }
+        T.check(h.bool("dataOk") && h.num("ltp") > 0, "a failed download is retried by later scheduled scans the same day")
+        T.check(app2.stateJson().isNotEmpty(), "spare app ok")
     }
 }

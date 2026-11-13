@@ -449,3 +449,13 @@ object PanelTexts {
 private const val RENAMED_NOTE = "These were not NSE symbols, so no prices could be loaded. They now use the exchange symbols; prices and verdicts follow from the next scan."
 fun ScoreTexts.renamedLine(from: List<String>, to: List<String>): String =
     from.indices.joinToString(", ") { from[it] + " → " + to[it] } + ". " + RENAMED_NOTE
+
+/** "GSPL (25 shares) merged: now 19 GUJENERGY + 6 GSPLTRANS. Check the counts in your broker app." */
+fun ScoreTexts.mergedLine(a: CorpAction, qty: Double): String {
+    val q = a.newQty(qty); val e = a.extraQty(qty)
+    fun n(x: Double) = if (x == Math.floor(x)) x.toLong().toString() else String.format(java.util.Locale.US, "%.2f", x)
+    val parts = n(q) + " " + a.to + (if (a.extra != null && e > 0) " + " + n(e) + " " + a.extra else "")
+    return a.old + " (" + n(qty) + " shares) no longer trades — it merged (" + a.num + " new per " + a.den + " old" +
+        (if (a.extra != null) ", plus " + a.exNum + " " + a.extra + " per " + a.exDen + " " + a.to else "") +
+        "). Now tracked as " + parts + ". Check the counts in your broker app and edit if they differ."
+}

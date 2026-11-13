@@ -1179,6 +1179,15 @@ class SwingApp(private val p: Platform) {
                 if (sym.isEmpty() || sym.length > 25 || !Regex("^[A-Z0-9&][A-Z0-9&\\-]*$").matches(sym)) return err("Enter a valid NSE symbol, e.g. RELIANCE")
                 if (qty.isNaN() || qty <= 0 || qty > 1e9) return err("Quantity must be more than 0")
                 if (avg.isNaN() || avg <= 0 || avg > 1e7) return err("Average buy price must be more than 0")
+                val act = try { searchIndex().actionFor(HoldingsImport.cleanSymbol(a.str("sym"))) } catch (t: Throwable) { null }
+                if (act != null) {
+                    val parts = mergerParts(act, qty, avg)
+                    for ((s2, q2, a2) in parts) addToHolding(s2, q2, a2)
+                    val note = ScoreTexts.mergedLine(act, qty)
+                    feed("info", "Merged stock converted", note)
+                    refreshHoldings(parts.map { it.first }, now, day)
+                    return ok("sym" to act.to, "note" to note)
+                }
                 upsertHolding(sym, qty, avg)
                 refreshHoldings(listOf(sym), now, day)
                 return ok("sym" to sym)
@@ -1190,11 +1199,26 @@ class SwingApp(private val p: Platform) {
             }
             "importHoldings" -> {
                 loadUniverse()
-                val res = HoldingsImport.parse(a.str("text"), nameToSym, universe.toHashSet())
+                val ix = try { searchIndex() } catch (t: Throwable) { null }
+                // a merged stock keeps its old symbol here so its quantity can be converted below
+                val res = HoldingsImport.parse(a.str("text"), nameToSym, universe.toHashSet()) { cell -> ix?.actionFor(cell)?.old ?: ix?.resolve(cell) }
                 var added = 0
                 var updated = 0
-                for (r in res.rows) if (upsertHolding(realSym(r.sym), r.qty, r.avg)) added++ else updated++
-                if (res.rows.isNotEmpty()) refreshHoldings(res.rows.map { realSym(it.sym) }, now, day)
+                val loaded = ArrayList<String>()
+                val merged = ArrayList<String>()
+                for (r in res.rows) {
+                    val act = ix?.actionFor(r.sym)
+                    if (act == null) {
+                        val sym = realSym(r.sym)
+                        if (upsertHolding(sym, r.qty, r.avg)) added++ else updated++
+                        loaded.add(sym)
+                        continue
+                    }
+                    for ((sym, q, av) in mergerParts(act, r.qty, r.avg)) { if (addToHolding(sym, q, av)) added++ else updated++; loaded.add(sym) }
+                    merged.add(ScoreTexts.mergedLine(act, r.qty))
+                }
+                if (merged.isNotEmpty()) feed("info", "Merged stock converted", merged.joinToString(" "))
+                if (loaded.isNotEmpty()) refreshHoldings(loaded.distinct(), now, day)
                 if (res.rows.isEmpty()) {
                     val m = LinkedHashMap(err("No holdings found in that text. Expected columns like Symbol, Quantity, Average price."))
                     m["added"] = 0; m["updated"] = 0; m["skipped"] = res.skipped
@@ -1303,8 +1327,16 @@ class SwingApp(private val p: Platform) {
             val ix = searchIndex()
             if (ix.size < 1000) return
             val renamed = ArrayList<String>()
+            val merged = ArrayList<String>()
             for (h in st.holdings.toList()) {
                 if (ix.has(h.sym)) continue
+                val act = ix.actionFor(h.sym)
+                if (act != null) {
+                    st.holdings.remove(h)
+                    for ((sym, q, av) in mergerParts(act, h.qty, h.avg)) addToHolding(sym, q, av)
+                    merged.add(ScoreTexts.mergedLine(act, h.qty))
+                    continue
+                }
                 val to = ix.resolve(h.sym) ?: continue
                 if (to == h.sym) continue
                 val ex = st.holdings.firstOrNull { it.sym == to }
@@ -1330,10 +1362,31 @@ class SwingApp(private val p: Platform) {
                 val to = ix.resolve(t.sym) ?: continue
                 if (to != t.sym && st.targets.none { it.sym == to }) t.sym = to
             }
+            if (merged.isNotEmpty()) feed("info", "Merged stock converted", merged.joinToString(" "))
             if (renamed.isNotEmpty()) feed("info", "Fixed stock symbols", ScoreTexts.renamedLine(renamed.map { it.substringBefore(" ->") }, renamed.map { it.substringAfter("-> ") }))
         } catch (t: Throwable) {
             p.log("fixSymbols: " + t)
         }
+    }
+
+    /** What an old holding became after a merger: the new stock (same money, converted count) and any demerged stock. */
+    private fun mergerParts(act: CorpAction, qty: Double, avg: Double): List<Triple<String, Double, Double>> {
+        val out = ArrayList<Triple<String, Double, Double>>()
+        val q = act.newQty(qty)
+        if (q > 0) out.add(Triple(act.to, q, act.newAvg(avg)))
+        val e = act.extraQty(qty)
+        if (act.extra != null && e > 0) out.add(Triple(act.extra, e, 0.0))
+        return out
+    }
+
+    /** Adds shares to a holding (weighted buy price when both are known; an unknown 0 price makes the result unknown). */
+    private fun addToHolding(sym: String, qty: Double, avg: Double): Boolean {
+        val ex = st.holdings.firstOrNull { it.sym == sym } ?: return upsertHolding(sym, qty, avg)
+        val q = ex.qty + qty
+        ex.avg = if (q > 0 && ex.avg > 0 && avg > 0) (ex.avg * ex.qty + avg * qty) / q else 0.0
+        ex.qty = q
+        ex.dataOk = false
+        return false
     }
 
     private fun upsertHolding(sym: String, qty: Double, avg: Double): Boolean {
@@ -1400,11 +1453,17 @@ class SwingApp(private val p: Platform) {
             symIndex?.let { return it }
             loadUniverse()
             val list = stockList ?: initialList().also { stockList = it }
-            val ix = try { SymbolIndex.build(list.rows, universe, names, asset("aliases.csv")) }
+            val ix = try { SymbolIndex.build(list.rows, universe, names, asset("aliases.csv"), changesCsv(), asset("corpactions.csv")) }
             catch (t: Throwable) { log("search index failed: $t"); SymbolIndex.build(emptyList(), universe, names, null) }
             symIndex = ix
             return ix
         }
+    }
+
+    /** NSE's symbol-change list: the latest download, else the bundled copy. */
+    private fun changesCsv(): String? {
+        val saved = try { p.read(CHANGES_FILE) } catch (t: Throwable) { null }
+        return if (saved != null && SymbolChanges.parseNse(saved).size > 500) saved else asset("symbolchange.csv")
     }
 
     /** The saved download if it is still valid, else the bundled asset. */
@@ -1447,7 +1506,11 @@ class SwingApp(private val p: Platform) {
             }
             try { p.write(StockList.SAVED_FILE, StockList.encode(got)) } catch (t: Throwable) { log("stock list not saved: $t") }
             loadUniverse()
-            val ix = SymbolIndex.build(got.rows, universe, names, asset("aliases.csv"))
+            try {
+                val chg = httpAll(listOf(CHANGES_URL)).firstOrNull()
+                if (chg != null && SymbolChanges.parseNse(chg).size > 500) p.write(CHANGES_FILE, chg)
+            } catch (t: Throwable) { log("symbol changes not refreshed: $t") }
+            val ix = SymbolIndex.build(got.rows, universe, names, asset("aliases.csv"), changesCsv(), asset("corpactions.csv"))
             synchronized(idxLock) { stockList = got; symIndex = ix }
             listFailed = false
             log("stock list: ${got.rows.size} rows from ${got.source}")
@@ -1798,6 +1861,8 @@ class SwingApp(private val p: Platform) {
 
     companion object {
         /** a failed price-history download is retried after this long (or at once on a manual scan) */
+        const val CHANGES_URL = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/symbolchange.csv"
+        const val CHANGES_FILE = "symbolchange.csv"
         const val RETRY_FAILED_MS = 20L * 60 * 1000
         const val STATE_FILE = "state.json"
         const val FORWARD_FILE = "forward.json"

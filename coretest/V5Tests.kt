@@ -8,7 +8,7 @@ object V5Tests {
     fun all(): List<Pair<String, () -> Unit>> = listOf(
         "v5-list-parse" to ::parse, "v5-list-refresh" to ::refresh, "v5-search-meta" to ::searchMeta,
         "v5-panel-rules" to ::panelRules, "v5-panel-app" to ::panelApp, "v5-listing" to ::listing, "v5-list-concurrent" to ::concurrent,
-        "v5-resolve-symbols" to ::resolveSymbols, "v5-holding-retry" to ::holdingRetry
+        "v5-resolve-symbols" to ::resolveSymbols, "v5-merged-import" to ::mergedImport, "v5-holding-retry" to ::holdingRetry
     )
 
     private fun day(y: Int, m: Int, d: Int) = java.time.LocalDate.of(y, m, d).toEpochDay().toInt()
@@ -45,10 +45,12 @@ object V5Tests {
     class ListNet(val base: FakePlatform) : Platform {
         val served = HashMap<String, String?>()
         val listHits = java.util.Collections.synchronizedList(ArrayList<String>())
+        val changeHits = java.util.Collections.synchronizedList(ArrayList<String>())
         @Volatile var delayMs = 0L
         override fun now() = base.now()
         override fun httpGetAll(urls: List<String>): List<String?> {
             if (urls.none { it.startsWith("https://nsearchives.") || it.startsWith("https://raw.githubusercontent.") }) return base.httpGetAll(urls)
+            if (urls.all { it == SwingApp.CHANGES_URL }) { changeHits.addAll(urls); return urls.map { synchronized(served) { served[it] } } }
             listHits.addAll(urls)
             if (delayMs > 0) Thread.sleep(delayMs)
             return urls.map { synchronized(served) { served[it] } }
@@ -137,6 +139,7 @@ object V5Tests {
         fp.setTime(d0, 9 * 60)
         app.tick("alarm"); app.tick("open")
         T.eq(p.listHits.size, 2, "once per day: later ticks do not refetch")
+        T.eq(p.changeHits.size, 1, "symbol-change list fetched with the stock list, once")
         T.eq(act(app, "refreshSymbols", "{}")["ok"], true, "refreshSymbols ok")
         T.eq(p.listHits.size, 2, "refreshSymbols after today's success: no network")
         // day 2: NSE blocked (HTML), SME fine -> GitHub
@@ -445,7 +448,8 @@ object V5Tests {
     fun resolveSymbols() {
         val f = java.io.File("app/src/main/assets/symbols.csv")
         if (!f.exists()) { T.check(false, "bundled symbols.csv readable from the repo root"); return }
-        val ix = SymbolIndex.build(StockList.parse(f.readText()).rows, emptyList(), emptyMap(), null)
+        val ix = SymbolIndex.build(StockList.parse(f.readText()).rows, emptyList(), emptyMap(), null,
+            java.io.File("app/src/main/assets/symbolchange.csv").readText(), java.io.File("app/src/main/assets/corpactions.csv").readText())
         T.check(ix.size > 3000, "real list loaded: " + ix.size)
         T.eq(ix.resolve("OLA"), "OLAELEC", "OLA -> OLAELEC (Ola Electric)")
         T.eq(ix.resolve("SESHAASAI"), "STYL", "SESHAASAI -> STYL (Seshaasai Technologies)")
@@ -457,6 +461,48 @@ object V5Tests {
         T.eq(ix.resolve("TATA"), null, "ambiguous -> no guess")
         T.eq(ix.resolve("ZZQXW"), null, "unknown -> no guess")
         T.eq(ix.resolve(""), null, "empty -> null")
+        T.eq(ix.resolve("Gujarat State Petronet Ltd"), "GUJENERGY", "merged company name -> its new stock (GSPL merged into Gujarat Energy)")
+        T.eq(ix.resolve("NSE:GSPL-EQ"), "GUJENERGY", "old merged symbol never prefix-guessed into GSPLTRANS")
+        T.eq(ix.resolve("GSPL"), "GUJENERGY", "GSPL -> GUJENERGY")
+        T.eq(ix.resolve("GUJGASLTD"), "GUJENERGY", "NSE symbol change GUJGASLTD -> GUJENERGY")
+        T.eq(ix.resolve("CADILAHC"), "ZYDUSLIFE", "NSE symbol change CADILAHC -> ZYDUSLIFE")
+        T.eq(ix.resolve("GSPLTRANS"), "GSPLTRANS", "real symbol unchanged")
+        val act = ix.actionFor("Gujarat State Petronet Limited")
+        T.check(act != null && act.to == "GUJENERGY" && act.extra == "GSPLTRANS", "merger found by old name")
+        if (act != null) {
+            T.eq(act.newQty(25.0), 19.0, "25 GSPL -> 19 GUJENERGY (10 per 13)")
+            T.eq(act.extraQty(25.0), 6.0, "-> 6 GSPLTRANS (1 per 3 GUJENERGY)")
+            T.eq(act.newAvg(0.0), 0.0, "unknown buy price stays unknown")
+            T.eq(act.newAvg(130.0), 169.0, "same money, fewer shares")
+        }
+        T.eq(ix.actionFor("GUJENERGY"), null, "live symbol has no merger")
+        T.eq(ix.resolve("Ola Electric Mobility Limited"), "OLAELEC", "full name -> OLAELEC")
+        // a statement with company names and a 0 buy price, as a broker/AI extraction produces it
+        val text = "Stock Name,Quantity,Average Price\nGujarat State Petronet Ltd,25,0\nOla Electric Mobility Limited,400,60.02\nGlobal Health Limited,14,336\nSeshaasai Technologies Ltd,100,431.65\n"
+        val res = HoldingsImport.parse(text, emptyMap(), emptySet()) { ix.actionFor(it)?.old ?: ix.resolve(it) }
+        T.eq(res.rows.map { it.sym }.sorted(), listOf("GSPL", "MEDANTA", "OLAELEC", "STYL"), "names in a statement import as NSE symbols: " + res.skipped)
+        T.check(res.rows.first { it.sym == "GSPL" }.avg == 0.0, "a 0 buy price is kept as 0 (tracked without P&L), not invented")
+    }
+
+    fun mergedImport() {
+        val p = FakePlatform.standard()
+        for (n in listOf("symbols.csv", "symbolchange.csv", "corpactions.csv")) p.assets[n] = java.io.File("app/src/main/assets/" + n).readText()
+        val app = SwingApp(p)
+        p.setTime(day(2026, 11, 13), 10 * 60)
+        val text = "Stock Name,Quantity,Average Price\nGujarat State Petronet Ltd,25,0\nOla Electric Mobility Limited,400,60.02\n"
+        val r = Json.parseObject(app.action("importHoldings", Json.stringify(mapOf("text" to text))))!!
+        T.check(r.bool("ok"), "statement imported: " + r)
+        val hs = Json.parseObject(app.stateJson())!!.list("holdings").map { it.asObj() }
+        val g = hs.firstOrNull { it.str("sym") == "GUJENERGY" }
+        T.check(g != null && g.num("qty", 0.0) == 19.0 && g.num("avg", -1.0) == 0.0, "25 GSPL became 19 GUJENERGY, buy price still unknown: " + g)
+        T.check(hs.any { it.str("sym") == "GSPLTRANS" && it.num("qty", 0.0) == 6.0 }, "plus 6 GSPLTRANS from the demerger")
+        T.check(hs.none { it.str("sym") == "GSPL" }, "no dead GSPL holding left")
+        T.check(hs.any { it.str("sym") == "OLAELEC" && it.num("qty", 0.0) == 400.0 }, "company name -> OLAELEC")
+        val app2 = SwingApp(FakePlatform.standard().also { q -> for (n in listOf("symbols.csv", "symbolchange.csv", "corpactions.csv")) q.assets[n] = p.assets[n]!!; q.setTime(day(2026, 11, 13), 10 * 60) })
+        app2.action("addHolding", "{\"sym\":\"GSPL\",\"qty\":13,\"avg\":130}")
+        val h2 = Json.parseObject(app2.stateJson())!!.list("holdings").map { it.asObj() }
+        T.check(h2.none { it.str("sym") == "GSPL" }, "typed GSPL converted: " + h2.map { it.str("sym") })
+        T.check(h2.any { it.str("sym") == "GUJENERGY" && it.num("qty", 0.0) == 10.0 && Math.abs(it.num("avg", 0.0) - 169.0) < 1e-6 }, "13 GSPL @130 -> 10 GUJENERGY @169")
     }
 
     fun holdingRetry() {

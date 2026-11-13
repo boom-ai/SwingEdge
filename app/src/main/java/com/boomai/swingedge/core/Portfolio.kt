@@ -306,7 +306,7 @@ object HoldingsImport {
 
     private val ISIN_RE = Regex("^IN[A-Z0-9]{10}$")
 
-    private fun resolveSymbol(cell: String, nameToSym: Map<String, String>, known: Set<String>): String? {
+    private fun resolveSymbol(cell: String, nameToSym: Map<String, String>, known: Set<String>, resolve: ((String) -> String?)? = null): String? {
         val x = cleanSymbol(cell)
         if (x.isEmpty() || JUNK.contains(x)) return null
         if (known.contains(x)) return x
@@ -330,11 +330,15 @@ object HoldingsImport {
             }
             if (hit != null && !many) return hit
         }
+        // the full NSE list: real symbols, renamed symbols and company names ("Gujarat State Petronet" -> GSPL)
+        if (resolve != null && !ISIN_RE.matches(x)) {
+            try { resolve(cell.trim())?.let { return it } } catch (t: Throwable) { }
+        }
         if (SYM_RE.matches(x) && x.any { it in 'A'..'Z' } && !ISIN_RE.matches(x)) return x
         return null
     }
 
-    fun parse(textIn: String?, nameToSym: Map<String, String>, known: Set<String>): ImportResult {
+    fun parse(textIn: String?, nameToSym: Map<String, String>, known: Set<String>, resolve: ((String) -> String?)? = null): ImportResult {
         val skipped = ArrayList<String>()
         val merged = LinkedHashMap<String, ImportRow>()
         try {
@@ -417,7 +421,7 @@ object HoldingsImport {
                 if (hdr >= 0) {
                     val symCell = cells.getOrNull(cSym) ?: ""
                     if (symCell.isBlank() || JUNK.contains(symCell.trim().uppercase()) || symCell.trim().lowercase().startsWith("total")) continue
-                    sym = resolveSymbol(symCell, nameToSym, known)
+                    sym = resolveSymbol(symCell, nameToSym, known, resolve)
                     qty = parseNumber(cells.getOrNull(cQty))
                     if (cAvg >= 0) avg = parseNumber(cells.getOrNull(cAvg))
                     if ((avg == null || avg <= 0) && cInv >= 0) {
@@ -429,7 +433,7 @@ object HoldingsImport {
                     var at = -1
                     for ((ci, cell) in cells.withIndex()) {
                         if (parseNumber(cell) != null) continue
-                        val r = resolveSymbol(cell, nameToSym, known)
+                        val r = resolveSymbol(cell, nameToSym, known, resolve)
                         if (r != null) {
                             sym = r
                             at = ci

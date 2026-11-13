@@ -28,6 +28,51 @@ class SymbolIndex private constructor(
 
     fun has(sym: String): Boolean = bySym.containsKey(sym)
 
+    /** OLD -> current symbol (NSE's symbol-change list, chains followed; only targets in this list). */
+    private var changed: Map<String, String> = emptyMap()
+    /** OLD -> merger, and the old company names of merged stocks (normalised words) */
+    private var corp: Map<String, CorpAction> = emptyMap()
+    private var corpNames: List<Pair<List<String>, CorpAction>> = emptyList()
+
+    private fun setChanges(nse: Map<String, String>, acts: List<CorpAction>) {
+        val m = HashMap<String, String>()
+        for (old in nse.keys) {
+            if (bySym.containsKey(old)) continue
+            var cur = old; var hops = 0
+            while (!bySym.containsKey(cur) && hops < 8) { cur = nse[cur] ?: break; hops++ }
+            if (bySym.containsKey(cur) && cur != old) m[old] = cur
+        }
+        val c = HashMap<String, CorpAction>(); val names = ArrayList<Pair<List<String>, CorpAction>>()
+        for (a in acts) {
+            if (bySym.containsKey(a.old)) continue
+            val to = if (bySym.containsKey(a.to)) a.to else m[a.to] ?: continue
+            val fixed = CorpAction(a.old, to, a.num, a.den, a.extra?.let { e -> if (bySym.containsKey(e)) e else m[e] }, a.exNum, a.exDen, a.oldName, a.effective)
+            c[a.old] = fixed
+            val w = cwords(a.oldName)
+            if (w.isNotEmpty()) names.add(Pair(w, fixed))
+        }
+        changed = m; corp = c; corpNames = names
+    }
+
+    private fun clean(raw: String): String = raw.trim().uppercase()
+        .removePrefix("NSE:").removePrefix("BSE:").trim()
+        .replace(Regex("(\\.NS|\\.BO|[- ](EQ|BE|SM|ST))$"), "").trim()
+
+    private fun cwords(s: String): List<String> = s.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in STOP }
+
+    /** The merger behind what was typed (old symbol or old company name), when its shares were swapped for another stock's. */
+    fun actionFor(raw: String): CorpAction? {
+        try {
+            val up = clean(raw)
+            if (up.isEmpty() || bySym.containsKey(up)) return null
+            corp[up]?.let { return it }
+            val qw = cwords(up)
+            if (qw.size < 2) return null
+            for ((w, a) in corpNames) if (w.size >= qw.size && qw.indices.all { i -> if (i == qw.size - 1) w[i].startsWith(qw[i]) else w[i] == qw[i] }) return a
+            return null
+        } catch (t: Throwable) { return null }
+    }
+
     /**
      * Maps what a user typed or a broker exported to the real NSE symbol: the symbol itself when it exists; else the
      * single symbol that starts with it ("OLA" -> "OLAELEC"); else the single company whose name starts with those words
@@ -36,9 +81,12 @@ class SymbolIndex private constructor(
      */
     fun resolve(raw: String): String? {
         try {
-            val up = raw.trim().uppercase()
+            val up = clean(raw)
             if (up.isEmpty()) return null
             if (bySym.containsKey(up)) return up
+            // official renames and mergers first: an old symbol must never be guessed into a different company by prefix
+            changed[up]?.let { return it }
+            actionFor(up)?.let { return it.to }
             val key = compact(up)
             if (key.length < 3) return null
             var hit = -1; var many = false
@@ -199,7 +247,8 @@ class SymbolIndex private constructor(
             build(try { StockList.parse(symbolsCsv).rows } catch (t: Throwable) { emptyList() }, universe, universeNames, extraNames)
 
         /** Same, from already-parsed stock list rows (the live list). */
-        fun build(rows: List<ListRow>, universe: List<String>, universeNames: Map<String, String>, extraNames: String?): SymbolIndex {
+        fun build(rows: List<ListRow>, universe: List<String>, universeNames: Map<String, String>, extraNames: String?,
+                  changesCsv: String? = null, corpCsv: String? = null): SymbolIndex {
             val order = ArrayList<String>()
             val primary = HashMap<String, String>()
             val primaryRank = HashMap<String, Int>()
@@ -247,7 +296,9 @@ class SymbolIndex private constructor(
             val nameLen = IntArray(n) { k -> nameWords[k].minOfOrNull { it.size } ?: 99 }
             val listed = IntArray(n) { listedBy[order[it]] ?: 0 }
             val board = Array(n) { if (boardBy[order[it]] == StockList.SME) StockList.SME else StockList.EQ }
-            return SymbolIndex(syms, names, tracked, symKey, nameWords, nameKey, nameLen, listed, board)
+            val ix = SymbolIndex(syms, names, tracked, symKey, nameWords, nameKey, nameLen, listed, board)
+            try { ix.setChanges(SymbolChanges.parseNse(changesCsv), SymbolChanges.parseCorp(corpCsv)) } catch (t: Throwable) {}
+            return ix
         }
     }
 }

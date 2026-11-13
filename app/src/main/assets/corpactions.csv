@@ -1,0 +1,4 @@
+# Mergers/demergers where an old NSE symbol stopped trading and holders received shares of other companies.
+# OLD,NEW,NUM,DEN,EXTRA,EXNUM,EXDEN,OLD COMPANY NAME,EFFECTIVE
+# NEW qty = floor(old qty * NUM / DEN); EXTRA qty = floor(NEW qty * EXNUM / EXDEN) (demerged company, no cost allocated)
+GSPL,GUJENERGY,10,13,GSPLTRANS,1,3,Gujarat State Petronet Limited,2026-05-01

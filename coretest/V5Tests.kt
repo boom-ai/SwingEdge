@@ -8,7 +8,7 @@ object V5Tests {
     fun all(): List<Pair<String, () -> Unit>> = listOf(
         "v5-list-parse" to ::parse, "v5-list-refresh" to ::refresh, "v5-search-meta" to ::searchMeta,
         "v5-panel-rules" to ::panelRules, "v5-panel-app" to ::panelApp, "v5-listing" to ::listing, "v5-list-concurrent" to ::concurrent,
-        "v5-resolve-symbols" to ::resolveSymbols, "v5-merged-import" to ::mergedImport, "v5-holding-retry" to ::holdingRetry
+        "v5-resolve-symbols" to ::resolveSymbols, "v5-merged-import" to ::mergedImport, "v5-bse-fallback" to ::bseFallback, "v5-holding-retry" to ::holdingRetry
     )
 
     private fun day(y: Int, m: Int, d: Int) = java.time.LocalDate.of(y, m, d).toEpochDay().toInt()
@@ -503,6 +503,28 @@ object V5Tests {
         val h2 = Json.parseObject(app2.stateJson())!!.list("holdings").map { it.asObj() }
         T.check(h2.none { it.str("sym") == "GSPL" }, "typed GSPL converted: " + h2.map { it.str("sym") })
         T.check(h2.any { it.str("sym") == "GUJENERGY" && it.num("qty", 0.0) == 10.0 && Math.abs(it.num("avg", 0.0) - 169.0) < 1e-6 }, "13 GSPL @130 -> 10 GUJENERGY @169")
+    }
+
+    fun bseFallback() {
+        val p = FakePlatform.standard()
+        val app = SwingApp(p)
+        p.setTime(day(2026, 11, 13), 11 * 60)
+        p.yahoo.bseOnly.add("UP03")
+        app.action("addHolding", "{\"sym\":\"UP03\",\"qty\":10,\"avg\":100}")
+        app.action("addHolding", "{\"sym\":\"ZEPTOX\",\"qty\":304,\"avg\":33}")
+        app.action("scanNow", "{}")
+        val hs = Json.parseObject(app.stateJson())!!.list("holdings").map { it.asObj() }
+        val b = hs.first { it.str("sym") == "UP03" }
+        T.check(b.bool("dataOk") && b.num("ltp", 0.0) > 0, "BSE-only stock gets prices from BSE: " + b.str("headline"))
+        val z = hs.first { it.str("sym") == "ZEPTOX" }
+        T.check(!z.bool("dataOk") && z.str("noDataWhy").contains("isn't trading on NSE or BSE"), "unlisted stock says why: " + z.str("noDataWhy"))
+        // remembered: a new app instance uses BSE straight away, no search
+        val n0 = p.yahoo.searches
+        val app2 = SwingApp(p)
+        app2.action("scanNow", "{}")
+        val b2 = Json.parseObject(app2.stateJson())!!.list("holdings").map { it.asObj() }.first { it.str("sym") == "UP03" }
+        T.check(b2.bool("dataOk"), "BSE ticker remembered after restart")
+        T.check(p.yahoo.searches - n0 <= 2, "no repeated searches within hours: " + (p.yahoo.searches - n0))
     }
 
     fun holdingRetry() {

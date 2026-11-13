@@ -459,3 +459,7 @@ fun ScoreTexts.mergedLine(a: CorpAction, qty: Double): String {
         (if (a.extra != null) ", plus " + a.exNum + " " + a.extra + " per " + a.exDen + " " + a.to else "") +
         "). Now tracked as " + parts + ". Check the counts in your broker app and edit if they differ."
 }
+
+fun ScoreTexts.notTradingLine(sym: String): String =
+    sym + " isn't trading on NSE or BSE right now (not listed yet, suspended or delisted), so there is no market price. " +
+        "Check the symbol in your broker app — if it's wrong, remove this and add the right one. The app keeps checking every few hours."

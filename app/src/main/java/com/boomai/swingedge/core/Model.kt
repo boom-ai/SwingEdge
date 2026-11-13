@@ -159,6 +159,8 @@ class Holding {
     var stop = 0.0; var bookAt = 0.0
     var reasons: List<String> = listOf("Added — prices load on the next scan", "Verdict appears once data is in")
     var dataOk = false
+    /** Why there is no price (e.g. not trading on NSE or BSE); empty while it is just waiting for a scan. */
+    var noDataWhy = ""
     var strength = 0
     /** "VERDICT@day" of the last verdict notification, and the day a stop-cross was last notified. */
     var notifiedKey = ""
@@ -173,7 +175,8 @@ class Holding {
     fun toMap(): Map<String, Any?> = linkedMapOf(
         "sym" to sym, "name" to name, "qty" to qty, "avg" to Fmt.r2(avg), "ltp" to Fmt.r2(ltp), "valueRs" to Fmt.r2(valueRs()),
         "pnlRs" to Fmt.r2(pnlRs()), "pnlPct" to Fmt.r2(if (avg > 0 && ltp > 0) (ltp / avg - 1) * 100.0 else 0.0), "dayChgPct" to Fmt.r2(dayChgPct()),
-        "verdict" to verdict, "headline" to headline, "stop" to Fmt.r2(stop), "bookAt" to Fmt.r2(bookAt), "reasons" to reasons, "dataOk" to dataOk, "strength" to strength
+        "verdict" to verdict, "headline" to headline, "stop" to Fmt.r2(stop), "bookAt" to Fmt.r2(bookAt), "reasons" to reasons, "dataOk" to dataOk, "strength" to strength,
+        "noDataWhy" to noDataWhy
     )
 
     fun persist(): Map<String, Any?> {
@@ -193,7 +196,7 @@ class Holding {
             h.headline = m.str("headline", h.headline); h.stop = m.num("stop"); h.bookAt = m.num("bookAt"); h.strength = m.int("strength", 0)
             val r = m.strList("reasons")
             if (r.isNotEmpty()) h.reasons = r
-            h.dataOk = m.bool("dataOk"); h.notifiedKey = m.str("notifiedKey"); h.lastVerdict = m.str("lastVerdict")
+            h.dataOk = m.bool("dataOk"); h.noDataWhy = m.str("noDataWhy"); h.notifiedKey = m.str("notifiedKey"); h.lastVerdict = m.str("lastVerdict")
             h.stopCrossDay = m.int("stopCrossDay"); h.belowStop = m.bool("belowStop")
             return h
         }

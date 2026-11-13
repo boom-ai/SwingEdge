@@ -690,7 +690,7 @@
       (!nodata && N(h.strength) > 0 ? '<div class="str"><span>Trend strength</span><i><b style="width:' + Math.min(100, Math.round(N(h.strength))) + '%" class="' + (N(h.strength) >= 65 ? 'g' : N(h.strength) >= 40 ? 'a' : 'r') + '"></b></i><span class="num">' + Math.round(N(h.strength)) + '</span></div>' : '') + '</div>';
     if (nodata) {
       out += '<div class="px"><div class="ltp mut">' + DASH + '</div><div class="ltpl">no price</div></div></div>' +
-        '<div class="nd">' + ic('clock') + '<span>No data yet. Prices and a verdict appear after the next scan.</span></div>';
+        '<div class="nd">' + ic(T(h.noDataWhy).trim() ? 'info' : 'clock') + '<span>' + (T(h.noDataWhy).trim() ? esc(T(h.noDataWhy).trim()) : 'No data yet. Prices and a verdict appear after the next scan.') + '</span></div>';
     } else {
       out += '<div class="px"><div class="ltp">' + px(h.ltp) + '</div><div class="ltpl num ' + tone(h.dayChgPct) + '">' + pc(h.dayChgPct, true, true) + ' today</div></div></div>';
       if (T(h.headline).trim()) out += '<div class="headline">' + esc(T(h.headline).trim()) + '</div>';

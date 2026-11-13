@@ -24,7 +24,7 @@ object SimTests {
        "sl":0,"t1":0,"t2":0,"day":1,"maxDays":6,"ltp":0,"pnlRs":0,"pnlPct":0,
        "action":"HOLD","actionNote":"","t1Done":false,"closedAt":0,"exitPrice":0,"result":""}],
      "holdings": [{"sym":"","name":"","qty":0,"avg":0,"ltp":0,"valueRs":0,"pnlRs":0,"pnlPct":0,"dayChgPct":0,
-       "verdict":"HOLD","headline":"","stop":0,"bookAt":0,"reasons":[""],"dataOk":true,"strength":0}],
+       "verdict":"HOLD","headline":"","stop":0,"bookAt":0,"reasons":[""],"dataOk":true,"strength":0,"noDataWhy":""}],
      "portfolio": {"investedRs":0,"valueRs":0,"pnlRs":0,"pnlPct":0,"dayPnlRs":0,"sellCount":0,"trimCount":0},
      "strategies": [{"id":"","label":"","desc":"","verdict":"LIVE","testedAt":0,
        "stats":{"n":0,"winPct":0,"avgPct":0,"pf":0,"maxDdPct":0,"oosN":0,"oosAvgPct":0},"why":""}],

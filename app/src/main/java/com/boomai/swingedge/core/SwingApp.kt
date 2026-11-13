@@ -366,6 +366,7 @@ class SwingApp(private val p: Platform) {
     /** Fetches daily history (when not yet fetched under [dailyKey]) and intraday bars for [syms]; fills `live` and `quotes`. Returns symbols with a quote. */
     private fun fetchSymbols(syms: List<String>, today: Int, dailyKey: Int, force: Boolean, pct0: Int, pct1: Int, quoteOnly: Set<String>? = null): Int {
         val nowMs = p.now()
+        loadAlt()
         // a download that failed is retried on a manual scan, and otherwise after RETRY_FAILED_MS (it is never "remembered for the day")
         val needDaily = syms.filter { sym ->
             val k = cache.keyOf(sym)
@@ -385,6 +386,7 @@ class SwingApp(private val p: Platform) {
                 }
             }
         }
+        findElsewhere(syms, today, dailyKey, force)
         // Live quotes for everything only when needed (buy window with a LIVE strategy, or a manual scan);
         // otherwise just the index, holdings and open trades. History above is still kept for every stock.
         val qsyms = if (quoteOnly == null) syms else syms.filter { quoteOnly.contains(it) }
@@ -399,6 +401,91 @@ class SwingApp(private val p: Platform) {
         }
         return n
     }
+
+    // ------------------------------------------------------------------ stocks that are not at "<SYM>.NS"
+
+    /** symbol -> when a search for it last found nothing anywhere (persisted with the found tickers) */
+    private val notListed = ConcurrentHashMap<String, Long>()
+    private val altTried = ConcurrentHashMap<String, Long>()
+    @Volatile private var altLoaded = false
+
+    private fun loadAlt() {
+        if (altLoaded) return
+        altLoaded = true
+        try {
+            val m = Json.parseObject(p.read(ALT_FILE) ?: return) ?: return
+            for ((k, v) in m.obj("alt")) (v as? String)?.let { Yahoo.alt[k] = it }
+            for ((k, v) in m.obj("none")) (v as? Number)?.let { notListed[k] = it.toLong() }
+        } catch (t: Throwable) { log("alt tickers not loaded: $t") }
+    }
+
+    private fun saveAlt() {
+        try { p.write(ALT_FILE, Json.stringify(mapOf("alt" to HashMap(Yahoo.alt), "none" to HashMap(notListed)))) } catch (t: Throwable) {}
+    }
+
+    /**
+     * Holdings, watchlist and searched stocks with no prices at "<SYM>.NS": tries BSE ("<SYM>.BO"), then a Yahoo search by
+     * symbol and company name (NSE first). A hit is remembered so every later scan uses it. A stock found nowhere is marked
+     * "not listed" and retried every ALT_RETRY_MS (a new listing starts trading). Bounded: at most ALT_MAX per scan.
+     */
+    private fun findElsewhere(syms: List<String>, today: Int, dailyKey: Int, force: Boolean) {
+        try {
+            loadAlt()
+            val now = p.now()
+            val mine = HashSet<String>()
+            for (h in st.holdings) mine.add(h.sym)
+            mine.addAll(st.watch)
+            val todo = syms.filter { sym ->
+                val got = cache.get(sym)
+                !sym.startsWith("^") && (got == null || got.n == 0) && (mine.contains(sym) || syms.size <= 3) &&
+                    now - (altTried[sym] ?: 0L) >= (if (force) ALT_FORCE_MS else ALT_RETRY_MS)
+            }.take(ALT_MAX)
+            if (todo.isEmpty()) return
+            val host = Params.YAHOO_HOST_1
+            var changed = false
+            for (sym in todo) {
+                altTried[sym] = now
+                val name = st.holdings.firstOrNull { it.sym == sym }?.name?.takeIf { it.isNotEmpty() && it != sym } ?: nameOf(sym).takeIf { it != sym }
+                val cands = LinkedHashSet<String>()
+                val prev = Yahoo.alt[sym]
+                if (prev != null) cands.add(prev)
+                cands.add("$sym.BO")
+                val searches = httpAll(listOfNotNull(Yahoo.searchUrl(host, sym), name?.let { Yahoo.searchUrl(host, it) }))
+                for ((i, txt) in searches.withIndex()) for ((t, nm) in Yahoo.searchHits(txt)) {
+                    val base = t.substringBeforeLast('.')
+                    val sameSym = base.equals(sym, true)
+                    // a hit from the name search must share the company's first word; from the symbol search, the symbol itself
+                    val sameName = i == 1 && name != null && firstWord(nm) != "" && firstWord(nm) == firstWord(name)
+                    if (sameSym || sameName) cands.add(t)
+                }
+                var found: String? = null
+                val list = cands.filter { it != "$sym.NS" }.take(4)
+                val res = httpAll(list.map { Yahoo.tickerUrl(host, it, "2y", "1d") })
+                for ((k, t) in list.withIndex()) {
+                    val s = Yahoo.daily(sym, res.getOrNull(k), today) ?: continue
+                    cache.put(sym, s, dailyKey); failedAt.remove(sym)
+                    found = t
+                    break
+                }
+                if (found != null) {
+                    if (Yahoo.alt[sym] != found) { Yahoo.alt[sym] = found; changed = true }
+                    if (notListed.remove(sym) != null) changed = true
+                    log("prices for $sym found at $found")
+                } else if (prev == null) {
+                    notListed[sym] = now; changed = true
+                }
+            }
+            if (changed) saveAlt()
+        } catch (t: Throwable) {
+            log("findElsewhere failed: $t")
+        }
+    }
+
+    private fun firstWord(s: String): String = s.lowercase().split(Regex("[^a-z0-9]+")).firstOrNull { it.length >= 3 } ?: ""
+
+    /** Shown on a holding with no price once the app has looked everywhere. */
+    private fun noDataWhy(sym: String): String =
+        if (notListed.containsKey(sym)) ScoreTexts.notTradingLine(sym) else ""
 
     private fun dailyKeyFor(day: Int): Int {
         var d = day
@@ -1074,6 +1161,7 @@ class SwingApp(private val p: Platform) {
             val weight = if (total > 0) h.valueRs() / total * 100.0 else 0.0
             val a = Advisor.check(s, idx, frac, if (st.holdings.size >= 2) weight else 0.0)
             h.verdict = a.verdict; h.headline = a.headline; h.stop = a.stop; h.bookAt = a.bookAt; h.reasons = a.reasons; h.dataOk = a.dataOk; h.strength = a.strength
+            h.noDataWhy = if (a.dataOk) "" else noDataWhy(h.sym)
             if (!a.dataOk) continue
             // h.notifiedKey = "SELL,TRIM,@day": the verdicts already announced today (each at most once a day)
             val dayTag = "@$day"
@@ -1863,6 +1951,10 @@ class SwingApp(private val p: Platform) {
         /** a failed price-history download is retried after this long (or at once on a manual scan) */
         const val CHANGES_URL = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/symbolchange.csv"
         const val CHANGES_FILE = "symbolchange.csv"
+        const val ALT_FILE = "alt_tickers.json"
+        const val ALT_MAX = 12
+        const val ALT_RETRY_MS = 6L * 3600 * 1000
+        const val ALT_FORCE_MS = 10L * 60 * 1000
         const val RETRY_FAILED_MS = 20L * 60 * 1000
         const val STATE_FILE = "state.json"
         const val FORWARD_FILE = "forward.json"

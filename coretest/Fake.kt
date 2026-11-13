@@ -136,13 +136,26 @@ class FakeYahoo {
         return sb.toString()
     }
 
+    /** symbols that trade only on BSE (served at "<SYM>.BO", an error at ".NS") */
+    val bseOnly = HashSet<String>()
+    var searches = 0
+
     /** Thread-safe: several threads (a scan and a stock-page lookup) may call it at once. */
     @Synchronized
     fun respond(url: String, nowMs: Long): String? {
         val host2 = url.contains("query2.")
+        if (url.contains("/v1/finance/search?q=")) {
+            searches++
+            val q = java.net.URLDecoder.decode(url.substringAfter("q=").substringBefore('&'), "UTF-8").uppercase()
+            val hits = bseOnly.filter { it == q }.joinToString(",") { "{\"symbol\":\"$it.BO\",\"quoteType\":\"EQUITY\",\"longname\":\"$it Ltd\"}" }
+            return "{\"quotes\":[$hits]}"
+        }
         val m = Regex("/v8/finance/chart/([^?]+)\\?range=(\\w+)&interval=(\\w+)").find(url) ?: return null
         val ticker = java.net.URLDecoder.decode(m.groupValues[1].replace("+", "%2B"), "UTF-8")
-        val sym = if (ticker.startsWith("^")) ticker else if (ticker.endsWith(".NS")) ticker.substring(0, ticker.length - 3) else return null
+        val sym = if (ticker.startsWith("^")) ticker
+            else if (ticker.endsWith(".BO")) ticker.substring(0, ticker.length - 3).takeIf { bseOnly.contains(it) } ?: return "{\"chart\":{\"result\":null,\"error\":{\"code\":\"Not Found\"}}}"
+            else if (ticker.endsWith(".NS")) ticker.substring(0, ticker.length - 3).also { if (bseOnly.contains(it)) return "{\"chart\":{\"result\":null,\"error\":{\"code\":\"Not Found\"}}}" }
+            else return null
         if (dead.contains(sym)) return null
         if (host2Only.contains(sym) && !host2) return null
         if (garbage.contains(sym)) return "<html><body>Too Many Requests</body></html>"

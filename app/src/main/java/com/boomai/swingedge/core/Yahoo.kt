@@ -27,11 +27,37 @@ object Yahoo {
         return sb.toString()
     }
 
-    /** NSE symbol -> Yahoo ticker ("^NSEI" stays an index, everything else gets ".NS"). */
-    fun ticker(sym: String): String = if (sym.startsWith("^")) sym else "$sym.NS"
+    /** Stocks found somewhere other than "<SYM>.NS" (BSE-only stocks, e.g. THINKINK -> THINKINK.BO). */
+    val alt = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    fun url(host: String, sym: String, range: String, interval: String): String =
-        host + "/v8/finance/chart/" + encode(ticker(sym)) + "?range=" + range + "&interval=" + interval
+    /** NSE symbol -> Yahoo ticker ("^NSEI" stays an index, a stock found elsewhere uses that, everything else gets ".NS"). */
+    fun ticker(sym: String): String = if (sym.startsWith("^")) sym else alt[sym] ?: "$sym.NS"
+
+    fun url(host: String, sym: String, range: String, interval: String): String = tickerUrl(host, ticker(sym), range, interval)
+
+    fun tickerUrl(host: String, ticker: String, range: String, interval: String): String =
+        host + "/v8/finance/chart/" + encode(ticker) + "?range=" + range + "&interval=" + interval
+
+    fun searchUrl(host: String, q: String): String =
+        host + "/v1/finance/search?q=" + encode(q) + "&quotesCount=8&newsCount=0&listsCount=0"
+
+    /** Indian equity tickers (".NS" first, then ".BO") from a Yahoo search response, with their names. */
+    fun searchHits(text: String?): List<Pair<String, String>> {
+        if (text == null) return emptyList()
+        try {
+            val out = ArrayList<Pair<String, String>>()
+            for (q in (Json.parseObject(text) ?: return emptyList()).list("quotes")) {
+                val m = q.asObj()
+                val t = m.str("symbol").uppercase()
+                if (!(t.endsWith(".NS") || t.endsWith(".BO"))) continue
+                val type = m.str("quoteType").uppercase()
+                if (type.isNotEmpty() && type != "EQUITY") continue
+                out.add(Pair(t, m.str("longname").ifEmpty { m.str("shortname") }))
+            }
+            out.sortBy { if (it.first.endsWith(".NS")) 0 else 1 }
+            return out
+        } catch (t: Throwable) { return emptyList() }
+    }
 
     fun dailyUrl(host: String, sym: String) = url(host, sym, "2y", "1d")
     fun intradayUrl(host: String, sym: String) = url(host, sym, "5d", "15m")

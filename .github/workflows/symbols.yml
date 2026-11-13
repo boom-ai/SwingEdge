@@ -23,6 +23,8 @@ jobs:
           curl -sS -m 30 -A "$UA" -c /tmp/ck -o /dev/null https://www.nseindia.com/ || true
           echo "EQ:  $(fetch https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv /tmp/eq.csv)"
           echo "SME: $(fetch https://nsearchives.nseindia.com/emerge/corporates/content/SME_EQUITY_L.csv /tmp/sme.csv)"
+          echo "CHG: $(fetch https://nsearchives.nseindia.com/content/equities/symbolchange.csv /tmp/chg.csv)"
+          head -3 /tmp/chg.csv || true; tail -3 /tmp/chg.csv || true
           head -2 /tmp/eq.csv || true; head -2 /tmp/sme.csv || true
       - name: Build symbols.csv
         run: |
@@ -54,9 +56,23 @@ jobs:
               f.write("SYMBOL,NAME,LISTED,BOARD\n")
               for k in sorted(rows): f.write(",".join(rows[k]) + "\n")
           PY
+      - name: Symbol changes
+        run: |
+          python3 - <<'PY'
+          import os
+          if os.path.exists("/tmp/chg.csv"):
+              t = open("/tmp/chg.csv", encoding="utf-8", errors="replace").read().lstrip("\ufeff")
+              lines = [l for l in t.splitlines() if l.count(",") >= 3]
+              if len(lines) > 100 and "<html" not in t[:500].lower():
+                  os.makedirs("data", exist_ok=True)
+                  open("data/symbolchange.csv", "w", encoding="utf-8").write("\n".join(lines) + "\n")
+                  print("symbol changes:", len(lines))
+              else:
+                  print("symbol change list missing or invalid")
+          PY
       - name: Commit if changed
         run: |
-          if [ -f data/symbols.csv ] && [ -n "$(git status --porcelain data/symbols.csv)" ]; then
+          if [ -n "$(git status --porcelain data)" ]; then
             git config user.name "github-actions[bot]"; git config user.email "41898+github-actions[bot]@users.noreply.github.com"
-            git add data/symbols.csv && git commit -m "Refresh NSE stock list" && git push
+            git add data && git commit -m "Refresh NSE stock list" && git push
           else echo "no change"; fi

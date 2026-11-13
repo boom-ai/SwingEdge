@@ -1,0 +1,62 @@
+name: Refresh NSE stock list
+on:
+  schedule:
+    - cron: "17 2 * * *"      # 07:47 IST daily
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/symbols.yml"]
+permissions:
+  contents: write
+concurrency:
+  group: symbols
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download NSE lists
+        run: |
+          set -u
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          fetch() { curl -sS -L --compressed -m 60 -A "$UA" -H "Accept: text/csv,*/*" -H "Referer: https://www.nseindia.com/" -c /tmp/ck -b /tmp/ck -o "$2" -w "%{http_code} %{size_download}\n" "$1" || echo "curl-failed"; }
+          curl -sS -m 30 -A "$UA" -c /tmp/ck -o /dev/null https://www.nseindia.com/ || true
+          echo "EQ:  $(fetch https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv /tmp/eq.csv)"
+          echo "SME: $(fetch https://nsearchives.nseindia.com/emerge/corporates/content/SME_EQUITY_L.csv /tmp/sme.csv)"
+          head -2 /tmp/eq.csv || true; head -2 /tmp/sme.csv || true
+      - name: Build symbols.csv
+        run: |
+          python3 - <<'PY'
+          import csv, io, os, sys
+          rows = {}
+          def load(path, board):
+              if not os.path.exists(path): return 0
+              txt = open(path, encoding="utf-8", errors="replace").read().lstrip("﻿")
+              if "<html" in txt[:500].lower(): return 0
+              r = csv.DictReader(io.StringIO(txt))
+              r.fieldnames = [f.strip().upper() for f in (r.fieldnames or [])]
+              n = 0
+              for x in r:
+                  x = {k.strip().upper(): (v or "").strip() for k, v in x.items() if k}
+                  sym = x.get("SYMBOL", "").upper()
+                  name = (x.get("NAME OF COMPANY") or x.get("NAME_OF_COMPANY") or "").replace(",", " ").strip()
+                  if not sym or not name: continue
+                  listed = x.get("DATE OF LISTING") or x.get("DATE_OF_LISTING") or ""
+                  rows[sym] = (sym, " ".join(name.split()), listed, board)
+                  n += 1
+              return n
+          eq = load("/tmp/eq.csv", "EQ"); sme = load("/tmp/sme.csv", "SME")
+          print("parsed", eq, sme)
+          if eq < 1500:
+              print("main-board list missing or invalid; keeping the last good copy"); sys.exit(0)
+          os.makedirs("data", exist_ok=True)
+          with open("data/symbols.csv", "w", encoding="utf-8") as f:
+              f.write("SYMBOL,NAME,LISTED,BOARD\n")
+              for k in sorted(rows): f.write(",".join(rows[k]) + "\n")
+          PY
+      - name: Commit if changed
+        run: |
+          if [ -f data/symbols.csv ] && [ -n "$(git status --porcelain data/symbols.csv)" ]; then
+            git config user.name "github-actions[bot]"; git config user.email "41898+github-actions[bot]@users.noreply.github.com"
+            git add data/symbols.csv && git commit -m "Refresh NSE stock list" && git push
+          else echo "no change"; fi

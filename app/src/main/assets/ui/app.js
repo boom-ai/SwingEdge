@@ -13,7 +13,7 @@
     });
   } catch (e) { /* ignore */ }
 
-  var TABS = { today: 1, setups: 1, money: 1, trades: 1, portfolio: 1, alerts: 1 };
+  var TABS = { today: 1, setups: 1, money: 1, bot: 1, trades: 1, portfolio: 1, alerts: 1 };
   var S = {}, lastJson = null, lastDevJson = null;
   var ui = { tab: TABS[qs.tab] ? qs.tab : 'today', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now(),
     recent: loadRecent(), search: { q: '', sent: null, shown: '', results: null, loading: false, err: '', filter: 'all', newList: null, newErr: '' }, emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, watchEdit: false, stock: null, pnl: {}, vOpen: {}, listMeta: null,

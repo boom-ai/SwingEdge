@@ -158,6 +158,7 @@
     target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/>',
     reset: '<path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5M4.5 4.5v4h4"/>',
     layers: '<path d="M4 8l8-4 8 4-8 4zM4 12.500l8 4 8-4M4 16.500l8 4 8-4"/>',
+    bot: '<rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 12h.01M15 12h.01M9 16h6"/>',
     money: '<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/><path d="M3 21h18"/>',
     logo: '<path d="M3 17.500l5-6 4 3.5 8.5-10" stroke="#3FD68F" stroke-width="2.4"/><path d="M15.5 5h5v5" stroke="#3FD68F" stroke-width="2.4"/><path d="M3 21h18" stroke="#2C3B4D" stroke-width="2"/>'
   };
@@ -302,7 +303,7 @@
     }
     return h;
   }
-  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
+  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['bot', 'Bot'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
   function tabbar(S, ui) {
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
@@ -1150,10 +1151,62 @@
     if (ui.tab === 'alerts') return alerts(S, ui);
     if (ui.tab === 'setups') return setups(S, ui);
     if (ui.tab === 'money') return money(S, ui);
+    if (ui.tab === 'bot') return bot(S, ui);
     return today(S, ui);
   }
 
 
+
+  /* ---------- Bot: plain tables ---------- */
+  function pq(v) { var n = N(v); if (n === null || n <= 0) return DASH; return '₹' + (n >= 100 ? grp(String(Math.round(n))) : n.toFixed(1)); }
+  function rs(v) { var n = N(v); return n === null ? DASH : '₹' + grp(String(Math.round(n))); }
+  function rsS(v) { var n = N(v); if (n === null) return DASH; return (n >= 0 ? '+₹' : '−₹') + grp(String(Math.abs(Math.round(n)))); }
+  function dShort(t) { var n = ts(t); if (n === null) return DASH; var d = ist(n); return d.getUTCDate() + ' ' + MON[d.getUTCMonth()]; }
+  function addDays(t, k) { var n = ts(t); if (n === null) return null; var d = new Date(n), c = 0; while (c < k) { d = new Date(d.getTime() + 86400000); var w = ist(d.getTime()).getUTCDay(); if (w > 0 && w < 6) c++; } return d.getTime(); }
+  function tbl(head, rows) {
+    return '<div class="card bt"><table class="btt"><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>' + rows.join('') + '</table></div>';
+  }
+  function cell(sym, name) { return '<td class="bs"><button type="button" class="lnk" data-c="stock" data-id="' + esc(T(sym)) + '" data-name="' + esc(T(name)) + '">' + tx(sym) + '</button></td>'; }
+  function bot(S, ui) {
+    var cap = N(O(S.settings).capital) || 0, h = '';
+    var buys = newSignals(S), opens = openTrades(S);
+    var sells = opens.filter(function (t) { return t.action === 'EXIT' || t.action === 'TIME_EXIT' || t.action === 'BOOK_HALF'; });
+    var hs = A(S.holdings).filter(function (x) { return (x.verdict === 'SELL' || x.verdict === 'TRIM') && x.dataOk !== false; });
+    var invested = opens.reduce(function (a, t) { return a + (N(t.entry) || 0) * (N(t.qty) || 0); }, 0);
+    h += '<div class="card setuphd"><h2>Bot · what to do today</h2><div class="asof">Capital ' + rs(cap) + ' · in trades ' + rs(invested) + ' · free ' + rs(Math.max(0, cap - invested)) + '</div></div>';
+    // 1 BUY
+    h += '<div class="sec"><h2>1 · Buy</h2><span class="cnt">' + buys.length + '</span></div>';
+    h += buys.length ? tbl(['Stock', 'Buy up to', 'Qty', 'Amount', 'Stop', 'Target', 'Sell by'], buys.map(function (g) {
+      return '<tr>' + cell(g.sym, g.name) + '<td>' + pq(g.entryMax || g.entry) + '</td><td>' + (N(g.qty) || 0) + '</td><td>' + rs(g.investRs) + '</td><td class="down">' + pq(g.sl) + '</td><td class="up">' + pq(g.t2 || g.t1) + '</td><td>' + dShort(addDays(g.createdAt, N(g.holdDays) || 6)) + '</td></tr>';
+    })) + '<div class="hint hintpad">' + ic('info') + '<span class="t">Buy at the next open only if the price is at or below “Buy up to”. Place the stop-loss order right after buying. Tap a stock, then “I bought it” so the bot tracks it.</span></div>'
+      : '<div class="hint hintpad"><span class="t">No buy today. Nothing passed the rules — no trade is better than a bad trade.</span></div>';
+    // 2 SELL
+    var srows = sells.map(function (t) {
+      var a = t.action === 'BOOK_HALF' ? 'Sell half (' + Math.floor((N(t.qty) || 0) / 2) + ')' : 'Sell all (' + (N(t.qty) || 0) + ')';
+      return '<tr>' + cell(t.sym, t.name) + '<td><b>' + a + '</b></td><td>' + pq(t.ltp) + '</td><td class="' + tone(t.pnlRs) + '">' + rsS(t.pnlRs) + '</td><td class="mut">' + tx(t.actionNote) + '</td></tr>';
+    }).concat(hs.map(function (x) {
+      return '<tr>' + cell(x.sym, x.name) + '<td><b>' + (x.verdict === 'TRIM' ? 'Sell half' : 'Sell all') + ' (' + (N(x.qty) || 0) + ')</b></td><td>' + pq(x.ltp) + '</td><td class="' + tone(x.pnlRs) + '">' + rsS(x.pnlRs) + '</td><td class="mut">' + tx(x.headline) + '</td></tr>';
+    }));
+    h += '<div class="sec"><h2>2 · Sell</h2><span class="cnt">' + srows.length + '</span></div>';
+    h += srows.length ? tbl(['Stock', 'Do this', 'Price', 'P&L', 'Why'], srows) : '<div class="hint hintpad"><span class="t">Nothing to sell. Keep your stop-loss orders in place.</span></div>';
+    // 3 HOLD
+    var holds = opens.filter(function (t) { return sells.indexOf(t) < 0; });
+    h += '<div class="sec"><h2>3 · Holding</h2><span class="cnt">' + holds.length + '</span></div>';
+    if (holds.length) h += tbl(['Stock', 'Bought', 'Now', 'P&L', 'Stop', 'Sell by'], holds.map(function (t) {
+      return '<tr>' + cell(t.sym, t.name) + '<td>' + pq(t.entry) + '</td><td>' + pq(t.ltp) + '</td><td class="' + tone(t.pnlRs) + '">' + rsS(t.pnlRs) + '</td><td class="down">' + pq(t.sl) + '</td><td>' + dShort(addDays(t.openedAt, N(t.maxDays) || 6)) + '</td></tr>';
+    }));
+    // 4 WEEK
+    var now = Date.now(), wk = ist(now), dow = (wk.getUTCDay() + 6) % 7, start = now - dow * 86400000 - ((wk.getUTCHours() * 60 + wk.getUTCMinutes()) * 60000);
+    var closed = A(S.trades).filter(function (t) { return t.status !== 'OPEN' && (ts(t.closedAt) || 0) >= start; });
+    var tot = closed.reduce(function (a, t) { return a + (N(t.pnlRs) || 0); }, 0), wins = closed.filter(function (t) { return (N(t.pnlRs) || 0) > 0; }).length;
+    h += '<div class="sec"><h2>4 · This week</h2></div>';
+    h += '<div class="card bt wk"><div class="wkn ' + tone(tot) + '">' + rsS(tot) + '</div><div class="mut">' + closed.length + ' trades closed · ' + wins + ' won · ' + (closed.length - wins) + ' lost' + (cap > 0 ? ' · ' + (tot >= 0 ? '+' : '') + (100 * tot / cap).toFixed(2) + '% of capital' : '') + '</div></div>';
+    if (closed.length) h += tbl(['Stock', 'Bought', 'Sold', 'P&L', 'Days'], closed.map(function (t) {
+      var d = Math.max(1, Math.round(((ts(t.closedAt) || 0) - (ts(t.openedAt) || 0)) / 86400000));
+      return '<tr>' + cell(t.sym, t.name) + '<td>' + pq(t.entry) + '</td><td>' + pq(t.exitPrice) + '</td><td class="' + tone(t.pnlRs) + '">' + rsS(t.pnlRs) + '</td><td>' + d + '</td></tr>';
+    }));
+    return h;
+  }
   /* ---------- Money flow ---------- */
   function crSigned(v) {
     var n = N(v); if (n === null) return DASH;

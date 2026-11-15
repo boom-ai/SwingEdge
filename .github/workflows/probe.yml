@@ -1,0 +1,26 @@
+name: probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: |
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+          f(){ code=$(curl -sS -m 30 -A "$UA" -H "Accept: */*" -b /tmp/c -c /tmp/c -o /tmp/o -w "%{http_code}" "$1" 2>&1); echo "== $1 -> $code $(wc -c </tmp/o 2>/dev/null)"; head -c ${2:-300} /tmp/o; echo; }
+          f https://www.niftyindices.com/IndexConstituent/ind_niftytotalmarket_list.csv
+          f https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv
+          f https://nsearchives.nseindia.com/content/indices/ind_niftytotalmarket_list.csv
+          f https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv
+          f https://nsearchives.nseindia.com/content/indices/ind_niftymicrocap250_list.csv
+          f https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_13112026.csv 400
+          f https://nsearchives.nseindia.com/archives/equities/mto/MTO_13112026.DAT 300
+          f https://www.nseindia.com/ 100
+          f "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities" 1500
+          f "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities&symbol=RELIANCE" 1500
+          f "https://www.nseindia.com/api/corporates-pit?index=equities&from_date=01-11-2026&to_date=13-11-2026" 1500
+          f "https://www.nseindia.com/api/snapshot-capital-market-largedeal" 600
+          f "https://www.nseindia.com/api/historical/bulk-deals?from=01-11-2026&to=13-11-2026" 600
+          f "https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scripcode=&industry=&segment=Equity&status=Active" 600
+          f "https://nsearchives.nseindia.com/content/equities/bulk.csv" 400
+          f "https://www.nseindia.com/api/fiidiiTradeReact" 600

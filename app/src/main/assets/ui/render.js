@@ -158,6 +158,7 @@
     target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/>',
     reset: '<path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5M4.5 4.5v4h4"/>',
     layers: '<path d="M4 8l8-4 8 4-8 4zM4 12.500l8 4 8-4M4 16.500l8 4 8-4"/>',
+    money: '<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/><path d="M3 21h18"/>',
     logo: '<path d="M3 17.500l5-6 4 3.5 8.5-10" stroke="#3FD68F" stroke-width="2.4"/><path d="M15.5 5h5v5" stroke="#3FD68F" stroke-width="2.4"/><path d="M3 21h18" stroke="#2C3B4D" stroke-width="2"/>'
   };
   function ic(name) { return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + (IC[name] || IC.info) + '</svg>'; }
@@ -301,7 +302,7 @@
     }
     return h;
   }
-  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
+  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
   function tabbar(S, ui) {
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
@@ -1148,9 +1149,167 @@
     if (ui.tab === 'portfolio') return portfolio(S, ui);
     if (ui.tab === 'alerts') return alerts(S, ui);
     if (ui.tab === 'setups') return setups(S, ui);
+    if (ui.tab === 'money') return money(S, ui);
     return today(S, ui);
   }
 
+
+  /* ---------- Money flow ---------- */
+  function crSigned(v) {
+    var n = N(v); if (n === null) return DASH;
+    var a = Math.abs(n);
+    return (n > 0 ? '+' : n < 0 ? '−' : '') + '₹' + (a >= 1000 ? grp(String(Math.round(a))) : a >= 10 ? a.toFixed(0) : a.toFixed(1)) + ' cr';
+  }
+  function isoDate(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(T(s)); if (!m) return T(s) || DASH;
+    return (+m[3]) + ' ' + MON[+m[2] - 1] + ' ' + m[1];
+  }
+  function qName(s) {
+    var m = /^(\d{4})-(\d{2})-\d{2}$/.exec(T(s)); if (!m) return T(s) || DASH;
+    var mo = +m[2], fy = mo >= 4 ? +m[1] + 1 : +m[1];
+    return 'Q' + (mo === 6 ? 1 : mo === 9 ? 2 : mo === 12 ? 3 : 4) + ' FY' + String(fy).slice(2) + ' (' + MON[mo - 1] + ' ' + m[1] + ')';
+  }
+  function heat(v, max) {
+    var n = N(v) || 0, w = max > 0 ? Math.min(100, Math.abs(n) / max * 100) : 0;
+    return '<span class="fbar ' + (n >= 0 ? 'in' : 'out') + '"><i style="width:' + w.toFixed(0) + '%"></i></span>';
+  }
+  function flowRow(x, o) {
+    x = O(x); o = o || {};
+    var mi = N(x.moneyIn), sc = N(x.score);
+    var sub = [];
+    if (T(x.industry).trim()) sub.push(esc(T(x.industry).trim()));
+    else if (T(x.sector).trim()) sub.push(esc(T(x.sector).trim()));
+    if (N(x.dlv20) > 0) sub.push('delivery ' + Math.round(N(x.dlv20)) + '%');
+    if (N(x.to20) > 0) sub.push(croreTxt(x.to20) + '/day');
+    var right = o.net5 ? crSigned(x.net5) : crSigned(x.net20);
+    return '<button type="button" class="srow frow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
+      '<div class="fr1"><b>' + tx(x.sym) + '</b>' + (T(x.label) === 'BUY' && sc !== null && sc >= 0 ? tag('buy', 'BUY ' + Math.round(sc)) : sc !== null && sc >= 0 ? '<span class="mut num sc">score ' + Math.round(sc) + '</span>' : '') +
+      '<span class="sp"></span><span class="num">' + px(x.close) + '</span><span class="num ' + tone(x.r20) + ' r20">' + pc(x.r20, true, true) + '</span></div>' +
+      '<div class="fr2"><span class="nm">' + tx(x.name, '') + '</span></div>' +
+      '<div class="fr3"><span class="mut">' + sub.join(' · ') + '</span><span class="sp"></span><span class="num ' + tone(o.net5 ? x.net5 : x.net20) + '">' + right + '</span>' +
+      (mi !== null && mi >= 0 ? '<span class="mi" title="money-in percentile">' + Math.round(mi) + '</span>' : '') + '</div></button>';
+  }
+  function holderRow(x, k) {
+    x = O(x);
+    var d = arr(x.delta), nw = arr(x.now), has = arr(x.has), names = ['Promoters', 'FIIs', 'MFs', 'DIIs'];
+    var chips = [0, 1, 2, 3].map(function (i) {
+      if (has[i] !== true) return '';
+      var v = N(d[i]) || 0; if (Math.abs(v) < 0.01 && i !== k) return '';
+      return '<span class="hch ' + (v > 0 ? 'up' : v < 0 ? 'down' : 'flat') + (i === k ? ' key' : '') + '">' + names[i] + ' ' + (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2) + ' → ' + (N(nw[i]) || 0).toFixed(1) + '%</span>';
+    }).join('');
+    return '<button type="button" class="srow frow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
+      '<div class="fr1"><b>' + tx(x.sym) + '</b><span class="sp"></span><span class="num">' + px(x.close) + '</span></div>' +
+      '<div class="fr2"><span class="nm">' + tx(x.name, '') + '</span></div>' +
+      '<div class="hchips">' + chips + '</div>' +
+      '<div class="fr3"><span class="mut">' + esc(qName(x.qdate)) + ' vs ' + esc(qName(x.pqdate)) + ' · filed ' + esc(isoDate(x.filed)) + '</span></div></button>';
+  }
+  function arr(v) { return Array.isArray(v) ? v : []; }
+  function evid(r, i) { return texts(r.evidence)[i] || ''; }
+  var STAKE_SEGS = [['together', 'All big money'], ['promoters', 'Promoters'], ['fii', 'FIIs'], ['mf', 'Mutual funds']];
+  function money(S, ui) {
+    var m = O(ui.money), r = O(m.res);
+    var h = '<div class="card setuphd"><h2>Where the money is going</h2>' +
+      '<div class="crit"><span>' + ic('check') + 'Every NSE stock, from NSE’s daily turnover and delivery data</span><span>' + ic('check') + 'Sectors ranked by net money coming in over 20 sessions</span><span>' + ic('check') + 'Promoter, FII and mutual fund stakes from quarterly filings</span></div>' +
+      (T(r.asof).trim() ? '<div class="asof">NSE data up to ' + esc(isoDate(r.asof)) + ' · ' + grp(String(N(r.liquid) || 0)) + ' liquid of ' + grp(String(N(r.stocks) || 0)) + ' stocks · updates every evening after 7:30 pm' + '</div>' : '') +
+      '<div class="btns">' + btn('money-refresh', null, m.loading ? 'Loading…' : 'Refresh', 'sm ghost', { icon: 'refresh', busy: m.loading === true }) + '</div></div>';
+    if (!isObj(m.res)) {
+      if (T(m.err).trim()) return h + '<div class="empty" role="alert"><div class="ei">' + ic('warn') + '</div><h3>Could not load money flow</h3><p>' + esc(T(m.err).trim()) + '</p><div class="btns">' + btn('money-refresh', null, 'Try again', 'sm', { icon: 'refresh' }) + '</div></div>';
+      return h + skCard('Sectors', 6) + skCard('Money coming in', 5);
+    }
+    if (r.ready !== true) return h + '<div class="empty"><div class="ei">' + ic('clock') + '</div><h3>Money-flow data is not ready yet</h3><p>The daily NSE data job runs every evening after the market closes. Pull to refresh later.</p></div>';
+    var secs = A(r.sectors), max = 0;
+    secs.forEach(function (x) { max = Math.max(max, Math.abs(N(x.flowPct) || 0)); });
+    // 1. sectors
+    h += '<div class="sec"><h2>Sectors · money in vs out</h2><span class="cnt">' + secs.length + '</span></div><div class="card mv">' + secs.map(function (x) {
+      var f = N(x.flowPct) || 0, rank = N(x.rank);
+      var tops = A(x.top).map(function (t) { return esc(T(O(t).sym)); }).join(', ');
+      return '<button type="button" class="srow secrow" data-c="sector" data-id="' + esc(T(x.name)) + '">' +
+        '<div class="fr1"><span class="rk num">' + rank + '</span><b>' + tx(x.name) + '</b><span class="sp"></span><span class="num ' + tone(f) + '">' + crSigned(x.net20) + '</span>' + ic('chev') + '</div>' +
+        '<div class="fr1">' + heat(f, max) + '<span class="num ' + tone(f) + ' fp">' + (f > 0 ? '+' : '') + f.toFixed(1) + '%</span></div>' +
+        '<div class="fr3"><span class="mut">' + (N(x.n) || 0) + ' stocks · ' + Math.round(N(x.breadth) || 0) + '% with money in · 20d ' + pc(x.r20, true, true) + (tops ? ' · ' + tops : '') + '</span></div></button>';
+    }).join('') + '</div>' +
+      '<div class="hint hintpad">' + ic('info') + '<span class="t">Net money = value of delivered shares on up days minus down days (₹ crore, 20 sessions). The % is that as a share of the sector’s normal trading. Tap a sector for its industries and stocks.</span></div>';
+    // 2. picks
+    var picks = A(r.picks);
+    h += '<div class="sec"><h2>Strong setups in money-in sectors</h2>' + (picks.length ? '<span class="cnt">' + picks.length + '</span>' : '') + '</div>';
+    h += picks.length ? '<div class="card mv">' + picks.map(function (x) { return flowRow(x); }).join('') + '</div>' :
+      '<div class="hint hintpad">' + ic('info') + '<span class="t">No BUY-grade setup is in the top ' + 5 + ' money-flow sectors right now' + (N(S.lastScanAt) > 0 ? '.' : ' (run a scan on Today first).') + '</span></div>';
+    h += '<div class="hint hintpad">' + ic('flask') + '<span class="t">' + esc(evid(r, 0)) + '</span></div>';
+    // 3. money coming in / big money / leaving
+    h += '<div class="sec"><h2>Most money coming in</h2><span class="cnt">' + A(r.inflow).length + '</span></div>' +
+      (A(r.inflow).length ? '<div class="card mv">' + A(r.inflow).map(function (x) { return flowRow(x); }).join('') + '</div>' : '<div class="hint hintpad"><span class="t">No stock stands out today.</span></div>');
+    h += '<div class="sec"><h2>Biggest buying, last 5 sessions</h2></div>' +
+      (A(r.bigMoney).length ? '<div class="card mv">' + A(r.bigMoney).map(function (x) { return flowRow(x, { net5: true }); }).join('') + '</div>' : '');
+    h += '<div class="hint hintpad">' + ic('flask') + '<span class="t">' + esc(evid(r, 1)) + '</span></div>';
+    // 4. stakes
+    var st = O(r.stakes), seg = T(m.seg) || 'together', lst = A(st[seg]);
+    h += '<div class="sec"><h2>Big holders raising stakes</h2>' + (T(st.quarter).trim() ? '<span class="cnt">' + esc(qName(st.quarter)) + '</span>' : '') + '</div>' +
+      '<div class="rc segs" role="group" aria-label="Holder type">' + STAKE_SEGS.map(function (g) {
+        var n = A(st[g[0]]).length;
+        return '<button type="button" class="rchip' + (g[0] === seg ? ' on' : '') + '" data-c="money-seg" data-id="' + g[0] + '" aria-pressed="' + (g[0] === seg) + '"><span>' + g[1] + (n ? ' · ' + n : '') + '</span></button>';
+      }).join('') + '</div>';
+    var kk = seg === 'promoters' ? 0 : seg === 'fii' ? 1 : seg === 'mf' ? 2 : -1;
+    if (!N(st.withInst) && seg !== 'promoters') h += '<div class="hint hintpad">' + ic('clock') + '<span class="t">FII and mutual-fund numbers are still being collected from the filings; they fill in over the next runs of the data job.</span></div>';
+    h += lst.length ? '<div class="card mv">' + lst.map(function (x) { return holderRow(x, kk); }).join('') + '</div>' :
+      '<div class="hint hintpad"><span class="t">' + (seg === 'together' ? 'No stock had FIIs and mutual funds both adding (with promoters not selling) last quarter.' : 'Nobody in this group raised a stake by the threshold last quarter.') + '</span></div>';
+    h += '<div class="hint hintpad">' + ic('flask') + '<span class="t">' + esc(evid(r, 2)) + ' Thresholds: promoters +0.25 points, FIIs / funds +0.5 points of all shares.</span></div>';
+    // 5. deals
+    var dl = A(r.deals);
+    if (dl.length) {
+      h += '<div class="sec"><h2>Bulk & block buys</h2><span class="cnt">' + dl.length + '</span></div><div class="card mv">' + dl.slice(0, 25).map(function (x) {
+        x = O(x);
+        return '<button type="button" class="srow frow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
+          '<div class="fr1"><b>' + tx(x.sym) + '</b>' + tag('neutral', T(x.kind)) + '<span class="sp"></span><span class="num up">' + croreTxt(x.valueCr) + '</span></div>' +
+          '<div class="fr2"><span class="nm">' + tx(x.client) + '</span></div>' +
+          '<div class="fr3"><span class="mut">' + esc(isoDate(x.date)) + ' · ' + grp(String(Math.round(N(x.qty) || 0))) + ' shares at ' + px(x.price) + '</span></div></button>';
+      }).join('') + '</div>';
+    }
+    return h + '<div class="hint hintpad">' + ic('info') + '<span class="t">Source: NSE bhavcopy, sector lists and shareholding filings, refreshed daily by the app’s data job. Not investment advice.</span></div>';
+  }
+  function sectorSheet(S, ui, data) {
+    var name = T(data.id), r = O(O(ui.sectors)[name]);
+    var foot = btn('sheet-close', null, 'Close', '');
+    if (!isObj(O(ui.sectors)[name])) return shell(name || 'Sector', skCard('Stocks', 6), foot);
+    if (r.ok !== true) return shell(name || 'Sector', '<div class="empty" role="alert"><div class="ei">' + ic('warn') + '</div><p>' + esc(T(r.error) || 'Could not load this sector') + '</p></div>', foot);
+    var f = N(r.flowPct) || 0, inds = A(r.industries), max = 0;
+    inds.forEach(function (x) { max = Math.max(max, Math.abs(N(x.flowPct) || 0)); });
+    var h = '<p class="lead">#' + (N(r.rank) || DASH) + ' of ' + (N(r.of) || DASH) + ' sectors for money coming in · net ' + crSigned(r.net20) + ' over 20 sessions (' + (f > 0 ? '+' : '') + f.toFixed(1) + '% of normal trading), ' + crSigned(r.net5) + ' in the last 5. ' +
+      Math.round(N(r.breadth) || 0) + '% of its stocks have money coming in.</p>';
+    if (inds.length) h += '<h3 class="skh">Industries</h3><div class="card mv">' + inds.map(function (x) {
+      var v = N(x.flowPct) || 0;
+      return '<div class="srow"><div class="fr1"><b>' + tx(x.name) + '</b><span class="sp"></span><span class="num ' + tone(v) + '">' + crSigned(x.net20) + '</span></div><div class="fr1">' + heat(v, max) + '<span class="num ' + tone(v) + ' fp">' + (v > 0 ? '+' : '') + v.toFixed(1) + '%</span></div><div class="fr3"><span class="mut">' + (N(x.n) || 0) + ' stocks</span></div></div>';
+    }).join('') + '</div>';
+    h += '<h3 class="skh">Stocks · money coming in first</h3><div class="card mv">' + A(r.stocks).map(function (x) { return flowRow(x); }).join('') + '</div>';
+    return shell(name, h, foot);
+  }
+  function moneyCard(d) {
+    var m = O(d.money);
+    if (!isObj(d.money)) return '';
+    var f = O(m.flow), hd = O(m.holders), tiles = [];
+    if (isObj(m.flow)) {
+      tiles.push(tile('Net money, 20 sessions', crSigned(f.net20), 'delivered value, up days minus down days', N(f.net20) > 0 ? 'up' : N(f.net20) < 0 ? 'down' : ''));
+      tiles.push(tile('Net money, 5 sessions', crSigned(f.net5), '', N(f.net5) > 0 ? 'up' : N(f.net5) < 0 ? 'down' : ''));
+      tiles.push(tile('Delivery', N(f.dlv20) > 0 ? Math.round(N(f.dlv20)) + '%' : DASH, N(f.dlv1) > 0 ? 'today ' + Math.round(N(f.dlv1)) + '% · 20-day average shown' : '20-day average'));
+      tiles.push(tile('Money-in rank', N(f.moneyIn) >= 0 ? Math.round(N(f.moneyIn)) + ' / 100' : DASH, N(f.moneyIn) >= 0 ? 'vs all liquid NSE stocks' : 'too thinly traded'));
+    }
+    if (T(m.sector).trim()) tiles.push(tile('Sector', '#' + (N(m.sectorRank) || DASH) + ' of ' + (N(m.sectorOf) || DASH), esc(T(m.sector)) + (T(m.industry).trim() ? ' · ' + esc(T(m.industry)) : '')));
+    var hold = '';
+    if (isObj(m.holders)) {
+      var names = ['Promoters', 'FIIs', 'Mutual funds', 'Other institutions', 'Small retail'], nw = arr(hd.now), pv = arr(hd.prev), has = arr(hd.has);
+      hold = '<h3 class="skh sub">Shareholding · ' + esc(qName(hd.qdate)) + '</h3><table class="ht"><tr><th></th><th>Now</th><th>Prev qtr</th><th>Change</th></tr>' + names.map(function (n, i) {
+        var a = N(nw[i]), b = N(pv[i]);
+        if (i > 0 && has[i] !== true && !(a > 0)) return '';
+        var dd = has[i] === true && a !== null && b !== null ? a - b : null;
+        return '<tr><td>' + n + '</td><td class="num">' + (a !== null ? a.toFixed(2) + '%' : DASH) + '</td><td class="num">' + (has[i] === true && b !== null ? b.toFixed(2) + '%' : DASH) + '</td><td class="num ' + tone(dd) + '">' + (dd === null ? DASH : (dd > 0 ? '+' : dd < 0 ? '−' : '') + Math.abs(dd).toFixed(2)) + '</td></tr>';
+      }).join('') + '</table><p class="sk-p mut">Filed ' + esc(isoDate(hd.filed)) + '. Change is in percentage points of all shares.</p>';
+    }
+    var deals = A(m.deals).map(function (x) { x = O(x); return '<li>' + esc(isoDate(x.date)) + ' · ' + esc(T(x.kind)) + ' ' + esc(T(x.side)) + ' · ' + tx(x.client) + ' · ' + croreTxt(x.valueCr) + '</li>'; }).join('');
+    return '<section class="card sk-card" id="sk-money"><h3 class="skh">Money flow & big holders</h3>' +
+      (T(m.line).trim() ? '<p class="sk-p">' + esc(T(m.line).trim()) + '</p>' : '') +
+      (tiles.length ? '<div class="sg">' + tiles.join('') + '</div>' : '') + hold +
+      (deals ? '<h3 class="skh sub">Bulk / block deals</h3><ul class="dl">' + deals + '</ul>' : '') +
+      '<p class="sk-p mut">NSE data up to ' + esc(isoDate(m.asof)) + '. Money flow alone did not predict returns in testing; read it with the setup.</p></section>';
+  }
   /* ---------- sheets ---------- */
   function shell(title, body, foot) {
     return '<div class="scrim" data-c="sheet-close"></div><section class="sheet" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
@@ -1533,7 +1692,7 @@
       return skCard('10 / 20 EMA', 4) + skCard('Moving averages', 5) + skCard('Technical checklist', 5) + skCard('Momentum', 4);
     }
     var d = st.info;
-    return listingCard(d) + crossCard(d) + emaTable(d) + checksCard(d) + momentumCard(d) + statsCard(d) + levelsCard(d) + heldCard(d) + setupsCard(d) +
+    return listingCard(d) + crossCard(d) + emaTable(d) + checksCard(d) + momentumCard(d) + statsCard(d) + moneyCard(d) + levelsCard(d) + heldCard(d) + setupsCard(d) +
       '<section class="card sk-card" id="sk-sum"><h3 class="skh">In short</h3>' + (T(d.summary).trim() ? '<p class="sk-p">' + esc(T(d.summary).trim()) + '</p>' : '<p class="sk-p mut">No summary available.</p>') + '</section>' +
       '<p class="sk-foot">' + ic('info') + '<span>Data comes from the last scan or quote. It describes the chart and is not investment advice. Past patterns do not promise what happens next.</span></p>';
   }
@@ -1843,6 +2002,7 @@
     if (kind === 'target') return targetSheet(S, ui, data);
     if (kind === 'search') return searchSheet(S, ui);
     if (kind === 'track') return trackSheet(S, ui);
+    if (kind === 'sector') return sectorSheet(S, ui, data);
     if (kind === 'resettrack') return shell('Reset the live record?', '<p class="lead">All picks recorded on this phone since the live record began will be deleted and the count starts again from zero. The replay is kept. Trades, holdings and strategies are not affected.</p>',
         btn('sheet-close', null, 'Keep it', 'ghost') + btn('submit', null, 'Reset record', 'dan'));
     if (kind === 'take') {

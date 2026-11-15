@@ -13,7 +13,7 @@
     });
   } catch (e) { /* ignore */ }
 
-  var TABS = { today: 1, setups: 1, trades: 1, portfolio: 1, alerts: 1 };
+  var TABS = { today: 1, setups: 1, money: 1, trades: 1, portfolio: 1, alerts: 1 };
   var S = {}, lastJson = null, lastDevJson = null;
   var ui = { tab: TABS[qs.tab] ? qs.tab : 'today', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now(),
     recent: loadRecent(), search: { q: '', sent: null, shown: '', results: null, loading: false, err: '', filter: 'all', newList: null, newErr: '' }, emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, watchEdit: false, stock: null, pnl: {}, vOpen: {}, listMeta: null,
@@ -163,6 +163,8 @@
         render(); paintSearchBody(); return;
       }
       if (name === 'stockInfo') { onInfoResult(res, ok, err); return; }
+      if (name === 'moneyFlow') { onMoney(res, ok, err); return; }
+      if (name === 'flowSector') { onSector(res, ok, err); return; }
       if (name === 'addWatch' || name === 'removeWatch') { onWatchResult(name, ok, err); return; }
       if (name === 'getChart' && chartReply(res, ok, err)) return;
       clearPending(name, true);
@@ -489,6 +491,38 @@
     var s = ui.search; if (!s) return;
     s.newErr = '';
     try { bridge().action('newListings', JSON.stringify({ days: 365 })); } catch (e) { s.newErr = 'Could not reach the app. Try again.'; }
+  }
+
+  /* ---------- money flow ---------- */
+  function loadMoney(force) {
+    var m = ui.money || (ui.money = { res: null, err: '', loading: false, seg: 'together', at: 0 });
+    if (m.loading) return;
+    if (!force && m.res && Date.now() - m.at < 10 * 60 * 1000) return;
+    m.loading = true; m.err = '';
+    try { bridge().action('moneyFlow', JSON.stringify({ force: force === true })); }
+    catch (e) { m.loading = false; m.err = 'Could not reach the app. Try again.'; }
+    if (ui.tab === 'money') render();
+  }
+  function onMoney(res, ok, err) {
+    var m = ui.money || (ui.money = { seg: 'together' });
+    m.loading = false;
+    if (ok) { m.res = res; m.err = ''; m.at = Date.now(); } else { m.err = err; }
+    if (ui.tab === 'money') render();
+  }
+  function openSector(name) {
+    if (!name) return;
+    ui.sectors = ui.sectors || {};
+    delete ui.sectors[name];
+    openSheet('sector', { id: name }, true);
+    try { bridge().action('flowSector', JSON.stringify({ name: name })); }
+    catch (e) { ui.sectors[name] = { ok: false, error: 'Could not reach the app. Try again.' }; if (sheet && sheet.kind === 'sector') paintSheet(true); }
+  }
+  function onSector(res, ok, err) {
+    ui.sectors = ui.sectors || {};
+    var name = SE.T(res && res.name) || (sheet && sheet.kind === 'sector' ? SE.T(sheet.data.id) : '');
+    if (!name) return;
+    ui.sectors[name] = ok ? res : { ok: false, error: err };
+    if (sheet && sheet.kind === 'sector' && SE.T(sheet.data.id) === name) paintSheet(true);
   }
 
   /* ---------- stock page ---------- */
@@ -865,7 +899,10 @@
 
   function command(c, id, el) {
     switch (c) {
-      case 'tab': setTab(id); break;
+      case 'tab': setTab(id); if (id === 'money') loadMoney(false); break;
+      case 'money-refresh': loadMoney(true); break;
+      case 'money-seg': if (ui.money) { ui.money.seg = id; render(); } break;
+      case 'sector': openSector(id); break;
       case 'jump': setTab(ui.tab, id); break;
       case 'strategies': setTab('alerts', 'strategies'); break;
       case 'settings': openSheet('settings'); break;
@@ -984,6 +1021,7 @@
 
   /* ---------- boot ---------- */
   pull();
+  if (ui.tab === 'money') loadMoney(false);
   try {
     if (qs.expand) {
       SE.A(S.signals).forEach(function (g) { ui.expanded['sig:' + SE.T(g.id)] = 1; });
@@ -1017,6 +1055,7 @@
           openChartFull();
         } else ui.afterInfo = function () { openTarget(bsym, qs.t1 ? { target: Number(qs.t1) || 0, stop: Number(qs.stop) || 0 } : null); };
       }
+      else if (qs.sheet === 'sector') openSector(qs.name || 'Capital Goods');
       else if ({ settings: 1, add: 1, paste: 1, clearfeed: 1, track: 1, resettrack: 1 }[qs.sheet]) openSheet(qs.sheet, qs.sheet === 'add' && qs.sym ? { sym: qs.sym } : {}, true);
       else if (qs.sheet === 'chart') { first = SE.A(S.holdings)[0]; openChart(qs.sym || (first ? SE.T(first.sym) : 'RELIANCE')); }
       if (qs.sheetscroll && qs.sheet !== 'stock') { var sb = elSheet.querySelector('.sb'); if (sb) sb.scrollTop = Number(qs.sheetscroll) || 0; }

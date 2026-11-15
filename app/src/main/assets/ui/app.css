@@ -1107,3 +1107,39 @@ svg.chart .xd { fill: var(--text); stroke: var(--bg); stroke-width: 1.5; }
 .nchip { flex: none; display: flex; flex-direction: column; align-items: flex-end; margin-left: 8px; }
 .nchip b { font: 700 11px/1 var(--cond); letter-spacing: .06em; padding: 3px 6px; border-radius: 5px; color: var(--blue); background: var(--blue-bg); }
 .nchip small { font: 400 10.5px/1.2 var(--sans); color: var(--muted); margin-top: 3px; white-space: nowrap; }
+
+/* ---------- Money flow ---------- */
+.tab { font-size: 11px; }
+.frow, .secrow { padding: 10px 14px 9px; }
+.frow .fr1, .secrow .fr1, .srow .fr1 { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+.frow .fr1 b, .secrow .fr1 b, .srow .fr1 b { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr1 .sp, .fr3 .sp { flex: 1; }
+.fr1 .r20 { min-width: 58px; text-align: right; }
+.fr1 .sc { font-size: 12px; }
+.fr1 svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.fr2 .nm { display: block; color: var(--text-2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr3 { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-top: 2px; }
+.fr3 .mut { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi { min-width: 30px; height: 20px; border-radius: 10px; background: var(--raised); border: 1px solid var(--line-2); font: 600 11.5px/18px var(--cond); text-align: center; color: var(--text-2); }
+.rk { min-width: 22px; height: 22px; border-radius: 6px; background: var(--raised); font: 700 12px/22px var(--cond); text-align: center; color: var(--text-2); }
+.fbar { flex: 1; height: 6px; border-radius: 3px; background: var(--raised); overflow: hidden; }
+.fbar i { display: block; height: 100%; border-radius: 3px; }
+.fbar.in i { background: var(--green); }
+.fbar.out i { background: var(--red); }
+.fp { min-width: 54px; text-align: right; font-size: 13px; }
+.segs { display: flex; flex-wrap: wrap; margin: 0 -4px 6px; }
+.segs .rchip span { min-width: 0; }
+.hchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.hch { font: 600 12px/22px var(--cond); padding: 0 8px; border-radius: 11px; border: 1px solid var(--line-2); color: var(--text-2); }
+.hch.up { color: var(--green); border-color: rgba(63, 214, 143, .35); }
+.hch.down { color: var(--red); border-color: rgba(255, 111, 111, .35); }
+.hch.key { background: rgba(63, 214, 143, .12); }
+.skh.sub { margin-top: 14px; }
+.ht { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 6px; }
+.ht th { text-align: right; color: var(--muted); font-weight: 500; font-size: 12px; padding: 4px 6px; }
+.ht td { text-align: right; padding: 6px; border-top: 1px solid var(--line); }
+.ht td:first-child, .ht th:first-child { text-align: left; padding-left: 0; }
+.dl { margin: 6px 0 0; padding-left: 18px; color: var(--text-2); font-size: 13px; }
+.dl li + li { margin-top: 4px; }
+.fr1 .num, .fr3 .num { white-space: nowrap; flex: none; }
+.fr3 .mut { flex: 1 1 auto; }

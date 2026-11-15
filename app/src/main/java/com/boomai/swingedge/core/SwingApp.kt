@@ -142,7 +142,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1651,6 +1651,13 @@ class SwingApp(private val p: Platform) {
                     ok("results" to searchIndex().newListings(Clock.epochDay(now()), days))
                 }
                 "stockInfo" -> stockInfo(a)
+                "moneyFlow" -> {
+                    val fd = flowData(a.bool("force"))
+                    val v = LinkedHashMap(MoneyFlow.view(fd, scoreTable?.entries ?: emptyMap()) { displayName(it) })
+                    v["fetchedAt"] = flowFetchedAt
+                    v
+                }
+                "flowSector" -> MoneyFlow.sector(flowData(false), a.str("name"), scoreTable?.entries ?: emptyMap()) { displayName(it) }
                 else -> chart(a)
             }
             return Json.stringify(res)
@@ -1791,7 +1798,49 @@ class SwingApp(private val p: Platform) {
             Panel.empty((call["label"] as? String) ?: "NA", call["proven"] == true, if (got.s.n > 0) StockPage.yyyymmdd(got.s.d[got.s.n - 1]) else 0)
         }
         m["listing"] = Panel.listing(got.s, listed, today)
+        m["money"] = try { MoneyFlow.forStock(flowData(false, fetch = false), sym) } catch (t: Throwable) { log("money $sym: $t"); null }
         return m
+    }
+
+    // ------------------------------------------------------------------ money flow (data/ files built by the daily job)
+
+    @Volatile private var flowCache: FlowData? = null
+    @Volatile private var flowFetchedAt = 0L
+    private val flowLock = Any()
+
+    /**
+     * The money-flow tables: the saved copy, refreshed from GitHub when older than FLOW_STALE_MS (or forced, at most every
+     * FLOW_FORCE_MS). A failed download keeps the old copy. Never throws.
+     */
+    private fun flowData(force: Boolean, fetch: Boolean = true): FlowData {
+        synchronized(flowLock) {
+            try {
+                if (flowCache == null) {
+                    flowFetchedAt = try { p.read(FLOW_META)?.trim()?.toLongOrNull() ?: 0L } catch (t: Throwable) { 0L }
+                    flowCache = MoneyFlow.parse(p.read("mf_flows.csv"), p.read("mf_industries.csv"), p.read("mf_holders.csv"), p.read("mf_deals.csv"))
+                }
+                val now = p.now()
+                val age = now - flowFetchedAt
+                if (fetch && (age >= FLOW_STALE_MS || (force && age >= FLOW_FORCE_MS) || flowCache?.ok != true)) {
+                    val got = httpAll(FLOW_FILES.map { FLOW_BASE + it })
+                    var changed = false
+                    val fl = got.getOrNull(0)
+                    if (fl != null && MoneyFlow.parse(fl, null, null, null).ok) {
+                        p.write("mf_flows.csv", fl); changed = true
+                        for (k in 1 until FLOW_FILES.size) {
+                            val t = got.getOrNull(k) ?: continue
+                            if (t.startsWith("SYMBOL,") || t.startsWith("DATE,")) p.write("mf_" + FLOW_FILES[k], t)
+                        }
+                    }
+                    flowFetchedAt = now
+                    try { p.write(FLOW_META, now.toString()) } catch (t: Throwable) {}
+                    if (changed) flowCache = MoneyFlow.parse(p.read("mf_flows.csv"), p.read("mf_industries.csv"), p.read("mf_holders.csv"), p.read("mf_deals.csv"))
+                }
+            } catch (t: Throwable) {
+                log("money flow: $t")
+            }
+            return flowCache ?: MoneyFlow.parse(null, null, null, null)
+        }
     }
 
     private fun chart(a: Map<String, Any?>): Map<String, Any?> {
@@ -1952,6 +2001,11 @@ class SwingApp(private val p: Platform) {
         const val CHANGES_URL = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/symbolchange.csv"
         const val CHANGES_FILE = "symbolchange.csv"
         const val ALT_FILE = "alt_tickers.json"
+        const val FLOW_BASE = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/"
+        val FLOW_FILES = listOf("flows.csv", "industries.csv", "holders.csv", "deals.csv")
+        const val FLOW_META = "mf_fetched.txt"
+        const val FLOW_STALE_MS = 4L * 3600 * 1000
+        const val FLOW_FORCE_MS = 5L * 60 * 1000
         const val ALT_MAX = 12
         const val ALT_RETRY_MS = 6L * 3600 * 1000
         const val ALT_FORCE_MS = 10L * 60 * 1000

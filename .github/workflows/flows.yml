@@ -23,7 +23,7 @@ jobs:
       - name: Bulk and block deals
         run: python3 tools/deals.py data/deals.csv || true
       - name: Industries
-        run: python3 tools/industries.py data/symbols.csv data/industries.csv 900 || true
+        run: timeout 1800 python3 -u tools/industries.py data/symbols.csv data/industries.csv 900 || true
       - name: Shareholding (promoter / FII / MF)
         run: |
           python3 tools/shp.py master "$(date -u -d '-240 days' +%d-%m-%Y)" "$(date -u +%d-%m-%Y)" /tmp/m.csv || true

@@ -52,7 +52,7 @@ object V2Tests {
      "panel":{"tally":{"for":0,"against":0,"neutral":0},
        "managers":[{"id":"trend","name":"","stance":"FOR","strength":0,"evidence":"","text":"","answers":"","rebuttal":"","metrics":[{"label":"","value":""}]}],
        "chair":{"label":"BUY","proven":false,"text":"","pros":[""],"cons":[""],"flipUp":"","flipDown":""},"asOfDay":0},
-     "listing":null}""").asObj()
+     "listing":null,"money":null}""").asObj()
     /** SPEC5 §3 listing object (when not null). */
     val LISTING: Map<String, Any?> = Json.parse("""{"isNew":true,"listedDay":0,"daysListed":0,"bars":0,"listPrice":0,"ltp":0,
      "sinceListingPct":0,"highSince":0,"highDay":0,"lowSince":0,"lowDay":0,"rangePos":0,"maxDdPct":0,"avgValueCr":0,"barsToRated":0,"baseRate":""}""").asObj()

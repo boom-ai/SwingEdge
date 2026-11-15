@@ -224,6 +224,8 @@ class FakePlatform : Platform {
     val urls = ArrayList<String>()
     var keepUrls = false
     var failWrites = false
+    /** fixed replies for non-Yahoo URLs (e.g. the money-flow files) */
+    val served = HashMap<String, String>()
 
     override fun now(): Long = nowMs
     override fun httpGetAll(urls: List<String>): List<String?> {
@@ -234,7 +236,7 @@ class FakePlatform : Platform {
         }
         if (httpDelayMs > 0) Thread.sleep(httpDelayMs)
         if (offline) return urls.map { null }
-        return urls.map { try { yahoo.respond(it, nowMs) } catch (t: Throwable) { null } }
+        return urls.map { u -> synchronized(served) { served[u] } ?: try { yahoo.respond(u, nowMs) } catch (t: Throwable) { null } }
     }
     override fun read(name: String): String? = synchronized(files) { files[name] }
     override fun write(name: String, text: String) {

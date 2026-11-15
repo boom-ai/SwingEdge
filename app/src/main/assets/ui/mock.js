@@ -182,6 +182,58 @@
     ];
   }
 
+
+  /* ---------- money flow (REPORT7) ---------- */
+  var MF_SECTORS = [['Automobile and Auto Components', 2.9, 1460, 49], ['Capital Goods', 2.1, 2210, 122], ['Forest Materials', 1.8, 64, 9], ['Healthcare', 0.9, 610, 68],
+    ['Financial Services', 0.3, 520, 117], ['Power', -0.2, -95, 23], ['Information Technology', -1.1, -890, 40], ['Metals & Mining', -1.9, -760, 27], ['Realty', -2.6, -310, 20]];
+  var MF_STOCKS = { 'Automobile and Auto Components': [['TATAMOTORS', 'Tata Motors Ltd', 'Passenger Cars & Utility Vehicles'], ['M&M', 'Mahindra & Mahindra Ltd', 'Passenger Cars & Utility Vehicles'], ['SANSERA', 'Sansera Engineering Ltd', 'Auto Components & Equipments'], ['UNOMINDA', 'UNO Minda Ltd', 'Auto Components & Equipments']],
+    'Capital Goods': [['POLYCAB', 'Polycab India Ltd', 'Cables - Electricals'], ['BHEL', 'Bharat Heavy Electricals Ltd', 'Heavy Electrical Equipment'], ['CUMMINSIND', 'Cummins India Ltd', 'Compressors Pumps & Diesel Engines']],
+    'Forest Materials': [['JKPAPER', 'JK Paper Ltd', 'Paper & Paper Products'], ['WSTCSTPAPR', 'West Coast Paper Mills Ltd', 'Paper & Paper Products'], ['CENTURYPLY', 'Century Plyboards (India) Ltd', 'Plywood Boards/ Laminates']],
+    'Healthcare': [['ZYDUSLIFE', 'Zydus Lifesciences Ltd', 'Pharmaceuticals'], ['MEDANTA', 'Global Health Ltd', 'Hospital']],
+    'Financial Services': [['MOTILALOFS', 'Motilal Oswal Financial Services Ltd', 'Stockbroking & Allied'], ['MCX', 'Multi Commodity Exchange of India Ltd', 'Exchange and Data Platform']],
+    'Power': [['TATAPOWER', 'Tata Power Company Ltd', 'Integrated Power Utilities']], 'Information Technology': [['INFY', 'Infosys Ltd', 'Computers - Software & Consulting']],
+    'Metals & Mining': [['HINDALCO', 'Hindalco Industries Ltd', 'Aluminium']], 'Realty': [['DLF', 'DLF Ltd', 'Residential Commercial Projects']] };
+  function mfStock(sym, name, sec, ind, k, rank) {
+    var b = { c: model(sym).info.ltp };
+    var mi = Math.max(1, 99 - k * 7 - rank * 3), net = (40 - k * 9) * (1 + rank * 0.1);
+    return { sym: sym, name: name, close: b ? b.c : 500, r1: 0.8 - k * 0.2, r5: 2.4 - k * 0.6, r20: 9.5 - k * 2.1, to20: 120 - k * 9, dlv20: 52 - k * 2, dlv1: 58 - k * 3,
+      net5: Math.round(net * 2.5) / 10, net20: Math.round(net * 10) / 10, flowPct: 4.2 - k * 0.9, moneyIn: mi, sector: sec, industry: ind, sectorRank: rank + 1,
+      score: k === 0 ? 93 - rank : k === 1 ? 88 : 62 - k, label: k <= 1 ? 'BUY' : k > 6 ? 'AVOID' : 'WAIT' };
+  }
+  function mfView() {
+    var secs = MF_SECTORS.map(function (s, i) {
+      var st = (MF_STOCKS[s[0]] || []);
+      return { name: s[0], n: s[3], net5: Math.round(s[2] / 3), net20: s[2], to20: s[3] * 40, flowPct: s[1], breadth: Math.max(8, Math.min(92, 55 + s[1] * 12)), r20: s[1] * 1.7, rank: i + 1,
+        top: st.slice(0, 3).map(function (x, k) { return { sym: x[0], name: x[1], moneyIn: 95 - k * 4 - i * 6 }; }) };
+    });
+    var all = [];
+    MF_SECTORS.forEach(function (s, i) { (MF_STOCKS[s[0]] || []).forEach(function (x, k) { all.push(mfStock(x[0], x[1], s[0], x[2], k, i)); }); });
+    var picks = all.filter(function (x) { return x.label === 'BUY' && x.sectorRank <= 5; });
+    var inflow = all.filter(function (x) { return x.moneyIn >= 70; }).slice(0, 8);
+    var big = all.slice().sort(function (a, b) { return b.net5 - a.net5; }).slice(0, 6);
+    function hold(sym, name, d, now) { return { sym: sym, name: name, qdate: '2026-09-30', pqdate: '2026-06-30', filed: '2026-10-21', now: now, prev: now.map(function (v, i) { return Math.round((v - (d[i] || 0)) * 100) / 100; }), delta: d, has: [true, true, true, true, true], close: model(sym).info.ltp }; }
+    var stakes = { quarter: '2026-09-30', companies: 2371, withInst: 2290,
+      together: [hold('POLYCAB', 'Polycab India Ltd', [0.1, 1.4, 0.9, 0.3, -1.2], [63.1, 14.2, 9.8, 3.4, 6.1]), hold('JKPAPER', 'JK Paper Ltd', [0, 0.8, 1.1, 0, -1.6], [49.6, 8.7, 6.3, 1.2, 21.4])],
+      promoters: [hold('SANSERA', 'Sansera Engineering Ltd', [1.85, -0.3, 0.4, 0, -1.9], [36.4, 21.8, 18.2, 2.1, 11.2]), hold('MOTILALOFS', 'Motilal Oswal Financial Services Ltd', [0.42, 0.2, -0.1, 0, -0.5], [68.9, 8.4, 5.1, 1.8, 9.9])],
+      fii: [hold('POLYCAB', 'Polycab India Ltd', [0.1, 1.4, 0.9, 0.3, -1.2], [63.1, 14.2, 9.8, 3.4, 6.1]), hold('MCX', 'Multi Commodity Exchange of India Ltd', [0, 1.1, -0.6, 0.2, -0.7], [0, 22.4, 24.9, 8.1, 19.2])],
+      mf: [hold('JKPAPER', 'JK Paper Ltd', [0, 0.8, 1.1, 0, -1.6], [49.6, 8.7, 6.3, 1.2, 21.4]), hold('ZYDUSLIFE', 'Zydus Lifesciences Ltd', [-0.1, 0.3, 0.7, 0.1, -0.9], [74.9, 8.6, 7.2, 2.6, 4.1])] };
+    var deals = [{ date: '2026-11-13', kind: 'BLOCK', sym: 'MEESHO', name: 'Meesho Ltd', client: 'ADITYA BIRLA SUN LIFE MUTUAL FUND', side: 'BUY', qty: 4200000, price: 246.75, valueCr: 103.6 },
+      { date: '2026-11-13', kind: 'BULK', sym: 'ALICON', name: 'Alicon Castalloy Ltd', client: 'MICROCURVES TRADING PRIVATE LIMITED', side: 'BUY', qty: 109747, price: 950.14, valueCr: 10.4 }];
+    if (scenario === 'broken') return { ok: true, ready: true, asof: 'x', stocks: 'many', sectors: [null, { name: '<b>x</b>', flowPct: 'NaN', top: 'no' }], picks: [{}, null], inflow: 'x', stakes: { together: [{ delta: 'x', now: null }] }, deals: [null], evidence: null };
+    return { ok: true, ready: true, asof: '2026-11-13', stocks: 2418, liquid: 1384, fetchedAt: Date.now(), sectors: secs, picks: picks, inflow: inflow, bigMoney: big,
+      outflow: all.filter(function (x) { return x.moneyIn < 30; }), stakes: stakes, deals: deals,
+      evidence: ['Tested 2020–2026: stocks in the sectors with the most money coming in did better than those in the sectors money was leaving, in both halves of the test. Among strong-setup (BUY-grade) stocks, those in the top money-flow sectors beat the others by about 1.2% (2020–23) and 0.7% (2023–26) over the next 60 trading days. A tilt, not a guarantee.',
+        'Money flow of a single stock (delivery, turnover jumps, buying pressure) did not reliably predict its next 20–60 days in the test. Use it to confirm a setup, not as a reason to buy on its own.',
+        'Stake changes come from the quarterly shareholding filings, so they are up to 3 months old by the time they are public.'] };
+  }
+  function mfSector(name) {
+    var i = -1; MF_SECTORS.forEach(function (s, k) { if (s[0] === name) i = k; });
+    if (i < 0) return { ok: false, error: 'No money-flow data for ' + name };
+    var s = MF_SECTORS[i], st = (MF_STOCKS[name] || []).map(function (x, k) { return mfStock(x[0], x[1], name, x[2], k, i); });
+    var inds = {}; st.forEach(function (x) { inds[x.industry] = (inds[x.industry] || 0) + x.net20; });
+    return { ok: true, name: name, rank: i + 1, of: MF_SECTORS.length, flowPct: s[1], net5: Math.round(s[2] / 3), net20: s[2], breadth: 55 + s[1] * 12, r20: s[1] * 1.7,
+      industries: Object.keys(inds).map(function (k) { return { name: k, n: 3, net20: Math.round(inds[k]), flowPct: s[1] * (0.6 + (k.length % 5) / 5) }; }), stocks: st };
+  }
   /* ---------- stock model: one deterministic 500-bar series per symbol drives search, stockInfo, getChart, myWatch ---------- */
   var UNI = [
     ['RELIANCE', 'Reliance Industries Ltd', 2918.45, 1], ['TCS', 'Tata Consultancy Services Ltd', 4120.3, 1], ['HDFCBANK', 'HDFC Bank Ltd', 1702.3, 1],
@@ -824,6 +876,8 @@
       var q = String(a.q == null ? '' : a.q);
       setTimeout(function () { finish('search', { ok: true, q: q, results: doSearch(q), list: listMeta() }, 0); }, 70);
     },
+    moneyFlow: function (a) { setTimeout(function () { finish('moneyFlow', mfView(), 0); }, 350); },
+    flowSector: function (a) { setTimeout(function () { finish('flowSector', mfSector(String(a.name || '')), 0); }, 250); },
     newListings: function (a) { setTimeout(function () { finish('newListings', { ok: true, results: newListingsList() }, 0); }, 120); },
     refreshSymbols: function () { setTimeout(function () { listFresh = true; finish('refreshSymbols', { ok: true, list: listMeta() }, 0); }, 900); },
     stockInfo: function (a) {
@@ -839,6 +893,10 @@
       res.myTarget = mt ? { target: mt.target, stop: mt.stop, note: mt.note, status: mt.status } : { target: 0, stop: 0, note: '', status: '' };
       res.isHolding = (state.holdings || []).some(function (h) { return h && h.sym === sym; });
       res.inWatch = (state.myWatch || []).some(function (w) { return w && w.sym === sym; });
+      res.money = sym === 'NEWSYM' ? null : { asof: '2026-11-13', flow: mfStock(sym, sym, 'Capital Goods', 'Cables - Electricals', 0, 1), sector: 'Capital Goods', industry: 'Cables - Electricals', sectorRank: 2, sectorOf: 9, sectorFlowPct: 2.1,
+        holders: { sym: sym, name: sym, qdate: '2026-09-30', pqdate: '2026-06-30', filed: '2026-10-21', now: [63.1, 14.2, 9.8, 3.4, 6.1], prev: [63.0, 12.8, 8.9, 3.1, 7.3], delta: [0.1, 1.4, 0.9, 0.3, -1.2], has: [true, true, true, true, true], close: 0 },
+        deals: [{ date: '2026-11-11', kind: 'BLOCK', sym: sym, client: 'SBI MUTUAL FUND', side: 'BUY', qty: 300000, price: 7100, valueCr: 213 }],
+        line: 'Money coming in strongly (top 10% of liquid stocks): net +₹412.0 cr delivered in 20 sessions. Capital Goods is #2 of 9 sectors for money coming in. FIIs, Mutual funds raised their stake last quarter.' };
       finish('stockInfo', res, sym === 'SLOW' ? 6000 : 400);
     },
     getChart: function (a) {

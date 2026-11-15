@@ -30,6 +30,16 @@ jobs:
                       from collections import Counter; print(Counter(r.get("date") for r in rows).most_common(6))
               else: print(json.dumps(d)[:800])
           PY
-          x=$(python3 -c "import json;d=json.load(open('/tmp/t.json'));r=d if isinstance(d,list) else d['data'];print(r[0].get('xbrl',''))" 2>/dev/null); echo "XBRL $x"
-          [ -n "$x" ] && curl -sS -m 60 -A "$UA" -o /tmp/x.xml -w "%{http_code}\n" "$x" && wc -c /tmp/x.xml && grep -o "<in-bse-shp:[A-Za-z]*" /tmp/x.xml | sort | uniq -c | sort -rn | head -60
-          grep -iE "ForeignPortfolio|MutualFund|Promoter" /tmp/x.xml | head -20 | cut -c1-250
+          x=$(python3 -c "import json;r=json.load(open('/tmp/m.json'));print([a for a in r if a['symbol']=='CAPF' or a['symbol']=='HDFCBANK' or a['symbol']=='TATAPOWER'][0]['xbrl'])"); echo "XBRL $x"
+          curl -sS -m 60 -A "$UA" -o /tmp/x.xml -w "%{http_code}\n" "$x"; wc -c /tmp/x.xml
+          grep -oE "<[a-zA-Z-]+:[A-Za-z]+ " /tmp/x.xml | sort | uniq -c | sort -rn | head -70
+          grep -oE 'context id="[^"]+"' /tmp/x.xml | head -80 | tr '\n' ' '
+          echo
+          grep -E "NumberOfShares|PercentageOfTotal|ShareholdingAsAPercentage" /tmp/x.xml | head -5 | cut -c1-300
+          python3 - <<'PY'
+          import re
+          t=open('/tmp/x.xml').read()
+          for m in re.finditer(r'<xbrli:context id="([^"]+)">(.*?)</xbrli:context>', t, re.S):
+              mem = re.findall(r'>([^<>]*Member)<', m.group(2))
+              print(m.group(1), mem)
+          PY

@@ -1,0 +1,42 @@
+name: money flow data
+on:
+  schedule:
+    - cron: "50 13 * * 1-5"   # 19:20 IST, after NSE publishes the day's bhavcopy
+    - cron: "15 3 * * *"      # 08:45 IST catch-up
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: { group: flows, cancel-in-progress: false }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/bhav
+          key: bhav-${{ github.run_id }}
+          restore-keys: bhav-
+      - name: Money flow (bhavcopy, every stock)
+        run: python3 tools/flows.py /tmp/bhav data/flows.csv
+      - name: Bulk and block deals
+        run: python3 tools/deals.py data/deals.csv || true
+      - name: Industries
+        run: python3 tools/industries.py data/symbols.csv data/industries.csv 900 || true
+      - name: Shareholding (promoter / FII / MF)
+        run: |
+          python3 tools/shp.py master "$(date -u -d '-240 days' +%d-%m-%Y)" "$(date -u +%d-%m-%Y)" /tmp/m.csv || true
+          if [ -s /tmp/m.csv ]; then
+            [ -f data/shp_cache.csv ] || cp /tmp/m.csv data/shp_cache.csv
+            timeout 9000 python3 tools/shp.py xbrl /tmp/m.csv data/shp_cache.csv /tmp/x.csv 6000 || true
+            [ -s /tmp/x.csv ] && cp /tmp/x.csv data/shp_cache.csv
+            python3 tools/holders.py data/shp_cache.csv data/holders.csv || true
+          fi
+      - name: Commit if changed
+        run: |
+          git config user.name "swingedge-bot"; git config user.email "actions@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -qm "Money flow data $(date -u +%F)"
+          for i in 1 2 3; do git pull -q --rebase origin main && git push -q origin main && break; sleep 5; done

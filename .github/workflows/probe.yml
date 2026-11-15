@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: probe
-        shell: bash {0}
+        shell: bash
         run: |
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
           f(){ code=$(curl -sS -m 30 -A "$UA" -H "Accept: application/json, text/plain, */*" -H "Referer: https://www.bseindia.com/" -H "Origin: https://www.bseindia.com" -b /tmp/c -c /tmp/c -o /tmp/o -w "%{http_code}" "$1" 2>&1 || true); echo "== $1 -> $code $(wc -c </tmp/o 2>/dev/null)"; head -c ${2:-400} /tmp/o; echo; }

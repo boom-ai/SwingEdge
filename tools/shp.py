@@ -75,6 +75,13 @@ def xbrl(mpath, known_path, out, mx):
     def work(r):
         b = get(r["XBRL"].replace("nsearchives.nseindia.com", "nsearchives.nseindia.in"))
         return r, (parse_xbrl(b) if b else None)
+    def save():
+        for r in rows:
+            k = (r["SYMBOL"], r["QDATE"], r["SUBMIT"])
+            if k in known: r.update({x: known[k][x] for x in ("FII", "MF", "DII", "RETAIL")})
+        with open(out + ".tmp", "w", newline="") as f:
+            w = csv.DictWriter(f, FIELDS); w.writeheader(); w.writerows(rows)
+        import os; os.replace(out + ".tmp", out)
     done = 0
     t0 = time.time()
     with cf.ThreadPoolExecutor(8) as ex:
@@ -82,11 +89,8 @@ def xbrl(mpath, known_path, out, mx):
             done += 1
             if p: r.update(p); known[(r["SYMBOL"], r["QDATE"], r["SUBMIT"])] = r
             if done % 500 == 0: print(" ", done, "in %.0fs" % (time.time() - t0), flush=True)
-    for r in rows:
-        k = (r["SYMBOL"], r["QDATE"], r["SUBMIT"])
-        if k in known: r.update({x: known[k][x] for x in ("FII", "MF", "DII", "RETAIL")})
-    with open(out, "w", newline="") as f:
-        w = csv.DictWriter(f, FIELDS); w.writeheader(); w.writerows(rows)
+            if done % 2000 == 0: save()
+    save()
     print("xbrl parsed:", sum(1 for r in rows if r["FII"] != ""), "of", len(rows))
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 name: shareholding backfill (research)
 on: workflow_dispatch
+permissions:
+  contents: write
 jobs:
   backfill:
     runs-on: ubuntu-latest
@@ -8,20 +10,20 @@ jobs:
       - uses: actions/checkout@v4
       - name: masters
         run: |
-          mkdir -p out
+          mkdir -p /tmp/out
           for y in 2018 2019 2020 2021 2022 2023 2024 2025 2026; do
             for q in "01-01 31-03" "01-04 30-06" "01-07 30-09" "01-10 31-12"; do
               set -- $q
-              python3 tools/shp.py master "$1-$y" "$2-$y" "out/m_${y}_${1}.csv" || true
+              python3 tools/shp.py master "$1-$y" "$2-$y" "/tmp/out/m_${y}_${1}.csv" || true
               sleep 1
             done
           done
           python3 - <<'PY'
           import csv, glob
           rows = {}
-          for f in sorted(glob.glob("out/m_*.csv")):
+          for f in sorted(glob.glob("/tmp/out/m_*.csv")):
               for r in csv.DictReader(open(f)): rows[(r["SYMBOL"], r["QDATE"], r["SUBMIT"])] = r
-          with open("out/master_all.csv", "w", newline="") as f:
+          with open("/tmp/out/master_all.csv", "w", newline="") as f:
               w = csv.DictWriter(f, list(next(iter(rows.values())).keys())); w.writeheader()
               for k in sorted(rows): w.writerow(rows[k])
           print("all filings:", len(rows))
@@ -29,21 +31,36 @@ jobs:
       - name: industries
         run: |
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
-          for i in niftytotalmarket_list niftymicrocap250_list; do curl -sS -m 60 -A "$UA" -o out/ind_$i.csv https://nsearchives.nseindia.com/content/indices/ind_$i.csv || true; done
-          wc -l out/ind_*.csv
-      - uses: actions/upload-artifact@v4
-        with: { name: masters, path: out/ }
+          for i in niftytotalmarket_list niftymicrocap250_list; do curl -sS -m 60 -A "$UA" -o /tmp/out/ind_$i.csv https://nsearchives.nseindia.com/content/indices/ind_$i.csv || true; done
+          wc -l /tmp/out/ind_*.csv
+      - name: push masters
+        run: |
+          mkdir -p /tmp/r && cp /tmp/out/*.csv /tmp/r/ 2>/dev/null || true
+          git config user.name "swingedge-bot"; git config user.email "actions@users.noreply.github.com"
+          git fetch -q origin research 2>/dev/null && git checkout -q -B research origin/research || git checkout -q --orphan research
+          git rm -rq --cached . >/dev/null 2>&1 || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          mkdir -p shp && cp /tmp/r/*.csv shp/
+          git add shp && git commit -qm "research data $(date -u +%F)" && git push -q -f origin research
+      - uses: actions/checkout@v4
       - name: xbrl (filings since 2024)
         run: |
           python3 - <<'PY'
           import csv
-          rows = [r for r in csv.DictReader(open("out/master_all.csv")) if r["QDATE"] >= "2023-12-31"]
+          rows = [r for r in csv.DictReader(open("/tmp/out/master_all.csv")) if r["QDATE"] >= "2023-12-31"]
           rows.sort(key=lambda r: r["QDATE"], reverse=True)
-          with open("out/recent.csv", "w", newline="") as f:
+          with open("/tmp/out/recent.csv", "w", newline="") as f:
               w = csv.DictWriter(f, list(rows[0].keys())); w.writeheader(); w.writerows(rows)
           print(len(rows))
           PY
-          timeout 18000 python3 tools/shp.py xbrl out/recent.csv /dev/null out/shp_hist.csv 40000 || true
-      - uses: actions/upload-artifact@v4
+          timeout 17000 python3 $GITHUB_WORKSPACE/tools/shp.py xbrl /tmp/out/recent.csv /dev/null /tmp/out/shp_hist.csv 40000 || true
+      - name: push to research branch
         if: always()
-        with: { name: shp_hist, path: out/shp_hist.csv }
+        run: |
+          mkdir -p /tmp/r && cp /tmp/out/*.csv /tmp/r/ 2>/dev/null || true
+          git config user.name "swingedge-bot"; git config user.email "actions@users.noreply.github.com"
+          git fetch -q origin research 2>/dev/null && git checkout -q -B research origin/research || git checkout -q --orphan research
+          git rm -rq --cached . >/dev/null 2>&1 || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          mkdir -p shp && cp /tmp/r/*.csv shp/
+          git add shp && git commit -qm "research data $(date -u +%F)" && git push -q -f origin research

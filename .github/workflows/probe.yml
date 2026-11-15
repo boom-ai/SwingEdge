@@ -5,9 +5,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: probe
+        shell: bash {0}
         run: |
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
-          f(){ code=$(curl -sS -m 30 -A "$UA" -H "Accept: application/json, text/plain, */*" -H "Referer: https://www.bseindia.com/" -H "Origin: https://www.bseindia.com" -b /tmp/c -c /tmp/c -o /tmp/o -w "%{http_code}" "$1" 2>&1); echo "== $1 -> $code $(wc -c </tmp/o 2>/dev/null)"; head -c ${2:-400} /tmp/o; echo; }
+          f(){ code=$(curl -sS -m 30 -A "$UA" -H "Accept: application/json, text/plain, */*" -H "Referer: https://www.bseindia.com/" -H "Origin: https://www.bseindia.com" -b /tmp/c -c /tmp/c -o /tmp/o -w "%{http_code}" "$1" 2>&1 || true); echo "== $1 -> $code $(wc -c </tmp/o 2>/dev/null)"; head -c ${2:-400} /tmp/o; echo; }
           f https://www.bseindia.com/ 100
           f "https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scripcode=&industry=&segment=Equity&status=Active" 600
           f "https://api.bseindia.com/BseIndiaAPI/api/shpSecSummery_New/w?qtrid=&scripcode=500325" 1500
@@ -22,4 +23,4 @@ jobs:
           f "https://www.moneycontrol.com/" 100
           f "https://www.tickertape.in/" 100
           f "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities" 300
-          curl -sS -m 30 -A "$UA" -L -o /tmp/o -w "%{http_code} %{url_effective}\n" "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities"; head -c 200 /tmp/o; echo
+          curl -sS -m 30 -A "$UA" -L --max-redirs 3 -o /tmp/o -w "%{http_code} %{url_effective}\n" "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities"; head -c 200 /tmp/o; echo

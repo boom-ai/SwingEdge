@@ -26,6 +26,13 @@ jobs:
         run: python3 tools/indices.py data/indices.csv || true
       - name: Industries
         run: timeout 1800 python3 -u tools/industries.py data/symbols.csv data/industries.csv 900 || true
+      - name: Commit fast data
+        run: |
+          git config user.name "swingedge-bot"; git config user.email "actions@users.noreply.github.com"
+          git add data/flows.csv data/deals.csv data/indices.csv data/industries.csv 2>/dev/null || true
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -qm "Money flow + index data $(date -u +%F)"
+          for i in 1 2 3; do git pull -q --rebase origin main && git push -q origin main && break; sleep 5; done
       - name: Shareholding (promoter / FII / MF)
         run: |
           python3 tools/shp.py master "$(date -u -d '-240 days' +%d-%m-%Y)" "$(date -u +%d-%m-%Y)" /tmp/m.csv || true

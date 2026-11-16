@@ -183,6 +183,35 @@
   }
 
 
+
+  /* ---------- mutual funds ---------- */
+  var MFD = [['Flexi Cap Fund', ['Parag Parikh Flexi Cap Fund - Direct Plan - Growth', 'HDFC Flexi Cap Fund - Direct Plan - Growth', 'Kotak Flexicap Fund - Direct Plan - Growth']],
+    ['Large Cap Fund', ['ICICI Prudential Bluechip Fund - Direct Plan - Growth', 'Nippon India Large Cap Fund - Direct Plan - Growth', 'Canara Robeco Bluechip Equity Fund - Direct Plan - Growth']],
+    ['Mid Cap Fund', ['Motilal Oswal Midcap Fund - Direct Plan - Growth', 'HDFC Mid-Cap Opportunities Fund - Direct Plan - Growth', 'Kotak Emerging Equity Fund - Direct Plan - Growth']],
+    ['Small Cap Fund', ['Nippon India Small Cap Fund - Direct Plan - Growth', 'Quant Small Cap Fund - Direct Plan - Growth', 'Bandhan Small Cap Fund - Direct Plan - Growth']]];
+  function mfFund(sub, name, i, k) {
+    var code = String(100000 + i * 10 + k);
+    return { code: code, name: name, amc: name.split(' ')[0], cat: 'Equity', sub: sub, nav: 50 + i * 30 + k * 7, navDate: '2026-11-13', aum: 12000 - k * 3000 + i * 500,
+      r1m: 1.2 - k * 0.3, r3m: 3.1 - k, r6m: 6.4 - k, r1y: 14.2 + i * 2 - k * 1.5, r3y: 18.6 + i * 2.4 - k, r5y: 21.3 + i * 2 - k * 1.2, r10y: k === 2 ? null : 16.5 + i, since: 17.1 + i,
+      vol: 12 + i * 3, mdd: -(14 + i * 5 + k * 2), sharpe: 1.3 - k * 0.15, sortino: 1.9 - k * 0.2, rollMed: 15 + i, rollMin: 4 - i * 2, rollBeat: 88 - k * 9 - i * 3, age: 11 - k, score: 91 - k * 6 - i * 2, rank: k + 1, of: 20 + i * 5 };
+  }
+  function mfFunds() {
+    if (scenario === 'broken') return { ok: true, ready: true, asof: 7, categories: [null, { sub: '<i>', best: [{ score: 'x', rollBeat: {} }, null] }], hot: 'x', fundStocks: [{}], notes: null };
+    var cats = MFD.map(function (c, i) { return { sub: c[0], cat: 'Equity', n: 25 + i * 5, medR1y: 12 + i, medR3y: 16 + i * 2, best: c[1].map(function (n, k) { return mfFund(c[0], n, i, k); }) }; });
+    var hot = []; cats.forEach(function (c) { hot = hot.concat(c.best); }); hot.sort(function (a, b) { return b.r1y - a.r1y; });
+    return { ok: true, ready: true, asof: '2026-11-13', count: 1642, categories: cats, hot: hot.slice(0, 6), hasHoldings: true,
+      fundStocks: [{ stock: 'HDFC Bank Ltd', funds: 412, avgPct: 6.8, added: 9 }, { stock: 'ICICI Bank Ltd', funds: 398, avgPct: 5.9, added: 12 }, { stock: 'Reliance Industries Ltd', funds: 371, avgPct: 4.7, added: 3 }],
+      fundAdds: [{ stock: 'Eternal Ltd', funds: 188, avgPct: 2.1, added: 31 }, { stock: 'Bharat Electronics Ltd', funds: 201, avgPct: 2.4, added: 22 }],
+      notes: ['Ranks compare a fund only with others in its own category.', 'Past returns alone are a weak guide.', 'Not investment advice.'] };
+  }
+  function mfInfo(code) {
+    var f = null; MFD.forEach(function (c, i) { c[1].forEach(function (n, k) { var x = mfFund(c[0], n, i, k); if (x.code === code) f = x; }); });
+    if (!f) return { ok: false, code: code, error: 'Fund not found' };
+    f.ok = true; f.verdict = 'Strong long-term pick (#' + f.rank + ' of ' + f.of + ' in ' + f.sub + '). Beat its category in ' + f.rollBeat + '% of 3-year windows. Worst fall in 3 years: ' + f.mdd + '%.';
+    f.holdings = [['HDFC Bank Ltd', 8.1], ['Bajaj Holdings & Investment Ltd', 6.9], ['ITC Ltd', 5.8], ['Coal India Ltd', 5.2], ['Power Grid Corporation of India Ltd', 4.9], ['ICICI Bank Ltd', 4.6], ['Maruti Suzuki India Ltd', 3.4]].map(function (x) { return { stock: x[0], pct: x[1] }; });
+    f.holdAsof = '2026-10-31'; f.top10 = 52.4; f.peers = MFD[0][1].map(function (n, k) { return mfFund(MFD[0][0], n, 0, k); });
+    return f;
+  }
   /* ---------- money flow (REPORT7) ---------- */
   var MF_SECTORS = [['Automobile and Auto Components', 2.9, 1460, 49], ['Capital Goods', 2.1, 2210, 122], ['Forest Materials', 1.8, 64, 9], ['Healthcare', 0.9, 610, 68],
     ['Financial Services', 0.3, 520, 117], ['Power', -0.2, -95, 23], ['Information Technology', -1.1, -890, 40], ['Metals & Mining', -1.9, -760, 27], ['Realty', -2.6, -310, 20]];
@@ -876,6 +905,8 @@
       var q = String(a.q == null ? '' : a.q);
       setTimeout(function () { finish('search', { ok: true, q: q, results: doSearch(q), list: listMeta() }, 0); }, 70);
     },
+    funds: function (a) { setTimeout(function () { finish('funds', mfFunds(), 0); }, 300); },
+    fundInfo: function (a) { setTimeout(function () { finish('fundInfo', mfInfo(String(a.code || '')), 0); }, 200); },
     moneyFlow: function (a) { setTimeout(function () { finish('moneyFlow', mfView(), 0); }, 350); },
     flowSector: function (a) { setTimeout(function () { finish('flowSector', mfSector(String(a.name || '')), 0); }, 250); },
     newListings: function (a) { setTimeout(function () { finish('newListings', { ok: true, results: newListingsList() }, 0); }, 120); },

@@ -159,6 +159,7 @@
     reset: '<path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5M4.5 4.5v4h4"/>',
     layers: '<path d="M4 8l8-4 8 4-8 4zM4 12.500l8 4 8-4M4 16.500l8 4 8-4"/>',
     bot: '<rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 12h.01M15 12h.01M9 16h6"/>',
+    funds: '<circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/>',
     money: '<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/><path d="M3 21h18"/>',
     logo: '<path d="M3 17.500l5-6 4 3.5 8.5-10" stroke="#3FD68F" stroke-width="2.4"/><path d="M15.5 5h5v5" stroke="#3FD68F" stroke-width="2.4"/><path d="M3 21h18" stroke="#2C3B4D" stroke-width="2"/>'
   };
@@ -303,7 +304,7 @@
     }
     return h;
   }
-  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
+  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['funds', 'Funds'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
   function tabbar(S, ui) {
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
@@ -1155,6 +1156,7 @@
     if (ui.tab === 'alerts') return alerts(S, ui);
     if (ui.tab === 'setups') return setups(S, ui);
     if (ui.tab === 'money') return money(S, ui);
+    if (ui.tab === 'funds') return fundsView(S, ui);
     if (ui.tab === 'bot') return today(S, ui);
     return today(S, ui);
   }
@@ -1259,6 +1261,60 @@
       return '<tr>' + cell(t.sym, t.name) + '<td>' + pq(t.entry) + '</td><td>' + pq(t.exitPrice) + '</td><td class="' + tone(t.pnlRs) + '">' + rsS(t.pnlRs) + '</td><td>' + d + '</td></tr>';
     }));
     return h;
+  }
+
+  /* ---------- Mutual funds ---------- */
+  function fname(v) { return T(v).replace(/\s*[-–(]+\s*(direct( plan)?)\b.*$/i, '').trim() || T(v); }
+  function pcF(v) { var n = N(v); return n === null ? DASH : (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(1) + '%'; }
+  function scoreChip(v) { var n = N(v); if (n === null || n < 0) return ''; return '<span class="fsc ' + (n >= 80 ? 'hi' : n >= 60 ? 'ok' : n >= 40 ? 'mid' : 'lo') + '">' + Math.round(n) + '</span>'; }
+  function fundRow(f) {
+    f = O(f);
+    var long = N(f.r5y) !== null ? '5Y ' + pcF(f.r5y) : '3Y ' + pcF(f.r3y);
+    return '<button type="button" class="srow frow" data-c="fund" data-id="' + esc(T(f.code)) + '">' +
+      '<div class="fr1">' + scoreChip(f.score) + '<b class="fnm">' + esc(fname(f.name)) + '</b></div>' +
+      '<div class="fr3"><span class="mut">' + tx(f.sub, '') + (N(f.rollBeat) !== null ? ' · beat category ' + Math.round(N(f.rollBeat)) + '% of the time' : '') + '</span></div>' +
+      '<div class="fr3"><span class="num ' + tone(f.r1y) + '">1Y ' + pcF(f.r1y) + '</span><span class="num ' + tone(f.r3y) + '">3Y ' + pcF(f.r3y) + '</span><span class="num">' + long + '</span><span class="sp"></span><span class="num down">' + (N(f.mdd) !== null ? 'worst ' + Math.round(N(f.mdd)) + '%' : '') + '</span></div></button>';
+  }
+  function fundsView(S, ui) {
+    var m = O(ui.funds), r = O(m.res);
+    var h = '<div class="card setuphd"><h2>Mutual funds</h2>' +
+      '<div class="crit"><span>' + ic('check') + 'Every direct-growth fund, from AMFI daily NAVs</span><span>' + ic('check') + 'Ranked only against its own category</span><span>' + ic('check') + 'Long-term score = consistency, return, risk and worst fall</span></div>' +
+      (T(r.asof).trim() ? '<div class="asof">NAVs up to ' + esc(isoDate(r.asof)) + ' · ' + grp(String(N(r.count) || 0)) + ' funds</div>' : '') +
+      '<div class="btns">' + btn('funds-refresh', null, m.loading ? 'Loading…' : 'Refresh', 'sm ghost', { icon: 'refresh', busy: m.loading === true }) + '</div></div>';
+    if (!isObj(m.res)) {
+      if (T(m.err).trim()) return h + '<div class="empty" role="alert"><div class="ei">' + ic('warn') + '</div><h3>Could not load funds</h3><p>' + esc(T(m.err).trim()) + '</p></div>';
+      return h + skCard('Funds', 6);
+    }
+    if (r.ready !== true) return h + '<div class="empty"><div class="ei">' + ic('clock') + '</div><h3>Fund data is not ready yet</h3><p>The daily fund job runs every night. Check back later.</p></div>';
+    h += '<div class="sec"><h2>Best for 5+ years</h2></div><div class="hint hintpad">' + ic('info') + '<span class="t">Top 3 per category by long-term score (0–100). Green ≥ 80. Tap a fund for its holdings and full numbers.</span></div>';
+    A(r.categories).forEach(function (c) {
+      var b = A(c.best); if (!b.length) return;
+      h += '<div class="sec sub"><h2>' + tx(c.sub) + '</h2><span class="cnt">' + (N(c.n) || 0) + ' funds · median 3Y ' + pcF(c.medR3y) + '</span></div><div class="card mv">' + b.map(fundRow).join('') + '</div>';
+    });
+    var hot = A(r.hot);
+    if (hot.length) h += '<div class="sec"><h2>Best last 12 months</h2></div><div class="hint hintpad">' + ic('warn') + '<span class="t">Last year’s winners often lag next year. Use this to spot themes, not to pick a fund.</span></div><div class="card mv">' + hot.map(fundRow).join('') + '</div>';
+    var fs = A(r.fundStocks), fa = A(r.fundAdds);
+    if (fa.length) h += '<div class="sec"><h2>Stocks funds added last month</h2></div><div class="card mv">' + fa.map(function (x) { return '<div class="srow"><div class="fr1"><b>' + tx(x.stock) + '</b><span class="sp"></span><span class="num up">+' + (N(x.added) || 0) + ' funds</span><span class="num mut">held by ' + (N(x.funds) || 0) + '</span></div></div>'; }).join('') + '</div>';
+    if (fs.length) h += '<div class="sec"><h2>Most held by funds</h2></div><div class="card mv">' + fs.map(function (x) { return '<div class="srow"><div class="fr1"><b>' + tx(x.stock) + '</b><span class="sp"></span><span class="num">' + (N(x.funds) || 0) + ' funds</span><span class="num mut">avg ' + (N(x.avgPct) !== null ? N(x.avgPct).toFixed(1) + '%' : DASH) + '</span></div></div>'; }).join('') + '</div>';
+    texts(r.notes).forEach(function (t) { h += '<div class="hint hintpad">' + ic('flask') + '<span class="t">' + esc(t) + '</span></div>'; });
+    return h;
+  }
+  function fundSheet(S, ui, data) {
+    var code = T(data.id), f = O(O(ui.fundInfo)[code]), foot = btn('sheet-close', null, 'Close', '');
+    if (!isObj(O(ui.fundInfo)[code])) return shell('Fund', skCard('Fund', 5), foot);
+    if (f.ok !== true) return shell('Fund', '<div class="empty" role="alert"><p>' + esc(T(f.error) || 'Could not load this fund') + '</p></div>', foot);
+    var rows = [['1 month', f.r1m], ['3 months', f.r3m], ['6 months', f.r6m], ['1 year', f.r1y], ['3 years (yearly)', f.r3y], ['5 years (yearly)', f.r5y], ['10 years (yearly)', f.r10y], ['Since start (yearly)', f.since]]
+      .filter(function (x) { return N(x[1]) !== null; });
+    var h = '<p class="lead">' + scoreChip(f.score) + ' ' + esc(T(f.verdict)) + '</p>' +
+      '<div class="sg">' + tile('NAV', '₹' + (N(f.nav) || 0).toFixed(2), esc(isoDate(f.navDate))) + tile('Consistency', N(f.rollBeat) !== null ? Math.round(N(f.rollBeat)) + '%' : DASH, '3-year windows it beat its category') +
+      tile('Worst fall, 3Y', N(f.mdd) !== null ? Math.round(N(f.mdd)) + '%' : DASH, 'peak to bottom', 'down') + tile('Sharpe, 3Y', N(f.sharpe) !== null ? N(f.sharpe).toFixed(2) : DASH, 'return per unit of risk') +
+      tile('Worst 3-year return', pcF(f.rollMin), 'yearly, any 3-year window') + tile('Fund size', N(f.aum) > 0 ? croreTxt(f.aum) : DASH, esc(T(f.amc))) + '</div>' +
+      '<h3 class="skh">Returns</h3><table class="ht">' + rows.map(function (x) { return '<tr><td>' + x[0] + '</td><td class="num ' + tone(x[1]) + '">' + pcF(x[1]) + '</td></tr>'; }).join('') + '</table>';
+    var hs = A(f.holdings);
+    h += '<h3 class="skh">Top holdings' + (T(f.holdAsof).trim() ? ' · ' + esc(isoDate(f.holdAsof)) : '') + '</h3>' + (hs.length ? '<table class="ht">' + hs.map(function (x) { return '<tr><td>' + tx(x.stock) + '</td><td class="num">' + (N(x.pct) || 0).toFixed(2) + '%</td></tr>'; }).join('') + '</table>' + (N(f.top10) !== null ? '<p class="sk-p mut">Top 10 stocks = ' + N(f.top10).toFixed(1) + '% of the fund.</p>' : '') : '<p class="sk-p mut">Holdings not available for this fund yet.</p>');
+    var pe = A(f.peers);
+    if (pe.length) h += '<h3 class="skh">Best in ' + tx(f.sub) + '</h3><div class="card mv">' + pe.map(fundRow).join('') + '</div>';
+    return shell(fname(f.name) || 'Fund', h, foot);
   }
   /* ---------- Money flow ---------- */
   function crSigned(v) {
@@ -2109,6 +2165,7 @@
     if (kind === 'search') return searchSheet(S, ui);
     if (kind === 'track') return trackSheet(S, ui);
     if (kind === 'sector') return sectorSheet(S, ui, data);
+    if (kind === 'fund') return fundSheet(S, ui, data);
     if (kind === 'resettrack') return shell('Reset the live record?', '<p class="lead">All picks recorded on this phone since the live record began will be deleted and the count starts again from zero. The replay is kept. Trades, holdings and strategies are not affected.</p>',
         btn('sheet-close', null, 'Keep it', 'ghost') + btn('submit', null, 'Reset record', 'dan'));
     if (kind === 'take') {

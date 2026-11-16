@@ -13,7 +13,7 @@
     });
   } catch (e) { /* ignore */ }
 
-  var TABS = { today: 1, setups: 1, money: 1, bot: 1, trades: 1, portfolio: 1, alerts: 1 };
+  var TABS = { today: 1, setups: 1, money: 1, funds: 1, bot: 1, trades: 1, portfolio: 1, alerts: 1 };
   var S = {}, lastJson = null, lastDevJson = null;
   var ui = { tab: TABS[qs.tab] ? qs.tab : 'today', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now(),
     recent: loadRecent(), search: { q: '', sent: null, shown: '', results: null, loading: false, err: '', filter: 'all', newList: null, newErr: '' }, emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, watchEdit: false, stock: null, pnl: {}, vOpen: {}, listMeta: null,
@@ -165,6 +165,8 @@
       if (name === 'stockInfo') { onInfoResult(res, ok, err); return; }
       if (name === 'moneyFlow') { onMoney(res, ok, err); return; }
       if (name === 'flowSector') { onSector(res, ok, err); return; }
+      if (name === 'funds') { var fm = ui.funds || (ui.funds = {}); fm.loading = false; if (ok) { fm.res = res; fm.err = ''; fm.at = Date.now(); } else fm.err = err; if (ui.tab === 'funds') render(); return; }
+      if (name === 'fundInfo') { ui.fundInfo = ui.fundInfo || {}; var fc = SE.T(res && res.code) || (sheet && sheet.kind === 'fund' ? SE.T(sheet.data.id) : ''); if (fc) ui.fundInfo[fc] = ok ? res : { ok: false, error: err }; if (sheet && sheet.kind === 'fund') paintSheet(true); return; }
       if (name === 'addWatch' || name === 'removeWatch') { onWatchResult(name, ok, err); return; }
       if (name === 'getChart' && chartReply(res, ok, err)) return;
       clearPending(name, true);
@@ -508,6 +510,14 @@
     m.loading = false;
     if (ok) { m.res = res; m.err = ''; m.at = Date.now(); } else { m.err = err; }
     if (ui.tab === 'money') render();
+  }
+  function loadFunds(force) {
+    var m = ui.funds || (ui.funds = {});
+    if (m.loading) return;
+    if (!force && m.res && Date.now() - (m.at || 0) < 30 * 60 * 1000) return;
+    m.loading = true; m.err = '';
+    try { bridge().action('funds', JSON.stringify({ force: force === true })); } catch (e) { m.loading = false; m.err = 'Could not reach the app.'; }
+    if (ui.tab === 'funds') render();
   }
   function openSector(name) {
     if (!name) return;
@@ -899,11 +909,13 @@
 
   function command(c, id, el) {
     switch (c) {
-      case 'tab': setTab(id); if (id === 'money') loadMoney(false); break;
+      case 'tab': setTab(id); if (id === 'money') loadMoney(false); if (id === 'funds') loadFunds(false); break;
       case 'money-refresh': loadMoney(true); break;
       case 'fullcards': ui.fullCards = !ui.fullCards; try { localStorage.setItem('se.fullCards', ui.fullCards ? '1' : '0'); } catch (e) {} render(); break;
       case 'money-seg': if (ui.money) { ui.money.seg = id; render(); } break;
       case 'sector': openSector(id); break;
+      case 'funds-refresh': loadFunds(true); break;
+      case 'fund': if (id) { ui.fundInfo = ui.fundInfo || {}; delete ui.fundInfo[id]; openSheet('fund', { id: id }, true); try { bridge().action('fundInfo', JSON.stringify({ code: id })); } catch (e) { ui.fundInfo[id] = { ok: false, error: 'Could not reach the app.' }; } } break;
       case 'jump': setTab(ui.tab, id); break;
       case 'strategies': setTab('alerts', 'strategies'); break;
       case 'settings': openSheet('settings'); break;
@@ -1024,6 +1036,8 @@
   try { ui.fullCards = localStorage.getItem('se.fullCards') === '1'; } catch (e) {}
   pull();
   if (ui.tab === 'money') loadMoney(false);
+  if (ui.tab === 'funds') loadFunds(false);
+  else if (qs.sheet === 'fund') { ui.fundInfo = {}; openSheet('fund', { id: qs.code || '1' }, true); try { bridge().action('fundInfo', JSON.stringify({ code: qs.code || '1' })); } catch (e) {} }
   try {
     if (qs.expand) {
       SE.A(S.signals).forEach(function (g) { ui.expanded['sig:' + SE.T(g.id)] = 1; });

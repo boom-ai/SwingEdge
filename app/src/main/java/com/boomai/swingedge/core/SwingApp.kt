@@ -142,7 +142,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1657,6 +1657,9 @@ class SwingApp(private val p: Platform) {
                     v["fetchedAt"] = flowFetchedAt
                     v
                 }
+                "funds" -> LinkedHashMap(Funds.view(fundData(a.bool("force"))))
+                "fundInfo" -> Funds.info(fundData(false), a.str("code"))
+                "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
                 "flowSector" -> MoneyFlow.sector(flowData(false), a.str("name"), scoreTable?.entries ?: emptyMap()) { displayName(it) }
                 else -> chart(a)
             }
@@ -1843,6 +1846,35 @@ class SwingApp(private val p: Platform) {
         }
     }
 
+    @Volatile private var fundCache: FundData? = null
+    @Volatile private var fundFetchedAt = 0L
+    private val fundLock = Any()
+
+    /** Mutual-fund tables: saved copy, refreshed from GitHub when older than FLOW_STALE_MS. Never throws. */
+    private fun fundData(force: Boolean): FundData {
+        synchronized(fundLock) {
+            try {
+                if (fundCache == null) {
+                    fundFetchedAt = try { p.read(FUND_META)?.trim()?.toLongOrNull() ?: 0L } catch (t: Throwable) { 0L }
+                    fundCache = Funds.parse(p.read("mf_funds.csv"), p.read("mf_fund_holdings.csv"), p.read("mf_fund_stocks.csv"))
+                }
+                val now = p.now(); val age = now - fundFetchedAt
+                if (age >= FLOW_STALE_MS || (force && age >= FLOW_FORCE_MS) || fundCache?.ok != true) {
+                    val got = httpAll(FUND_FILES.map { FLOW_BASE + it })
+                    val fl = got.getOrNull(0)
+                    if (fl != null && Funds.parse(fl, null, null).ok) {
+                        p.write("mf_funds.csv", fl)
+                        for (k in 1 until FUND_FILES.size) { val t = got.getOrNull(k) ?: continue; if (t.startsWith("CODE,") || t.startsWith("STOCK,")) p.write("mf_" + FUND_FILES[k], t) }
+                        fundCache = Funds.parse(p.read("mf_funds.csv"), p.read("mf_fund_holdings.csv"), p.read("mf_fund_stocks.csv"))
+                    }
+                    fundFetchedAt = now
+                    try { p.write(FUND_META, now.toString()) } catch (t: Throwable) {}
+                }
+            } catch (t: Throwable) { log("funds: $t") }
+            return fundCache ?: Funds.parse(null, null, null)
+        }
+    }
+
     private fun chart(a: Map<String, Any?>): Map<String, Any?> {
         val raw = a.str("sym")
         val sym = HoldingsImport.cleanSymbol(raw)
@@ -2004,6 +2036,8 @@ class SwingApp(private val p: Platform) {
         const val FLOW_BASE = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/"
         val FLOW_FILES = listOf("flows.csv", "industries.csv", "holders.csv", "deals.csv")
         const val FLOW_META = "mf_fetched.txt"
+        val FUND_FILES = listOf("funds.csv", "fund_holdings.csv", "fund_stocks.csv")
+        const val FUND_META = "fund_fetched.txt"
         const val FLOW_STALE_MS = 4L * 3600 * 1000
         const val FLOW_FORCE_MS = 5L * 60 * 1000
         const val ALT_MAX = 12

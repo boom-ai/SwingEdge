@@ -79,3 +79,24 @@ object V8Tests {
         T.eq(MarketGate.open((0 until 5).map { mk("F$it", 0.002) }), null, "too few stocks: unknown")
     }
 }
+
+object V9Tests {
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v9-indices" to ::idx)
+    fun idx() {
+        val csv = "INDEX,SYMBOL\n" + (0 until 50).joinToString("") { "Nifty 50,MF$it\n" } + "Nifty Bank,MF1\nNifty Bank,MF2\nTiny,ZZ\n"
+        val ix = Indices.parse(csv)
+        T.eq(ix.keys.toList(), listOf("Nifty 50"), "lists under 5 members dropped, order kept")
+        val d = V6Tests.data()
+        val ent = HashMap<String, ScoreEntry>()
+        fun e(sym: String, sc: Double, lab: String) { ent[sym] = ScoreEntry(sym, SetupScore.compute(Series(sym, 0)), DoubleArray(5), sc, sc, lab, "", 1, 100) }
+        e("MF3", 90.0, "BUY"); e("MF4", 60.0, "WAIT"); e("MF5", 40.0, "AVOID")
+        val v = Indices.view(ix, "Nifty 50", d.flows, ent, true) { it }
+        @Suppress("UNCHECKED_CAST") val rows = v["stocks"] as List<Map<String, Any?>>
+        T.eq(rows.size, 50, "all 50 members, nothing outside the index")
+        T.eq(rows.take(3).map { it["sym"] to it["call"] }, listOf("MF3" to "BUY", "MF4" to "WAIT", "MF5" to "AVOID"), "BUY first, then WAIT, AVOID, unrated last")
+        val shut = Indices.view(ix, "Nifty 50", d.flows, ent, false) { it }
+        @Suppress("UNCHECKED_CAST") T.eq((shut["stocks"] as List<Map<String, Any?>>)[0]["call"], "WAIT", "market gate shut: BUY shows WAIT")
+        T.eq(Indices.view(ix, "nope", d.flows, ent, true) { it }["index"], "Nifty 50", "unknown index falls back to the first")
+        T.eq(Indices.view(Indices.parse(null), "x", d.flows, ent, true) { it }["ready"], false, "no data: not ready")
+    }
+}

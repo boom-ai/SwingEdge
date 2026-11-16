@@ -144,7 +144,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1676,6 +1676,11 @@ class SwingApp(private val p: Platform) {
                 "funds" -> LinkedHashMap(Funds.view(fundData(a.bool("force"))))
                 "fundInfo" -> Funds.info(fundData(false), a.str("code"))
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
+                "indexView" -> {
+                    flowData(false)
+                    val idx = Indices.parse(try { p.read("mf_indices.csv") } catch (t: Throwable) { null })
+                    Indices.view(idx, a.str("index"), flowCache?.flows ?: emptyMap(), scoreTable?.entries ?: emptyMap(), marketGate != false) { displayName(it) }
+                }
                 "flowSector" -> MoneyFlow.sector(flowData(false), a.str("name"), scoreTable?.entries ?: emptyMap()) { displayName(it) }
                 else -> chart(a)
             }
@@ -1848,7 +1853,7 @@ class SwingApp(private val p: Platform) {
                         p.write("mf_flows.csv", fl); changed = true
                         for (k in 1 until FLOW_FILES.size) {
                             val t = got.getOrNull(k) ?: continue
-                            if (t.startsWith("SYMBOL,") || t.startsWith("DATE,")) p.write("mf_" + FLOW_FILES[k], t)
+                            if (t.startsWith("SYMBOL,") || t.startsWith("DATE,") || t.startsWith("INDEX,")) p.write("mf_" + FLOW_FILES[k], t)
                         }
                     }
                     flowFetchedAt = now
@@ -2053,7 +2058,7 @@ class SwingApp(private val p: Platform) {
         const val HOLD_MAX_DAYS = 120
         const val TRAIL_ATR = 5.0
         const val FLOW_BASE = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/"
-        val FLOW_FILES = listOf("flows.csv", "industries.csv", "holders.csv", "deals.csv")
+        val FLOW_FILES = listOf("flows.csv", "industries.csv", "holders.csv", "deals.csv", "indices.csv")
         const val FLOW_META = "mf_fetched.txt"
         val FUND_FILES = listOf("funds.csv", "fund_holdings.csv", "fund_stocks.csv")
         const val FUND_META = "fund_fetched.txt"

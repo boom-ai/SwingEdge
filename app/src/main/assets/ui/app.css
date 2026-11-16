@@ -1177,3 +1177,6 @@ svg.chart .xd { fill: var(--text); stroke: var(--bg); stroke-width: 1.5; }
 .vbig.up { color: var(--green); } .vbig.down { color: var(--red); } .vbig.neutral { color: var(--text-2); }
 .vsimple { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 15px; color: var(--text-2); }
 .vsimple b { color: var(--text); } .vsimple .up b { color: var(--green); } .vsimple .down b { color: var(--red); }
+.ixc { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; }
+.ixc .rchip { flex: none; }
+.btt td.gray { color: var(--muted); }

@@ -905,6 +905,12 @@
       var q = String(a.q == null ? '' : a.q);
       setTimeout(function () { finish('search', { ok: true, q: q, results: doSearch(q), list: listMeta() }, 0); }, 70);
     },
+    indexView: function (a) { setTimeout(function () {
+      var IX = { 'Nifty 50': ['RELIANCE', 'HDFCBANK', 'ICICIBANK', 'INFY', 'TCS', 'LT', 'ITC', 'MARUTI', 'TITAN', 'BAJFINANCE', 'TATAMOTORS', 'HAL'], 'Nifty Bank': ['HDFCBANK', 'ICICIBANK', 'KOTAKBANK', 'AXISBANK', 'SBIN', 'INDUSINDBK'], 'Nifty Midcap 150': ['POLYCAB', 'MCX', 'BHEL', 'CUMMINSIND', 'MOTILALOFS', 'SANSERA'] };
+      var nm = IX[a.index] ? a.index : 'Nifty 50', calls = ['BUY', 'WAIT', 'AVOID', 'NA'];
+      var st = IX[nm].map(function (s, i) { return { sym: s, name: s + ' Ltd', close: model(s).info.ltp, r1: (i % 5) - 2.1, r20: 8 - i * 1.3, score: 95 - i * 6, call: calls[Math.min(3, Math.floor(i / 3))] }; });
+      finish('indexView', { ok: true, ready: true, index: nm, gateOpen: true, buys: st.filter(function (x) { return x.call === 'BUY'; }).length, stocks: st,
+        indices: Object.keys(IX).map(function (k) { return { name: k, n: IX[k].length }; }) }, 0); }, 200); },
     funds: function (a) { setTimeout(function () { finish('funds', mfFunds(), 0); }, 300); },
     fundInfo: function (a) { setTimeout(function () { finish('fundInfo', mfInfo(String(a.code || '')), 0); }, 200); },
     moneyFlow: function (a) { setTimeout(function () { finish('moneyFlow', mfView(), 0); }, 350); },

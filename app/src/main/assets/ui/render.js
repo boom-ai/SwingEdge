@@ -533,7 +533,7 @@
     return h + '<div class="card mv">' + rows.map(function (x) { return wrow(x, edit, ui); }).join('') + '</div>';
   }
   function setups(S, ui) {
-    var ws = watchItems(S), asof = '', h = trackRow(S) + ideasBlock(S, 'setups') + myWatchSection(S, ui);
+    var ws = watchItems(S), asof = '', h = '<div class="btns hintpad">' + btn('index-open', null, 'Index stocks only (Nifty 50, Bank, Midcap…)', 'sm', { icon: 'layers' }) + '</div>' + trackRow(S) + ideasBlock(S, 'setups') + myWatchSection(S, ui);
     ws.forEach(function (x) { if (!asof) asof = barDayText(x.barDay); });
     h += '<div class="card setuphd"><h2>Fresh EMA crossovers</h2>' +
       '<div class="crit"><span>' + ic('check') + '10 EMA crossed above 20 EMA</span><span>' + ic('check') + '10 EMA above the 50, 100 and 200 EMA</span><span>' + ic('check') + 'Traded ₹25 crore+ a day</span></div>' +
@@ -1346,6 +1346,24 @@
     var pe = A(f.peers);
     if (pe.length) h += '<h3 class="skh">Best in ' + tx(f.sub) + '</h3><div class="card mv">' + pe.map(fundRow).join('') + '</div>';
     return shell(fname(f.name) || 'Fund', h, foot);
+  }
+
+  /* ---------- Index members ---------- */
+  function indexSheet(S, ui) {
+    var m = O(ui.index), r = O(m.res), foot = btn('sheet-close', null, 'Close', '');
+    if (!isObj(m.res)) return shell('Index stocks', T(m.err).trim() ? '<p class="lead">' + esc(m.err) + '</p>' : skCard('Index', 6), foot);
+    if (r.ready !== true) return shell('Index stocks', '<p class="lead">Index lists arrive with the evening data update. Try again later.</p>', foot);
+    var sel = T(r.index);
+    var chips = '<div class="ixc">' + A(r.indices).map(function (x) {
+      x = O(x); var on = T(x.name) === sel;
+      return '<button type="button" class="rchip' + (on ? ' on' : '') + '" data-c="index-pick" data-id="' + esc(T(x.name)) + '" aria-pressed="' + on + '"><span>' + esc(T(x.name).replace(/^Nifty /, '')) + '</span></button>';
+    }).join('') + '</div>';
+    var rows = A(r.stocks).map(function (x) {
+      x = O(x); var c = T(x.call), cls = c === 'BUY' ? 'up' : c === 'AVOID' ? 'down' : 'gray';
+      return '<tr>' + cell(x.sym, x.name) + '<td>' + pq(x.close) + '</td><td class="' + tone(x.r1) + '">' + pcF(x.r1) + '</td><td class="' + tone(x.r20) + '">' + pcF(x.r20) + '</td><td class="' + cls + '"><b>' + (c === 'NA' ? DASH : esc(c)) + '</b></td></tr>';
+    });
+    var head = '<p class="lead"><b>' + esc(sel) + '</b> · ' + A(r.stocks).length + ' stocks · ' + (N(r.buys) || 0) + ' BUY' + (r.gateOpen === false ? ' · market below 200-day average: no new buys' : '') + '</p>';
+    return shell('Index stocks', chips + head + (m.loading ? skCard('Index', 4) : tbl(['Stock', 'Price', '1D', '20D', 'Call'], rows)), foot);
   }
   /* ---------- Money flow ---------- */
   function crSigned(v) {
@@ -2197,6 +2215,7 @@
     if (kind === 'track') return trackSheet(S, ui);
     if (kind === 'sector') return sectorSheet(S, ui, data);
     if (kind === 'fund') return fundSheet(S, ui, data);
+    if (kind === 'index') return indexSheet(S, ui);
     if (kind === 'resettrack') return shell('Reset the live record?', '<p class="lead">All picks recorded on this phone since the live record began will be deleted and the count starts again from zero. The replay is kept. Trades, holdings and strategies are not affected.</p>',
         btn('sheet-close', null, 'Keep it', 'ghost') + btn('submit', null, 'Reset record', 'dan'));
     if (kind === 'take') {

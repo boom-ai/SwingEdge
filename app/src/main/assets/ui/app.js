@@ -165,6 +165,7 @@
       if (name === 'stockInfo') { onInfoResult(res, ok, err); return; }
       if (name === 'moneyFlow') { onMoney(res, ok, err); return; }
       if (name === 'flowSector') { onSector(res, ok, err); return; }
+      if (name === 'indexView') { var im = ui.index || (ui.index = {}); im.loading = false; if (ok) { im.res = res; im.sel = SE.T(res && res.index); } else im.err = err; if (sheet && sheet.kind === 'index') paintSheet(true); return; }
       if (name === 'funds') { var fm = ui.funds || (ui.funds = {}); fm.loading = false; if (ok) { fm.res = res; fm.err = ''; fm.at = Date.now(); } else fm.err = err; if (ui.tab === 'funds') render(); return; }
       if (name === 'fundInfo') { ui.fundInfo = ui.fundInfo || {}; var fc = SE.T(res && res.code) || (sheet && sheet.kind === 'fund' ? SE.T(sheet.data.id) : ''); if (fc) ui.fundInfo[fc] = ok ? res : { ok: false, error: err }; if (sheet && sheet.kind === 'fund') paintSheet(true); return; }
       if (name === 'addWatch' || name === 'removeWatch') { onWatchResult(name, ok, err); return; }
@@ -510,6 +511,12 @@
     m.loading = false;
     if (ok) { m.res = res; m.err = ''; m.at = Date.now(); } else { m.err = err; }
     if (ui.tab === 'money') render();
+  }
+  function loadIndex(name) {
+    var m = ui.index || (ui.index = {});
+    m.sel = name; m.loading = true; m.err = '';
+    try { bridge().action('indexView', JSON.stringify({ index: name })); } catch (e) { m.loading = false; m.err = 'Could not reach the app.'; }
+    if (sheet && sheet.kind === 'index') paintSheet(true);
   }
   function loadFunds(force) {
     var m = ui.funds || (ui.funds = {});
@@ -911,6 +918,8 @@
     switch (c) {
       case 'tab': setTab(id); if (id === 'money') loadMoney(false); if (id === 'funds') loadFunds(false); break;
       case 'money-refresh': loadMoney(true); break;
+      case 'index-open': ui.index = ui.index || {}; openSheet('index', {}, true); loadIndex(ui.index.sel || ''); break;
+      case 'index-pick': loadIndex(id); break;
       case 'short-toggle': ui.showShort = !ui.showShort; render(); break;
       case 'fullcards': ui.fullCards = !ui.fullCards; try { localStorage.setItem('se.fullCards', ui.fullCards ? '1' : '0'); } catch (e) {} render(); break;
       case 'money-seg': if (ui.money) { ui.money.seg = id; render(); } break;
@@ -1038,6 +1047,7 @@
   pull();
   if (ui.tab === 'money') loadMoney(false);
   if (ui.tab === 'funds') loadFunds(false);
+  else if (qs.sheet === 'index') { ui.index = {}; openSheet('index', {}, true); loadIndex(qs.index || ''); }
   else if (qs.sheet === 'fund') { ui.fundInfo = {}; openSheet('fund', { id: qs.code || '1' }, true); try { bridge().action('fundInfo', JSON.stringify({ code: qs.code || '1' })); } catch (e) {} }
   try {
     if (qs.expand) {

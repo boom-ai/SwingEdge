@@ -552,6 +552,8 @@
   }
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
+    if (ui.fullCards !== true) return banner(ui) + statusPanel(S, ui, now) + simpleToday(S, ui, items, bs) +
+      '<div class="btns hintpad">' + btn('fullcards', null, 'Detailed view', 'sm ghost', { icon: 'layers' }) + '</div>';
     var h = banner(ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs);
     if (ui.fullCards === true || !items.length) h += '<div class="sec"><h2>Act now</h2>' + (items.length ? '<span class="cnt">' + items.length + '</span>' : '') + '</div>';
     if (!items.length) {
@@ -901,6 +903,25 @@
     if (!k) return '';
     var ltp = N(info.ltp), sym = T(st.sym).trim();
     var hz = N(c.horizonDays) > 0 ? N(c.horizonDays) : (N(O(c.hist).horizonDays) > 0 ? N(O(c.hist).horizonDays) : 0);
+    if (O(ui).fullCards !== true) {
+      var sx = T(sym).toUpperCase(), tr = openTrades(S).filter(function (t) { return T(t.sym).toUpperCase() === sx; })[0];
+      var hd = A(S.holdings).filter(function (x) { return T(x.sym).toUpperCase() === sx; })[0];
+      var sg = newSignals(S).filter(function (g) { return T(g.sym).toUpperCase() === sx; })[0];
+      var strip = function (word, cls3, inner) { return '<section class="card vd vsim" id="st-vcard"><span class="vbig ' + cls3 + '">' + word + '</span><div class="vsimple">' + inner + '</div></section>'; };
+      if (tr) {
+        var tq = N(tr.qty) || 0;
+        if (tr.action === 'EXIT' || tr.action === 'TIME_EXIT') return strip('SELL ' + tq, 'down', '<span>Sell all now.</span>');
+        if (tr.action === 'BOOK_HALF') return strip('SELL ' + Math.floor(tq / 2), 'down', '<span>Keep ' + (tq - Math.floor(tq / 2)) + '. New stop <b>' + pq(tr.entry) + '</b></span>');
+        return strip('HOLD', 'up', '<span>Sell by <b>' + dShort(addDays(tr.openedAt, N(tr.maxDays) || 6)) + '</b></span><span class="up">Target <b>' + pq(tr.t2 || tr.t1) + '</b></span><span class="down">Stop <b>' + pq(tr.sl) + '</b></span>');
+      }
+      if (hd && (hd.verdict === 'SELL' || hd.verdict === 'TRIM')) { var hq = N(hd.qty) || 0; return strip('SELL ' + (hd.verdict === 'TRIM' ? Math.floor(hq / 2) : hq), 'down', '<span>' + (hd.verdict === 'TRIM' ? 'Sell half.' : 'Sell all.') + '</span>'); }
+      if (sg) return strip('BUY', 'up', '<span>Buy ≤ <b>' + pq(sg.entryMax || sg.entry) + '</b></span><span>Qty <b>' + (N(sg.qty) || 0) + '</b></span><span>Hold <b>' + (N(sg.holdDays) || 6) + ' days</b></span><span class="up">Target <b>' + pq(sg.t2 || sg.t1) + '</b></span><span class="down">Stop <b>' + pq(sg.sl) + '</b></span>');
+      if (hd) return strip('HOLD', 'up', '<span>Keep it.</span>');
+      var buy = lab === 'BUY', cls2 = buy ? 'up' : lab === 'AVOID' ? 'down' : 'neutral';
+      var line = buy ? '<div class="vsimple"><span>Buy ≤ <b>' + pq(c.entryHigh) + '</b></span><span>Hold <b>' + (hz || 60) + ' days</b></span><span class="up">Target <b>' + pq(c.t2 || c.t1) + '</b></span><span class="down">Stop <b>' + pq(c.stop) + '</b></span></div>'
+        : '<div class="vsimple"><span>' + (lab === 'AVOID' ? 'Don’t buy. Sell if you hold it.' : lab === 'NA' ? 'No call for this stock.' : 'Don’t buy yet.') + '</span></div>';
+      return '<section class="card vd vsim" id="st-vcard"><span class="vbig ' + cls2 + '">' + (buy ? 'BUY' : lab === 'AVOID' ? 'AVOID' : lab === 'NA' ? 'NO CALL' : 'WAIT') + '</span>' + line + '</section>';
+    }
     var head = T(c.headline).trim(), reasons = texts(c.reasons).slice(0, 8);
     var pillText = lab === 'BUY' && c.proven !== true ? 'BUY CANDIDATE' : lab === 'NA' ? 'NOT RATED' : lab;
     var h = '<section class="card rail ' + k.rail + ' vd vd-' + k.cls + '" id="st-vcard" aria-label="' + esc('SwingEdge call for ' + (sym || 'this stock') + ': ' + lab) + '"><div class="vdb">' +
@@ -1180,28 +1201,33 @@
     return null;
   }
   function simpleToday(S, ui, items, bs) {
-    var h = '', jobs = [];
-    items.forEach(function (x) { if (x.type !== 'signal') { var d = doLine(x); if (d) jobs.push({ x: x, d: d }); } });
-    h += '<div class="sec" id="first-sell"><h2>Sell / act</h2><span class="cnt">' + jobs.length + '</span></div>';
-    h += jobs.length ? '<div class="card mv">' + jobs.map(function (j) {
-      var t = O(j.x.it), pnl = N(t.pnlRs);
-      return '<button type="button" class="srow job" data-c="stock" data-id="' + esc(T(t.sym)) + '" data-name="' + esc(T(t.name)) + '">' +
-        '<div class="fr1"><span class="vb ' + j.d.c + '">' + esc(j.d.v) + '</span><b>' + tx(t.sym) + '</b><span class="sp"></span><span class="num">' + pq(t.ltp || t.price) + '</span>' +
-        (pnl !== null && j.x.type !== 'target' ? '<span class="num ' + tone(pnl) + '">' + rsS(pnl) + '</span>' : '') + '</div>' +
-        '<div class="jt">' + esc(j.d.s.trim()) + '</div></button>';
-    }).join('') + '</div>' : '<div class="hint hintpad">' + ic('check') + '<span class="t">Nothing to sell today. Keep your stop-loss orders in place.</span></div>';
-    var buys = newSignals(S);
+    var h = '', sells = [], cap = N(O(S.settings).capital) || 0;
+    items.forEach(function (x) {
+      var t = O(x.it), q = N(t.qty) || 0, half = Math.floor(q / 2), n = null;
+      if (x.type === 'trade') n = t.action === 'BOOK_HALF' ? half : q;
+      else if (x.type === 'holding') n = t.verdict === 'TRIM' ? half : q;
+      if (n !== null && n > 0) sells.push({ t: t, n: n });
+    });
+    h += '<div class="sec" id="first-sell"><h2>Sell</h2><span class="cnt">' + sells.length + '</span></div>';
+    h += sells.length ? tbl(['Stock', 'Sell qty', 'Price'], sells.map(function (x) {
+      return '<tr>' + cell(x.t.sym, x.t.name) + '<td class="down"><b>' + x.n + '</b></td><td>' + pq(x.t.ltp) + '</td></tr>';
+    })) : '<div class="hint hintpad"><span class="t">Nothing to sell.</span></div>';
+    var held = {};
+    openTrades(S).forEach(function (t) { held[T(t.sym)] = 1; });
+    A(S.holdings).forEach(function (t) { held[T(t.sym)] = 1; });
+    var buys = newSignals(S).map(function (g) {
+      return { sym: g.sym, name: g.name, px: g.entryMax || g.entry, qty: N(g.qty) || 0, days: N(g.holdDays) || 6, tgt: g.t2 || g.t1, sl: g.sl };
+    });
+    var used = {}; buys.forEach(function (b) { used[T(b.sym)] = 1; });
+    var slot = cap > 0 ? cap / 4 : 0;
+    A(S.ideas).filter(function (x) { return T(x.sym) && !held[T(x.sym)] && !used[T(x.sym)] && N(x.entryHigh) > 0 && N(x.stop) > 0; }).slice(0, 4).forEach(function (x) {
+      var p = N(x.entryHigh);
+      buys.push({ sym: x.sym, name: x.name, px: p, qty: slot > 0 ? Math.floor(slot / p) : 0, days: N(x.horizonDays) || 60, tgt: x.t2 || x.t1, sl: x.stop });
+    });
     h += '<div class="sec" id="first-buy"><h2>Buy</h2><span class="cnt">' + buys.length + '</span></div>';
-    if (buys.length) {
-      h += tbl(['Stock', 'Buy up to', 'Qty', 'Amount', 'Stop', 'Sell at', 'Sell by'], buys.map(function (g) {
-        return '<tr>' + cell(g.sym, g.name) + '<td>' + pq(g.entryMax || g.entry) + '</td><td>' + (N(g.qty) || 0) + '</td><td>' + rsB(g.investRs) + '</td><td class="down">' + pq(g.sl) + '</td><td class="up">' + pq(g.t2 || g.t1) + '</td><td>' + dShort(addDays(g.createdAt, N(g.holdDays) || 6)) + '</td></tr>';
-      }));
-      h += '<div class="card rules"><b>How to do it</b><ol>' +
-        '<li>Buy at the next open, only if the price is at or below <b>Buy up to</b>. Otherwise skip it.</li>' +
-        '<li>Right after buying, place a stop-loss order at <b>Stop</b>.</li>' +
-        '<li>Sell everything at <b>Sell at</b>, or on the <b>Sell by</b> date, whichever comes first.</li>' +
-        '<li>Tap the stock → <b>I bought it</b>, so the app tracks it and tells you when to sell.</li></ol></div>';
-    } else h += hintLine(bs);
+    h += buys.length ? tbl(['Stock', 'Buy ≤', 'Qty', 'Days', 'Target', 'Stop'], buys.map(function (b) {
+      return '<tr>' + cell(b.sym, b.name) + '<td>' + pq(b.px) + '</td><td>' + (b.qty || DASH) + '</td><td><b>' + b.days + '</b></td><td class="up">' + pq(b.tgt) + '</td><td class="down">' + pq(b.sl) + '</td></tr>';
+    })) : '<div class="hint hintpad"><span class="t">Nothing to buy.</span></div>';
     return h;
   }
   /* ---------- Bot: plain tables ---------- */
@@ -1865,7 +1891,7 @@
     if (part === 'price') return stockPrice(ui);
     if (part === 'act') return stockActions(S, ui);
     if (part === 'verdict') return verdictCard(S, ui);
-    if (part === 'panel') return panelCard(S, ui);
+    if (part === 'panel') return O(ui).fullCards === true ? panelCard(S, ui) : '';
     if (part === 'chart') return stockChartPart(ui);
     return stockBody(S, ui);
   }
@@ -1873,7 +1899,7 @@
     var sym = T(O(ui.stock).sym) || T(data.id);
     return '<div class="scrim"></div><section class="sheet full stk" role="dialog" aria-modal="true" aria-label="' + esc((sym || 'Stock') + ' stock page') + '">' +
       '<div class="sh stkh" id="st-head">' + stockHead(sym, ui) + '</div>' +
-      '<div class="sb" id="st-scroll"><div id="st-price">' + stockPrice(ui) + '</div><div id="st-act">' + stockActions(S, ui) + '</div><div id="st-verdict">' + verdictCard(S, ui) + '</div><div id="st-panel">' + panelCard(S, ui) + '</div><div id="st-chart" class="st-chart">' + stockChartPart(ui) + '</div><div id="st-body">' + stockBody(S, ui) + '</div></div></section>';
+      '<div class="sb" id="st-scroll"><div id="st-price">' + stockPrice(ui) + '</div><div id="st-act">' + stockActions(S, ui) + '</div><div id="st-verdict">' + verdictCard(S, ui) + '</div><div id="st-panel">' + (O(ui).fullCards === true ? panelCard(S, ui) : '') + '</div><div id="st-chart" class="st-chart">' + stockChartPart(ui) + '</div><div id="st-body">' + stockBody(S, ui) + '</div></div></section>';
   }
 
   /* =====================================================================================================

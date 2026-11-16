@@ -746,7 +746,18 @@ class SwingApp(private val p: Platform) {
         }
         val t = SetupScore.buildTable(items, now)
         val proven = trackProof?.upgraded == true
-        val rows = SetupScore.topBuys(t, Params.IDEAS_MAX).map { BuyCall.idea(it, nameOf(it.sym), bySym[it.sym], proven) }
+        // tested tilt (REPORT7): among BUY-grade setups, those in the top money-flow sectors did better over 60 sessions
+        val hot = try {
+            val fd = flowData(false, fetch = false)
+            if (fd.ok) { val secs = MoneyFlow.sectors(fd, MoneyFlow.moneyIn(fd)).take(MoneyFlow.HOT_SECTORS).map { it.name }.toHashSet(); { s: String -> fd.ind[s]?.sector?.takeIf { it in secs } } } else null
+        } catch (e: Throwable) { null }
+        val cands = SetupScore.topBuys(t, Params.IDEAS_MAX * 4)
+        val ordered = if (hot == null) cands else cands.sortedWith(compareBy<ScoreEntry> { if (hot(it.sym) != null) 0 else 1 })   // stable: score order kept inside each group
+        val rows = ordered.take(Params.IDEAS_MAX).map { e ->
+            val m = LinkedHashMap(BuyCall.idea(e, nameOf(e.sym), bySym[e.sym], proven))
+            m["hotSector"] = hot?.invoke(e.sym) ?: ""
+            m
+        }
         scoreTable = t
         ideaItems = rows
     }

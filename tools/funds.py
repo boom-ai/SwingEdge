@@ -57,6 +57,26 @@ def jget(url, **kw):
 
 
 # ---------------------------------------------------------------- AMFI list
+SUB_ALIAS = {
+    "elss- tax saver fund": "ELSS", "elss": "ELSS", "elss - tax saver fund": "ELSS",
+    "sectoral fund": "Sectoral/Thematic", "thematic fund": "Sectoral/Thematic", "sectoral/ thematic": "Sectoral/Thematic",
+    "sectoral/thematic": "Sectoral/Thematic",
+    "balanced advantage fund/ dynamic asset allocation": "Dynamic Asset Allocation or Balanced Advantage",
+    "dynamic asset allocation or balanced advantage": "Dynamic Asset Allocation or Balanced Advantage",
+    "equity savings fund": "Equity Savings", "multi asset allocation fund": "Multi Asset Allocation",
+    "short term fund": "Short Duration Fund", "medium term fund": "Medium Duration Fund",
+    "medium to long term fund": "Medium to Long Duration Fund", "long term fund": "Long Duration Fund",
+    "ultra short term fund": "Ultra Short Duration Fund", "ultra short to short term fund": "Ultra Short Duration Fund",
+    "dynamic term fund": "Dynamic Bond", "dynamic bond fund": "Dynamic Bond",
+    "floating interest rates fund": "Floater Fund", "banking and psu fund": "Banking and PSU Debt Fund",
+    "foF overseas": "FoF Overseas", "fund of funds investing overseas": "FoF Overseas", "fof overseas": "FoF Overseas",
+    "children\u2019s fund": "Children's Fund", "childrens' fund": "Children's Fund", "children's fund": "Children's Fund",
+}
+
+
+def canon_sub(s):
+    return SUB_ALIAS.get(s.strip().lower(), s.strip())
+
 def parse_navall(txt):
     out = []
     amc = ""; cat = None
@@ -86,19 +106,20 @@ def parse_navall(txt):
         except Exception:
             continue
         left, _, right = cat[1].partition(" - ")
-        sub = right.strip() or left.strip()
+        full = cat[1].lower()
+        if "etf" in full or "exchange traded" in full: continue
+        if re.search(r"(fof|fund of funds?)[^a-z]*(scheme)?[^a-z]*\(?domestic", full): continue
         ll = left.lower()
-        if "equity" in ll: broad = "Equity"
-        elif "debt" in ll: broad = "Debt"
-        elif "hybrid" in ll: broad = "Hybrid"
-        elif "solution" in ll or "children" in ll or "retirement" in ll: broad = "Solution Oriented"
-        elif "other" in ll:
-            broad = "Other"
-        else: broad = "Other"
-        sl = sub.lower()
-        if "etf" in sl or "exchange traded" in sl: continue
-        if "fof domestic" in sl or "fund of funds (domestic)" in sl or "fund of fund - domestic" in sl: continue
-        if "index" in sl: broad = "Index/ETF-like"
+        if "index" in ll:
+            broad, sub = "Index/ETF-like", "Index Funds"
+        else:
+            sub = (right.strip() or left.strip())
+            if "equity" in ll: broad = "Equity"
+            elif "debt" in ll: broad = "Debt"
+            elif "hybrid" in ll: broad = "Hybrid"
+            elif "solution" in ll or "children" in ll or "retirement" in ll: broad = "Solution Oriented"
+            else: broad = "Other"
+            sub = canon_sub(sub)
         out.append(dict(CODE=code, NAME=name, AMC=amc, CATEGORY=broad, SUBCAT=sub, NAV=nv, NAVD=d))
     return out
 
@@ -471,11 +492,22 @@ def do_holdings(kept, cdir, odir, today):
     except Exception as e:
         by_name, by_isin = {}, {}; log("NSE list unavailable:", e)
 
+    import difflib
+    alias = {"zomato": "eternal", "tata motors": "tata motors passenger vehicles", "hdfc": "hdfc bank"}
+    keys = list(by_name)
+    memo = {}
+    miss = {}
+
     def ident(name, isin):
         if isin and isin in by_isin: return by_isin[isin], isin
-        h = by_name.get(nname(name))
-        if h: return h
-        return name, isin
+        k = nname(name)
+        if k in memo: return memo[k]
+        h = by_name.get(k) or by_name.get(alias.get(k, "\0"))
+        if not h and keys:
+            m = difflib.get_close_matches(k, keys, n=1, cutoff=0.92)
+            if m: h = by_name[m[0]]
+        memo[k] = h or (name, isin)
+        return memo[k]
 
     rows = []; agg = {}; added = {}; anyprev = False; unm = 0; tot = 0
     asofs = {}
@@ -491,12 +523,14 @@ def do_holdings(kept, cdir, odir, today):
         seen = set()
         for sym, isin, p in ids:
             tot += 1; unm += (not isin)
+            if not isin: miss[sym] = miss.get(sym, 0) + 1
             if sym in seen: continue
             seen.add(sym)
             a = agg.setdefault(sym, [isin, 0, 0.0]); a[1] += 1; a[2] += p
             if not a[0] and isin: a[0] = isin
             if prev is not None and sym not in prev: added[sym] = added.get(sym, 0) + 1
     log("holding rows:", len(rows), "ASOF months:", asofs, "unmatched ISIN %.1f%%" % (100.0 * unm / max(tot, 1)), "prev month available:", anyprev)
+    log("top unmatched:", sorted(miss.items(), key=lambda x: -x[1])[:30])
     with open(os.path.join(odir, "fund_holdings.csv"), "w", newline="") as fh:
         w = csv.writer(fh); w.writerow(hdr_h.split(","))
         w.writerows(rows)

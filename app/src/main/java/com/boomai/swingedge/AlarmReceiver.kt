@@ -15,6 +15,7 @@ class AlarmReceiver : BroadcastReceiver() {
             Scheduler.enqueueScan(context, "alarm")
             Scheduler.ensurePeriodic(context)
             Scheduler.armDirectFallback(context)
+            OptionWatchService.ensure(context)
         } catch (t: Throwable) {
             Log.e(App.TAG, "AlarmReceiver failed", t)
         }

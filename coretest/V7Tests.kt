@@ -148,5 +148,19 @@ object V10Tests {
         T.check(Options.view(book, emptyMap(), 14.0)["ok"] == true, "view")
         val back = OptTrade.from(Json.parseObject(Json.stringify(t.toMap()))!!)
         T.check(back.id == t.id && back.pnlRs == t.pnlRs && back.status == "CLOSED", "saves and loads")
+        val fp = FakePlatform.standard(); fp.setTime(mon, 10 * 60)
+        val app = SwingApp(fp)
+        val r = app.optionsQuick()
+        T.check(r == "ok" || r == "no data", "live options check runs without a scan: $r")
+        T.check(!Json.parseObject(app.stateJson())!!.containsKey("busy") || Json.parseObject(app.stateJson())!!["busy"] == null || (Json.parseObject(app.stateJson())!!["busy"] as? Map<*, *>)?.get("label") != "", "no empty busy spinner left behind")
+        // live watch and the stock scan at the same time: no crash, state stays valid
+        val errs = java.util.concurrent.atomic.AtomicInteger()
+        val th = Thread { repeat(40) { try { app.optionsQuick() } catch (e: Throwable) { errs.incrementAndGet() } } }
+        th.start()
+        repeat(3) { try { app.tick("alarm") } catch (e: Throwable) { errs.incrementAndGet() } }
+        th.join(60_000)
+        T.check(errs.get() == 0 && Json.parseObject(app.stateJson()) != null, "live watch + scan in parallel: no errors, state intact")
+        fp.offline = true
+        T.eq(app.optionsQuick(), "no data", "offline: no crash")
     }
 }

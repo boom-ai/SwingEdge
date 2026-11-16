@@ -2,7 +2,7 @@ package com.boomai.swingedge.core
 
 /*
  * Index options, PAPER ONLY. One simple, fixed rule, tracked with the app's real delay (it only acts at its
- * 15-minute scans) and realistic costs, so the record shows what following it would really have done.
+ * scans: every minute during market hours via the live watch, else the 15-minute scan) and realistic costs, so the record shows what following it would really have done.
  * Premiums are ESTIMATED with Black-Scholes from the index level and India VIX (no free live option-chain feed),
  * plus 1% slippage on each side. Nothing here throws.
  *
@@ -242,7 +242,7 @@ object Options {
         "spots" to CFG.map { linkedMapOf("idx" to it.name, "spot" to (spots[it.yahoo] ?: 0.0), "lot" to it.lot, "expiry" to expiryLabel(it)) },
         "vix" to vix,
         "rules" to listOf("Paper only, estimated premiums.", "Buys 09:45–2:30 pm, max 1 per index per day, never on expiry day.",
-            "Stop −30%, target +50%, exit by 3:15 pm.", "Acts only at the app's 15-minute scans.")
+            "Stop −30%, target +50%, exit by 3:15 pm.", "Live watch checks Nifty & Bank Nifty every minute, 9:40 am–3:20 pm.")
     )
 
     private fun expiryLabel(c: OptCfg): String = if (c.weekly) "weekly, Tuesday" else "monthly, last Tuesday"

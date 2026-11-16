@@ -130,6 +130,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        OptionWatchService.ensure(this)
         try {
             if (web == null && root != null) createWebView()
             web?.onResume()

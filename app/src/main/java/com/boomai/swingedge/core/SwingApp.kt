@@ -343,7 +343,7 @@ class SwingApp(private val p: Platform) {
                 }
             }
             pos += part.size
-            setBusy(label, pctFrom + (pctTo - pctFrom) * pos / syms.size)
+            if (label.isNotEmpty()) setBusy(label, pctFrom + (pctTo - pctFrom) * pos / syms.size)
         }
         return out
     }
@@ -1889,10 +1889,47 @@ class SwingApp(private val p: Platform) {
         return l
     }
 
-    /** One paper-options step per scan: index levels + VIX, then the fixed rule. Never throws, never blocks the stock scan for long. */
+    /**
+     * Live options watch (called every ~60 s by the foreground service during 09:40–15:20): fetches Nifty, Bank Nifty
+     * and India VIX only, then runs the options rule. Separate from the 15-minute stock scan. Returns a short status.
+     */
+    fun optionsQuick(): String {
+        return try {
+            cache.ensureLoaded()
+            val got = fetchParsed(listOf(Params.INDEX_SYMBOL), { h, s -> Yahoo.intradayUrl(h, s) }, { s, t -> Yahoo.intraday(s, t) }, "", 1, 1)
+            val iq = got[Params.INDEX_SYMBOL] ?: return "no data"
+            val ev = optionsStep(p.now(), iq)
+            // the phone alert goes out at once; the in-app feed entry is written under the state lock (or queued)
+            for ((k, e) in ev.withIndex()) {
+                val ch = if (e.buy) "buy" else "sell"
+                val allowed = if (e.buy) st.settings.notifyBuy else st.settings.notifySell
+                if (allowed) try { p.notify(ch, optNid(e, k), e.title, e.body) } catch (t: Throwable) {}
+                optPending.add(e)
+            }
+            if (optPending.isNotEmpty() && lock.tryLock(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                try { flushOptPending(); save() } finally { lock.unlock() }
+            }
+            "ok"
+        } catch (t: Throwable) { log("optionsQuick: $t"); "error" }
+    }
+
+    private val optPending = java.util.concurrent.ConcurrentLinkedQueue<OptEvent>()
+    private fun optNid(e: OptEvent, k: Int) = 7100 + (e.t.id.hashCode() and 0xff) + k
+    /** caller holds [lock] */
+    private fun flushOptPending() {
+        while (true) { val e = optPending.poll() ?: break; feed(if (e.buy) "buy" else "sell", e.title, e.body) }
+    }
+
+    /** From the stock scan (holds [lock]): run the options step and post alerts normally. */
     private fun optionsTick(now: Long, iq: Intraday) {
+        flushOptPending()
+        for ((k, e) in optionsStep(now, iq).withIndex()) post(if (e.buy) "buy" else "sell", optNid(e, k), e.title, e.body)
+    }
+
+    /** Fetch Bank Nifty + VIX, step the book under [optLock], save it. Returns the BUY/SELL events. Never throws. */
+    private fun optionsStep(now: Long, iq: Intraday): List<OptEvent> {
         try {
-            val got = fetchParsed(listOf("^NSEBANK", Options.VIX), { h, s -> Yahoo.intradayUrl(h, s) }, { s, t -> Yahoo.intraday(s, t) }, "Scanning…", 1, 2)
+            val got = fetchParsed(listOf("^NSEBANK", Options.VIX), { h, s -> Yahoo.intradayUrl(h, s) }, { s, t -> Yahoo.intraday(s, t) }, "", 1, 2)
             val spots = HashMap<String, Double>()
             if (iq.ltp > 0) spots[Params.INDEX_SYMBOL] = iq.ltp
             got["^NSEBANK"]?.let { if (it.ltp > 0) spots["^NSEBANK"] = it.ltp }
@@ -1902,10 +1939,10 @@ class SwingApp(private val p: Platform) {
                 val notes = Options.step(book, now, spots, mapOf(Params.INDEX_SYMBOL to cache.get(Params.INDEX_SYMBOL), "^NSEBANK" to cache.get("^NSEBANK")), vix, st.settings.capital)
                 optSpots = spots
                 if (vix > 0) optVix = vix
-                for ((k, e) in notes.withIndex()) post(if (e.buy) "buy" else "sell", 7100 + (e.t.id.hashCode() and 0xff) + k, e.title, e.body)
                 p.write(OPT_FILE, Json.stringify(mapOf("vix" to optVix, "trades" to book.map { it.toMap() })))
+                return notes
             }
-        } catch (t: Throwable) { log("options tick: $t") }
+        } catch (t: Throwable) { log("options step: $t"); return emptyList() }
     }
 
     @Volatile private var fundCache: FundData? = null

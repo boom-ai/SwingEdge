@@ -127,6 +127,10 @@ object V10Tests {
         T.check(book.size == 1 && book[0].side == "CE" && book[0].lot == 65 && book[0].strike % 50 == 0, "one NIFTY ATM CE, 1 lot = 65")
         val t = book[0]
         T.check(Math.abs(t.stop - t.entry * 0.7) < 0.02 && Math.abs(t.target - t.entry * 1.5) < 0.02, "stop −30%, target +50%")
+        T.check(t.spotStop in (t.spot0 - 600)..(t.spot0 - 20) && t.spotTgt > t.spot0, "index-level stop below entry, target above: ${t.spotStop} / ${t.spotTgt}")
+        T.eq(Options.lotsFor(100000.0, 180.0, 65), 1, "₹1 lakh: 1 Nifty lot (risk ~3.6%, under the 5% one-lot cap)")
+        T.eq(Options.lotsFor(30000.0, 180.0, 65), 0, "₹30k: no trade (one lot risks too much)")
+        T.eq(Options.lotsFor(500000.0, 180.0, 65), 4, "₹5 lakh: 3% risk → 4 lots")
         Options.step(book, ms(mon, 10 * 60 + 15), spots(prevHigh + 80), mapOf("^NSEI" to d), 14.0)
         T.eq(book.size, 1, "max one trade per index per day")
         Options.step(book, ms(mon, 10 * 60 + 30), spots(prevHigh - 400), mapOf("^NSEI" to d), 14.0)

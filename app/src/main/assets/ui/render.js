@@ -1201,8 +1201,20 @@
     if (x.type === 'target') return { v: 'CHECK', c: 'neutral', s: 'Your own ' + (/STOP/.test(T(t.status)) ? 'stop' : 'target') + ' was reached. Open it and decide: sell, or move the level.' };
     return null;
   }
+  function optToday(S) {
+    var op = A(S.optOpen), rec = O(S.optRecord), h = '';
+    if (!op.length) return '';
+    h += '<div class="sec"><h2>Options</h2><span class="cnt">' + op.length + '</span></div>';
+    h += tbl(['Option', 'Do', 'Lots', 'Limit', 'SL', 'Target', 'Index SL'], op.map(function (t) {
+      var fresh = Date.now() - (ts(t.openedAt) || 0) < 25 * 60000, idx = T(t.idx) === 'BANKNIFTY' ? 'BNF' : 'NIFTY';
+      return '<tr><td><b>' + idx + ' ' + (N(t.strike) || 0) + ' ' + esc(T(t.side)) + '</b></td><td class="' + (fresh ? 'up' : 'gray') + '"><b>' + (fresh ? 'BUY' : 'HOLD') + '</b></td><td>' + (N(t.lots) || 1) + '</td><td>₹' + (N(t.limit) || 0).toFixed(1) +
+        '</td><td class="down">₹' + (N(t.stop) || 0).toFixed(1) + '</td><td class="up">₹' + (N(t.target) || 0).toFixed(1) + '</td><td class="down">' + (N(t.spotStop) > 0 ? grp(String(Math.round(N(t.spotStop)))) : DASH) + '</td></tr>';
+    }));
+    h += '<div class="hint hintpad"><span class="t">Exit all by 3:15 pm. Record so far: ' + (N(rec.trades) || 0) + ' trades, ' + rsS(rec.netRs) + ' per lot' + (rec.proven === true ? '' : ' (not proven yet)') + '.</span></div>';
+    return h;
+  }
   function simpleToday(S, ui, items, bs) {
-    var h = '', sells = [], cap = N(O(S.settings).capital) || 0;
+    var h = optToday(S), sells = [], cap = N(O(S.settings).capital) || 0;
     items.forEach(function (x) {
       var t = O(x.it), q = N(t.qty) || 0, half = Math.floor(q / 2), n = null;
       if (x.type === 'trade') n = t.action === 'BOOK_HALF' ? half : q;

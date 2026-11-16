@@ -1899,10 +1899,10 @@ class SwingApp(private val p: Platform) {
             val vix = got[Options.VIX]?.ltp ?: 0.0
             synchronized(optLock) {
                 val book = optLoad()
-                val notes = Options.step(book, now, spots, mapOf(Params.INDEX_SYMBOL to cache.get(Params.INDEX_SYMBOL), "^NSEBANK" to cache.get("^NSEBANK")), vix)
+                val notes = Options.step(book, now, spots, mapOf(Params.INDEX_SYMBOL to cache.get(Params.INDEX_SYMBOL), "^NSEBANK" to cache.get("^NSEBANK")), vix, st.settings.capital)
                 optSpots = spots
                 if (vix > 0) optVix = vix
-                if (notes.isNotEmpty()) for (n in notes) feed("info", "Options (paper)", n)
+                for ((k, e) in notes.withIndex()) post(if (e.buy) "buy" else "sell", 7100 + (e.t.id.hashCode() and 0xff) + k, e.title, e.body)
                 p.write(OPT_FILE, Json.stringify(mapOf("vix" to optVix, "trades" to book.map { it.toMap() })))
             }
         } catch (t: Throwable) { log("options tick: $t") }
@@ -2060,6 +2060,8 @@ class SwingApp(private val p: Platform) {
             m["myWatch"] = myWatch(s, now)
             m["ideas"] = ideaItems
             m["marketGate"] = marketGate
+            m["optOpen"] = try { synchronized(optLock) { optLoad().filter { it.status == "OPEN" }.map { it.toMap() } } } catch (t: Throwable) { emptyList<Any>() }
+            m["optRecord"] = try { synchronized(optLock) { Options.stats(optLoad()) } } catch (t: Throwable) { null }
             m["targets"] = s.targets.map { it.toMap() }
             m["track"] = if (trackView.isEmpty()) TrackEngine.view(TrackStore(), s.settings.costPct, false) else trackView
             return m

@@ -664,6 +664,8 @@
     });
     s.myWatch = defaultWatch(); s.track = trackData();
     s.ideas = ideasList(); s.targets = defaultTargets();
+    s.optOpen = [{ idx: 'NIFTY', side: 'CE', strike: 24850, entry: 118.6, limit: 119.8, stop: 83.0, target: 177.9, last: 121.0, lots: 1, spotStop: 24735, spotTgt: 25010, openedAt: Date.now() - 5 * 60000, lot: 65 }];
+    s.optRecord = { trades: 12, wins: 5, netRs: 3925, proven: false };
     if (scenario === 'empty') { s.watch = []; s.myWatch = []; s.ideas = []; s.targets = []; s.track = emptyTrack(); }
     if (scenario === 'empty') {
       s.signals = []; s.trades = []; s.holdings = []; s.feed = [];
@@ -738,7 +740,9 @@
           null, 'junk', { name: 'no symbol' },
           { sym: 'OKCO', name: 'Fine Company Ltd', ltp: 250.5, dayChgPct: -1.2, spark: [250, 251, 249, 248, 247, 246, 245], strength: 50, stack: 'MIXED', crossText: '10 EMA below 20 EMA for 4 days', dataOk: true }
         ],
-        ideas: [
+        optOpen: [{ idx: 'NIFTY', side: 'CE', strike: 24850, entry: 118.6, limit: 119.8, stop: 83.0, target: 177.9, last: 121.0, lots: 1, spotStop: 24735, spotTgt: 25010, openedAt: Date.now() - 5 * 60000, lot: 65 }],
+      optRecord: { trades: 12, wins: 5, netRs: 3925, proven: false },
+      ideas: [
           { sym: 'SUPERLONGSYMBOLNAME-EQ', name: LONG, ltp: 1e12, dayChgPct: 'NaN', score: 1e9, label: 'MAYBE', headline: LONG, entryLow: 'x', entryHigh: null, stop: -1, t1: 1e18, t2: 0, rr: 'lots', horizonDays: 'x', spark: [1, 'x', null], barDay: 5 },
           null, 'junk', { name: 'no symbol' }, { sym: '<img src=x onerror=alert(1)>', name: '<b>x</b>', score: 'NaN', label: null }, { sym: 'OKIDEA', name: 'Fine Co', ltp: 250.5, dayChgPct: 1.2, score: 77, label: 'BUY', entryLow: 248, entryHigh: 252, stop: 238, t1: 270, t2: 285, rr: 1.7, horizonDays: 60, spark: [250, 251, 249, 248, 247, 246, 245], headline: 'Fine' }
         ],

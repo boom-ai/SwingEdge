@@ -14,24 +14,30 @@ package com.boomai.swingedge.core
  *  - stop-loss: premium −30%; target: premium +50%; time exit: first scan at/after 15:15
  */
 
+class OptEvent(val buy: Boolean, val t: OptTrade, val title: String, val body: String)
+
 class OptCfg(val name: String, val yahoo: String, val lot: Int, val step: Int, val weekly: Boolean, val ivMult: Double)
 
 class OptTrade(
     var id: String = "", var idx: String = "", var side: String = "", var strike: Int = 0, var expiry: Int = 0,
     var openedAt: Long = 0, var spot0: Double = 0.0, var entry: Double = 0.0, var stop: Double = 0.0, var target: Double = 0.0,
     var lot: Int = 0, var status: String = "OPEN", var closedAt: Long = 0, var exit: Double = 0.0, var reason: String = "",
-    var last: Double = 0.0, var pnlRs: Double = 0.0
+    var last: Double = 0.0, var pnlRs: Double = 0.0,
+    /** lots for the user's capital, and the index levels where the premium would hit the stop / target */
+    var lots: Int = 1, var spotStop: Double = 0.0, var spotTgt: Double = 0.0
 ) {
     fun toMap(): Map<String, Any?> = linkedMapOf(
         "id" to id, "idx" to idx, "side" to side, "strike" to strike, "expiry" to expiry, "openedAt" to openedAt, "spot0" to spot0,
         "entry" to entry, "stop" to stop, "target" to target, "lot" to lot, "status" to status, "closedAt" to closedAt,
-        "exit" to exit, "reason" to reason, "last" to last, "pnlRs" to pnlRs
+        "exit" to exit, "reason" to reason, "last" to last, "pnlRs" to pnlRs, "lots" to lots, "spotStop" to spotStop, "spotTgt" to spotTgt,
+        "limit" to Math.rint(entry * 1.01 * 20) / 20
     )
     companion object {
         fun from(m: Map<String, Any?>): OptTrade = OptTrade(
             m.str("id"), m.str("idx"), m.str("side"), m.int("strike"), m.int("expiry"), m.long("openedAt"), m.num("spot0", 0.0),
             m.num("entry", 0.0), m.num("stop", 0.0), m.num("target", 0.0), m.int("lot"), m.str("status").ifEmpty { "OPEN" },
-            m.long("closedAt"), m.num("exit", 0.0), m.str("reason"), m.num("last", 0.0), m.num("pnlRs", 0.0))
+            m.long("closedAt"), m.num("exit", 0.0), m.str("reason"), m.num("last", 0.0), m.num("pnlRs", 0.0),
+            maxOf(1, m.int("lots", 1)), m.num("spotStop", 0.0), m.num("spotTgt", 0.0))
     }
 }
 
@@ -131,8 +137,31 @@ object Options {
      * Updates the paper book at a scan. [spots] = live index levels by Yahoo symbol; [daily] = daily bars by Yahoo symbol;
      * [vix] = India VIX level (percent). Returns notes for the feed.
      */
-    fun step(book: MutableList<OptTrade>, nowMs: Long, spots: Map<String, Double>, daily: Map<String, Series?>, vix: Double): List<String> {
-        val notes = ArrayList<String>()
+    /** risk per trade for sizing: 3% of capital; premium outlay capped at 25% of capital */
+    const val RISK_PCT = 3.0
+    const val CASH_PCT = 25.0
+
+    fun lotsFor(capital: Double, entry: Double, lot: Int): Int {
+        if (!(capital > 0) || !(entry > 0)) return 1
+        val riskLot = entry * SL * lot + costRs(entry, entry * (1 - SL), lot)
+        val n = minOf(Math.floor(capital * RISK_PCT / 100 / riskLot), Math.floor(capital * CASH_PCT / 100 / (entry * lot))).toInt()
+        if (n >= 1) return n
+        // one lot is still allowed if it risks at most MAX_ONE_LOT_PCT of capital and fits the cash cap
+        return if (riskLot <= capital * MAX_ONE_LOT_PCT / 100 && entry * lot <= capital * CASH_PCT / 100) 1 else 0
+    }
+    const val MAX_ONE_LOT_PCT = 5.0
+
+    /** Index level at which the estimated premium equals [target] (bisection; NaN if not reachable within ±15%). */
+    fun spotFor(call: Boolean, strike: Double, years: Double, iv: Double, target: Double, spot0: Double): Double {
+        var lo = spot0 * 0.85; var hi = spot0 * 1.15
+        val f = { x: Double -> price(call, x, strike, years, iv) - target }
+        if (f(lo) * f(hi) > 0) return Double.NaN
+        repeat(60) { val mid = (lo + hi) / 2; if (f(lo) * f(mid) <= 0) hi = mid else lo = mid }
+        return Math.rint((lo + hi) / 2)
+    }
+
+    fun step(book: MutableList<OptTrade>, nowMs: Long, spots: Map<String, Double>, daily: Map<String, Series?>, vix: Double, capital: Double = 100000.0): List<OptEvent> {
+        val notes = ArrayList<OptEvent>()
         try {
             val day = Clock.epochDay(nowMs); val min = Clock.minuteOfDay(nowMs)
             val iv0 = if (vix > 5 && vix < 100) vix / 100.0 else Double.NaN
@@ -156,7 +185,7 @@ object Options {
                     val ex = r2(px * (1 - SLIP))
                     t.status = "CLOSED"; t.closedAt = nowMs; t.exit = ex; t.reason = reason
                     t.pnlRs = r2((ex - t.entry) * t.lot - costRs(t.entry, ex, t.lot))
-                    notes.add("Paper ${t.idx} ${t.strike} ${t.side}: ${reason.lowercase()} at ₹${f2(ex)} (${if (t.pnlRs >= 0) "+" else "−"}₹${Math.round(Math.abs(t.pnlRs))} per lot).")
+                    notes.add(OptEvent(false, t, "SELL ${t.idx} ${t.strike} ${t.side} now", "${reason}. Sell ${t.lots} lot${if (t.lots == 1) "" else "s"} (${t.lots * t.lot} qty) at market. Est. ₹${f2(ex)}, ${if (t.pnlRs >= 0) "+" else "−"}₹${Math.round(Math.abs(t.pnlRs * t.lots))}."))
                 } else t.pnlRs = r2((px * (1 - SLIP) - t.entry) * t.lot - costRs(t.entry, px, t.lot))
             }
             // 2. new entries
@@ -172,12 +201,17 @@ object Options {
                     if (px.isNaN() || px < 5) continue
                     val en = r2(px * (1 + SLIP))
                     val t = OptTrade(cfg.name + "-" + day + "-" + side, cfg.name, side, strike, exp, nowMs, r2(spot), en, r2(en * (1 - SL)), r2(en * (1 + TGT)), cfg.lot, last = r2(px))
+                    val yrs = yearsTo(nowMs, exp); val iv = iv0 * cfg.ivMult
+                    t.lots = lotsFor(capital, en, cfg.lot)
+                    t.spotStop = spotFor(side == "CE", strike.toDouble(), yrs, iv, t.stop / (1 - SLIP), spot).let { if (it.isNaN()) 0.0 else it }
+                    t.spotTgt = spotFor(side == "CE", strike.toDouble(), yrs, iv, t.target / (1 - SLIP), spot).let { if (it.isNaN()) 0.0 else it }
                     book.add(t)
-                    notes.add("Paper BUY ${cfg.name} $strike ${side} at ₹${f2(en)}. Stop ₹${f2(t.stop)}, target ₹${f2(t.target)}.")
+                    if (t.lots >= 1) notes.add(OptEvent(true, t, "BUY ${cfg.name} $strike ${side}",
+                        "${t.lots} lot${if (t.lots == 1) "" else "s"} (${t.lots * cfg.lot} qty), limit ₹${f2(Math.rint(en * 1.01 * 20) / 20)}. SL ₹${f2(t.stop)}${if (t.spotStop > 0) " (${cfg.name} ${Math.round(t.spotStop)})" else ""}, target ₹${f2(t.target)}. Exit by 3:15 pm."))
                 }
             }
             while (book.size > MAX_KEEP) { val i = book.indexOfFirst { it.status != "OPEN" }; if (i < 0) break; book.removeAt(i) }
-        } catch (e: Throwable) { notes.add("Options paper step skipped: ${e.javaClass.simpleName}") }
+        } catch (e: Throwable) { }
         return notes
     }
 

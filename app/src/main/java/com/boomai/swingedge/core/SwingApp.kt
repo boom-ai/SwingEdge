@@ -759,7 +759,8 @@ class SwingApp(private val p: Platform) {
         val gate = MarketGate.open(have)
         marketGate = gate
         val cands = if (gate == false) emptyList() else SetupScore.topBuys(t, Params.IDEAS_MAX * 4)
-        val ordered = if (hot == null) cands else cands.sortedWith(compareBy<ScoreEntry> { if (hot(it.sym) != null) 0 else 1 })   // stable: score order kept inside each group
+        // REPORT9: qualifying names fill slots in order of Clenow trend quality (eligibility unchanged); unscorable last
+        val ordered = cands.sortedWith(compareByDescending<ScoreEntry> { Clenow.score(bySym[it.sym]).let { c -> if (c.isNaN()) -1e9 else c } }.thenByDescending { it.score }.thenBy { it.sym })
         val rows = ordered.take(Params.IDEAS_MAX).map { e ->
             val m = LinkedHashMap(BuyCall.idea(e, nameOf(e.sym), bySym[e.sym], proven))
             m["hotSector"] = hot?.invoke(e.sym) ?: ""

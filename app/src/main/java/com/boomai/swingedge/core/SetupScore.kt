@@ -312,3 +312,26 @@ object MarketGate {
         } catch (t: Throwable) { return null }
     }
 }
+
+/** REPORT9: Clenow trend quality = (exp(252 x slope) - 1) x R² of a regression of ln(close) on time over the last 90 sessions. */
+object Clenow {
+    const val N = 90
+    fun score(s: Series?): Double {
+        try {
+            if (s == null || s.n < N) return Double.NaN
+            val from = s.n - N
+            var sx = 0.0; var sy = 0.0; var sxx = 0.0; var sxy = 0.0; var syy = 0.0
+            for (k in 0 until N) {
+                val c = s.c[from + k]; if (!(c > 0)) return Double.NaN
+                val x = k.toDouble(); val y = Math.log(c)
+                sx += x; sy += y; sxx += x * x; sxy += x * y; syy += y * y
+            }
+            val n = N.toDouble()
+            val vx = sxx - sx * sx / n; val vy = syy - sy * sy / n; val cxy = sxy - sx * sy / n
+            if (vx <= 0 || vy <= 0) return Double.NaN
+            val slope = cxy / vx
+            val r2 = (cxy * cxy) / (vx * vy)
+            return (Math.exp(252 * slope) - 1) * r2
+        } catch (t: Throwable) { return Double.NaN }
+    }
+}

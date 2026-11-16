@@ -164,3 +164,17 @@ object V10Tests {
         T.eq(app.optionsQuick(), "no data", "offline: no crash")
     }
 }
+
+object V11Tests {
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v11-clenow" to ::cl)
+    fun cl() {
+        fun mk(f: (Int) -> Double, n: Int = 120): Series { val s = Series("X", n); for (i in 0 until n) { val p = f(i); s.add(20000 + i, p, p, p, p, 1.0) }; return s }
+        val smooth = Clenow.score(mk({ 100 * Math.exp(0.001 * it) }))
+        T.check(Math.abs(smooth - (Math.exp(0.252) - 1)) < 1e-6, "perfect 0.1%/day trend: ~28.7%/yr x R²=1: $smooth")
+        val noisy = Clenow.score(mk({ 100 * Math.exp(0.001 * it) * (if (it % 2 == 0) 1.03 else 0.97) }))
+        T.check(noisy < smooth && noisy > 0, "same trend with noise ranks lower")
+        T.check(Clenow.score(mk({ 100 * Math.exp(-0.001 * it) })) < 0, "downtrend negative")
+        T.check(Clenow.score(mk({ 100.0 + it }, 60)).isNaN(), "under 90 sessions: not scored")
+        T.check(Clenow.score(null).isNaN(), "null safe")
+    }
+}

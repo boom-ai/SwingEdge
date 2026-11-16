@@ -120,6 +120,7 @@ def parse_navall(txt):
             elif "solution" in ll or "children" in ll or "retirement" in ll: broad = "Solution Oriented"
             else: broad = "Other"
             sub = canon_sub(sub)
+            if sub.lower() == "index funds": broad = "Index/ETF-like"
         out.append(dict(CODE=code, NAME=name, AMC=amc, CATEGORY=broad, SUBCAT=sub, NAV=nv, NAVD=d))
     return out
 

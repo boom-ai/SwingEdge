@@ -354,8 +354,7 @@ def get_holdings(fund, cdir, today):
 def nname(n):
     n = n.lower().replace("&", " and ")
     n = re.sub(r"[^a-z0-9 ]+", " ", n)
-    n = re.sub(r"\bltd\b", "limited", n)
-    n = re.sub(r"\b(the|limited|ltd)\b", " ", n)
+    n = re.sub(r"\b(the|limited|ltd|company|co|corporation|corp|eq|new fv.*)\b", " ", n)
     return re.sub(r"\s+", " ", n).strip()
 
 
@@ -493,7 +492,11 @@ def do_holdings(kept, cdir, odir, today):
         by_name, by_isin = {}, {}; log("NSE list unavailable:", e)
 
     import difflib
-    alias = {"zomato": "eternal", "tata motors": "tata motors passenger vehicles", "hdfc": "hdfc bank"}
+    alias = {"zomato": "eternal", "shriram transport finance": "shriram finance",
+             "ge t and d india": "ge vernova t and d india", "jindal steel and power": "jindal steel",
+             "l and t finance holdings": "l and t finance", "gmr airports infrastructure": "gmr airports",
+             "adani transmission": "adani energy solutions", "iifl wealth management": "360 one wam",
+             "pvr": "pvr inox", "affle india": "affle 3i"}
     keys = list(by_name)
     memo = {}
     miss = {}
@@ -504,7 +507,7 @@ def do_holdings(kept, cdir, odir, today):
         if k in memo: return memo[k]
         h = by_name.get(k) or by_name.get(alias.get(k, "\0"))
         if not h and keys:
-            m = difflib.get_close_matches(k, keys, n=1, cutoff=0.92)
+            m = difflib.get_close_matches(k, keys, n=1, cutoff=0.9)
             if m: h = by_name[m[0]]
         memo[k] = h or (name, isin)
         return memo[k]

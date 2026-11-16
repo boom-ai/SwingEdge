@@ -985,19 +985,36 @@ CODE,NAME,AMC,CATEGORY,SUBCAT,NAV,NAVDATE,AUM_CR,R1M,R3M,R6M,R1Y,R3Y,R5Y,R10Y,SI
 152787,Union Multi Asset Allocation Fund,Union,Hybrid,Multi Asset Allocation,12.5800,2026-11-13,1003.67,3.54,-0.32,3.45,7.16,,,,10.82,,,,,,,,2.17
 151745,WhiteOak Capital Multi Asset Allocation Fund,WhiteOak Capital,Hybrid,Multi Asset Allocation,16.7300,2026-11-13,8526.61,1.50,-0.45,4.35,7.92,16.56,,,15.82,5.19,-6.08,1.67,2.85,,,,3.48
 151165,360 ONE ELSS Tax Saver Nifty 50 Index Fund,360 ONE,Index/ETF-like,Index Funds,14.3059,2026-11-13,68.74,10.70,3.06,8.09,-2.07,9.89,,,9.62,13.32,-15.39,0.25,0.37,9.39,5.30,,3.86
+153529,ANGEL ONE NIFTY 50 INDEX FUND,Angel One,Index/ETF-like,Index Funds,10.3682,2026-11-13,33.04,10.71,3.13,8.20,-2.10,,,,2.10,,,,,,,,1.46
+153330,ANGEL ONE NIFTY TOTAL MARKET INDEX FUND,Angel One,Index/ETF-like,Index Funds,12.1188,2026-11-13,61.83,7.17,0.33,6.87,0.64,,,,10.77,,,,,,,,1.69
 153736,Aditya Birla Sun Life BSE 500 Momentum 50 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,11.0534,2026-11-13,79.00,4.32,-0.54,8.78,5.67,,,,7.63,,,,,,,,1.26
 153740,Aditya Birla Sun Life BSE 500 Quality 50 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,10.6951,2026-11-13,71.61,3.43,-4.04,0.10,1.45,,,,5.17,,,,,,,,1.26
 153081,Aditya Birla Sun Life BSE India Infrastructure Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,9.0355,2026-11-13,31.25,5.55,-2.26,-6.33,-3.22,,,,-5.30,,,,,,,,1.94
+151427,Aditya Birla Sun Life CRISIL IBX SDL Jun 2032 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,12.9890,2026-11-13,147.67,0.57,-1.18,2.49,3.30,7.09,,,7.20,2.39,-2.35,0.12,0.17,7.43,6.70,,3.74
+150702,Aditya Birla Sun Life Crisil IBX 50:50 Gilt Plus SDL Apr 2028 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,13.4412,2026-11-13,405.82,0.24,0.66,2.66,4.72,7.38,,,7.44,1.11,-0.81,0.49,0.72,7.53,7.01,,4.07
+150353,Aditya Birla Sun Life Crisil IBX 60:40 SDL+AAA PSU-APR 2027 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,13.3013,2026-11-13,1323.75,0.48,1.36,3.05,5.95,7.41,,,6.36,0.60,-0.14,0.99,1.73,7.49,6.16,,4.62
+150778,Aditya Birla Sun Life Crisil IBX Gilt -Apr 2029 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,13.4703,2026-11-13,613.09,0.41,0.02,2.24,4.07,7.42,,,7.67,1.56,-0.97,0.36,0.51,7.73,7.11,,4.06
+151577,Aditya Birla Sun Life Crisil IBX Gilt Apr 2028 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,12.7618,2026-11-13,21.16,0.25,0.66,2.28,4.48,6.93,,,6.87,1.01,-0.62,0.15,0.22,7.03,6.70,,3.66
+152267,Aditya Birla Sun Life Crisil IBX Gilt April 2033 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,12.1554,2026-11-13,27.26,1.17,-1.47,1.90,3.20,,,,6.96,,,,,,,,2.88
+152659,Aditya Birla Sun Life Crisil IBX Gilt June 2027 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,11.7736,2026-11-13,12.81,0.33,0.93,2.44,4.92,,,,6.89,,,,,,,,2.44
+153030,Aditya Birla Sun Life Crisil-IBX AAA Financial Services Index-Sep 2027 Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,11.5211,2026-11-13,10.41,0.40,1.26,3.35,5.92,,,,7.33,,,,,,,,2.00
+153179,Aditya Birla Sun Life Crisil-IBX Financial Services 3 to 6 months Debt Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,11.4164,2026-11-13,2484.77,0.45,1.55,3.60,6.88,,,,7.19,,,,,,,,1.90
+153443,Aditya Birla Sun Life Crisil-IBX Financial Services 9-12 Months Debt Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,11.1531,2026-11-13,1190.07,0.36,1.27,3.35,6.02,,,,6.83,,,,,,,,1.64
 148962,Aditya Birla Sun Life Nifty 50 Equal Weight index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,19.4293,2026-11-13,523.68,8.36,-0.09,5.33,1.86,12.85,11.27,,13.02,13.85,-18.02,0.43,0.64,16.69,9.40,,5.43
+119648,Aditya Birla Sun Life Nifty 50 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,262.9031,2026-11-13,1478.16,10.73,3.14,8.24,-2.01,9.96,7.75,12.42,11.44,13.38,-15.51,0.25,0.38,12.60,-3.83,,13.86
 152798,Aditya Birla Sun Life Nifty India Defence Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,13.0097,2026-11-13,1349.28,-1.75,-7.34,-0.02,11.26,,,,13.08,,,,,,,,2.20
 148807,Aditya Birla Sun Life Nifty Midcap 150 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,25.6758,2026-11-13,488.68,3.96,-3.59,2.88,1.89,14.39,14.10,,18.23,17.22,-21.09,0.45,0.66,22.83,12.81,,5.60
 149838,Aditya Birla Sun Life Nifty Next 50 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,18.1645,2026-11-13,277.53,5.76,-2.36,5.75,5.02,17.00,,,13.84,18.59,-26.70,0.56,0.82,17.90,12.43,,4.73
+149794,Aditya Birla Sun Life Nifty SDL Apr 2027 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,13.4577,2026-11-13,3271.54,0.48,1.30,2.78,5.68,7.37,,,6.38,0.55,-0.10,1.05,1.94,7.48,6.05,,4.78
+151562,Aditya Birla Sun Life Nifty SDL SEP 2027 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,13.0618,2026-11-13,40.59,0.35,0.89,2.79,5.35,7.48,,,7.45,0.80,-0.32,0.83,1.29,7.50,7.20,,3.67
 148815,Aditya Birla Sun Life Nifty Smallcap 50 Index Fund,Aditya Birla Sun Life,Index/ETF-like,Index Funds,24.3930,2026-11-13,358.84,2.80,0.14,12.82,13.02,16.49,12.98,,17.01,21.38,-25.05,0.48,0.69,22.24,14.01,,5.60
 152422,Axis BSE Sensex Index Fund,Axis,Index/ETF-like,Index Funds,11.5011,2026-11-13,53.90,11.80,4.57,10.23,-2.46,,,,5.60,,,,,,,,2.70
+151300,Axis CRISIL IBX 50:50 Gilt Plus SDL June 2028 Index Fund,Axis,Index/ETF-like,Index Funds,13.0279,2026-11-13,336.57,0.20,0.57,2.70,4.79,7.39,,,7.24,1.19,-0.81,0.47,0.68,7.48,6.97,,3.79
 149873,Axis CRISIL IBX SDL May 2027 Index Fund,Axis,Index/ETF-like,Index Funds,13.3492,2026-11-13,1768.27,0.40,1.10,2.79,5.70,7.54,,,6.38,0.72,-0.17,1.01,1.67,7.61,6.18,,4.71
 152887,Axis CRISIL-IBX AAA Bond NBFC - Jun 2027 Index Fund,Axis,Index/ETF-like,Index Funds,11.6801,2026-11-13,2269.24,0.45,1.38,3.45,6.14,,,,7.52,,,,,,,,2.13
 153879,Axis CRISIL-IBX Financial Services 3-6 Months Debt Index Fund,Axis,Index/ETF-like,Index Funds,10.7666,2026-11-13,250.79,0.44,1.49,3.45,6.72,,,,6.70,,,,,,,,1.12
 151435,Axis Crisil IBX 50:50 Gilt Plus SDL September 2027 Index Fund,Axis,Index/ETF-like,Index Funds,13.0404,2026-11-13,36.15,0.33,0.91,2.71,5.23,7.35,,,7.41,0.78,-0.27,0.68,1.02,7.40,7.10,,3.70
+147666,Axis Nifty 100 Index Fund,Axis,Index/ETF-like,Index Funds,23.4148,2026-11-13,2077.25,9.80,2.09,7.76,-0.86,11.13,8.19,,12.86,13.86,-17.27,0.33,0.48,15.06,6.95,,7.06
 149373,Axis Nifty 50 Index Fund,Axis,Index/ETF-like,Index Funds,15.3114,2026-11-13,1024.37,10.73,3.14,8.25,-1.97,10.00,,,8.72,13.36,-15.42,0.26,0.38,12.29,5.40,,4.93
 152731,Axis Nifty 500 Index Fund,Axis,Index/ETF-like,Index Funds,10.4450,2026-11-13,319.47,7.52,0.42,6.71,0.21,,,,1.75,,,,,,,,2.33
 152629,Axis Nifty Bank Index Fund,Axis,Index/ETF-like,Index Funds,12.6241,2026-11-13,181.30,9.99,5.88,14.79,4.95,,,,10.37,,,,,,,,2.46
@@ -1008,7 +1025,69 @@ CODE,NAME,AMC,CATEGORY,SUBCAT,NAV,NAVDATE,AUM_CR,R1M,R3M,R6M,R1Y,R3Y,R5Y,R10Y,SI
 153244,Axis Nifty500 Momentum 50 Index Fund,Axis,Index/ETF-like,Index Funds,11.3561,2026-11-13,171.35,3.43,-0.30,5.88,1.45,,,,9.60,,,,,,,,1.73
 153829,Axis Nifty500 Quality 50 Index Fund,Axis,Index/ETF-like,Index Funds,9.9766,2026-11-13,81.00,3.47,-4.32,0.35,-0.30,,,,-0.41,,,,,,,,1.16
 152949,Axis Nifty500 Value 50 Index Fund,Axis,Index/ETF-like,Index Funds,11.2429,2026-11-13,232.40,4.82,-3.25,-4.31,3.93,,,,5.78,,,,,,,,2.04
+150871,BANDHAN CRISIL IBX 90:10 SDL PLUS GILT - APRIL 2032 INDEX FUND,Bandhan,Index/ETF-like,Index Funds,13.1646,2026-11-13,391.93,0.57,-1.16,2.58,3.51,7.19,,,7.18,2.37,-2.31,0.16,0.23,7.70,6.74,,3.95
+150868,BANDHAN CRISIL IBX 90:10 SDL PLUS GILT - NOV 2026 INDEX FUND,Bandhan,Index/ETF-like,Index Funds,13.2019,2026-11-13,89.82,0.47,1.36,2.82,5.70,7.35,,,7.22,0.50,-0.10,1.11,2.17,7.37,7.16,,3.99
+150888,BANDHAN CRISIL IBX 90:10 SDL PLUS GILT - SEPTEMBER 2027 INDEX FUND,Bandhan,Index/ETF-like,Index Funds,13.2590,2026-11-13,143.55,0.36,0.88,2.94,5.50,7.55,,,7.35,0.85,-0.38,0.86,1.33,7.63,7.24,,3.97
+148792,BANDHAN CRISIL IBX GILT APRIL 2028 INDEX FUND,Bandhan,Index/ETF-like,Index Funds,14.0699,2026-11-13,3399.65,0.26,0.71,2.42,4.80,7.29,6.09,,6.22,0.99,-0.56,0.48,0.73,7.37,5.19,,5.64
+151408,BANDHAN CRISIL IBX GILT APRIL 2032 INDEX FUND,Bandhan,Index/ETF-like,Index Funds,13.0513,2026-11-13,416.31,0.74,-1.42,2.19,3.15,7.40,,,7.37,2.55,-2.76,0.19,0.27,7.73,6.90,,3.74
+148789,BANDHAN CRISIL IBX GILT JUNE 2027 INDEX FUND,Bandhan,Index/ETF-like,Index Funds,14.0153,2026-11-13,5281.38,0.36,1.01,2.57,5.11,7.24,6.01,,6.14,0.80,-0.21,0.51,0.79,7.26,5.12,,5.64
+149832,BANDHAN NIFTY 100 INDEX FUND,Bandhan,Index/ETF-like,Index Funds,15.6852,2026-11-13,258.13,9.80,2.09,7.79,-0.79,11.21,,,10.70,13.87,-17.26,0.33,0.49,13.08,7.03,,4.71
+152793,BANDHAN NIFTY BANK INDEX FUND,Bandhan,Index/ETF-like,Index Funds,11.9979,2026-11-13,20.81,9.99,5.85,14.71,4.82,,,,8.73,,,,,,,,2.21
+152716,BANDHAN NIFTY TOTAL MARKET INDEX FUND,Bandhan,Index/ETF-like,Index Funds,10.4568,2026-11-13,47.80,7.16,0.29,6.68,0.35,,,,1.87,,,,,,,,2.34
+150591,BANDHAN NIFTY200 MOMENTUM 30 INDEX FUND,Bandhan,Index/ETF-like,Index Funds,15.7241,2026-11-13,121.48,4.66,-1.53,2.85,-3.35,8.74,,,11.25,19.49,-31.73,0.17,0.23,15.46,7.02,,4.19
+118482,BANDHAN Nifty 50 Index Fund,Bandhan,Index/ETF-like,Index Funds,56.3772,2026-11-13,2777.63,10.74,3.15,8.26,-2.00,9.98,7.89,12.86,11.98,13.39,-15.52,0.26,0.38,13.03,-3.16,,13.86
+152264,BANDHAN Nifty Smallcap 250 Index Fund,Bandhan,Index/ETF-like,Index Funds,13.0138,2026-11-13,100.16,0.66,-2.38,7.03,5.28,,,,9.47,,,,,,,,2.88
+150636,BANDHAN Nifty100 Low Volatility 30 Index Fund,Bandhan,Index/ETF-like,Index Funds,15.9500,2026-11-13,1614.87,7.82,-1.74,4.96,-2.76,10.49,,,12.12,12.32,-18.24,0.28,0.42,13.64,7.83,,4.10
+153506,Bajaj Finserv Nifty 50 Index Fund,Bajaj Finserv,Index/ETF-like,Index Funds,10.2826,2026-11-13,38.30,10.72,3.13,8.17,-2.36,,,,1.35,,,,,,,,1.49
+153479,Bajaj Finserv Nifty Next 50 Index Fund,Bajaj Finserv,Index/ETF-like,Index Funds,11.6240,2026-11-13,32.06,5.77,-2.39,5.64,4.24,,,,7.52,,,,,,,,1.50
+152844,Bandhan BSE Healthcare Index Fund,Bandhan,Index/ETF-like,Index Funds,12.2106,2026-11-13,22.09,8.42,3.58,14.78,18.85,,,,9.76,,,,,,,,2.18
+153838,Bandhan BSE India Sector Leaders Index Fund,Bandhan,Index/ETF-like,Index Funds,9.9781,2026-11-13,25.46,9.14,0.99,6.58,-1.95,,,,1.13,,,,,,,,1.13
+153407,Bandhan CRISIL-IBX Financial Services 3-6 Months Debt Index Fund,Bandhan,Index/ETF-like,Index Funds,11.2171,2026-11-13,331.74,0.45,1.57,3.62,6.88,,,,7.10,,,,,,,,1.66
+153114,Bandhan Nifty 200 Quality 30 Index Fund,Bandhan,Index/ETF-like,Index Funds,9.3950,2026-11-13,13.46,2.51,-5.69,-0.94,-6.65,,,,-3.49,,,,,,,,1.94
+153003,Bandhan Nifty 500 Momentum 50 Index Fund,Bandhan,Index/ETF-like,Index Funds,9.1846,2026-11-13,37.10,3.41,-0.38,5.77,1.08,,,,-4.05,,,,,,,,2.04
+152990,Bandhan Nifty 500 Value 50 Index Fund,Bandhan,Index/ETF-like,Index Funds,11.1073,2026-11-13,37.43,4.78,-3.37,-4.58,3.44,,,,5.33,,,,,,,,2.04
+152177,Bandhan Nifty Alpha 50 Index Fund,Bandhan,Index/ETF-like,Index Funds,14.3496,2026-11-13,599.98,-0.53,-3.70,6.37,5.21,11.96,,,12.52,22.08,-31.84,0.30,0.43,,,,3.01
+153213,Bandhan Nifty Alpha Low Volatility 30 Index Fund,Bandhan,Index/ETF-like,Index Funds,10.1640,2026-11-13,9.24,6.82,-3.43,4.15,-1.36,,,,1.49,,,,,,,,1.80
+152041,Bandhan Nifty IT Index Fund,Bandhan,Index/ETF-like,Index Funds,10.8975,2026-11-13,32.75,7.34,1.72,15.09,-12.00,3.34,,,2.38,23.74,-42.44,-0.09,-0.12,,,,3.20
+152855,Bandhan Nifty Midcap 150 Index Fund,Bandhan,Index/ETF-like,Index Funds,10.3320,2026-11-13,94.68,3.94,-3.60,2.82,1.75,,,,0.88,,,,,,,,2.15
+153350,Bandhan Nifty Next 50 Index Fund,Bandhan,Index/ETF-like,Index Funds,12.8745,2026-11-13,35.46,5.77,-2.44,5.66,4.92,,,,15.44,,,,,,,,1.70
 151574,Baroda BNP Paribas NIFTY SDL December 2028 Index Fund,Baroda BNP Paribas,Index/ETF-like,Index Funds,12.9832,2026-11-13,68.81,0.29,0.34,2.89,4.37,7.45,,,7.42,1.59,-1.18,0.38,0.55,7.47,6.95,,3.63
+152329,Baroda BNP Paribas Nifty 50 Index Fund,Baroda BNP Paribas,Index/ETF-like,Index Funds,11.8838,2026-11-13,53.95,10.67,3.10,8.20,-2.12,,,,6.72,,,,,,,,2.79
+153000,Baroda BNP Paribas Nifty Midcap 150 Index Fund,Baroda BNP Paribas,Index/ETF-like,Index Funds,10.9059,2026-11-13,10.27,3.88,-3.81,2.50,1.38,,,,3.10,,,,,,,,2.02
+152931,Baroda BNP Paribas Nifty200 Momentum 30 Index Fund,Baroda BNP Paribas,Index/ETF-like,Index Funds,8.1322,2026-11-13,21.75,4.63,-1.61,2.78,-3.64,,,,-9.27,,,,,,,,2.08
+153219,DSP BSE SENSEX Next 30 Index Fund,DSP,Index/ETF-like,Index Funds,12.1855,2026-11-13,25.85,6.15,-2.92,1.68,5.22,,,,11.75,,,,,,,,1.79
+151329,DSP CRISIL-IBX 50:50 Gilt Plus SDL - April 2033 Index Fund,DSP,Index/ETF-like,Index Funds,13.0411,2026-11-13,279.10,0.82,-1.40,2.14,3.10,7.21,,,7.25,2.32,-2.71,0.14,0.22,7.58,6.74,,3.79
+141877,DSP Nifty 50 Equal Weight Index Fund,DSP,Index/ETF-like,Index Funds,28.0194,2026-11-13,2647.34,8.34,-0.07,5.37,1.89,12.91,11.39,,12.04,13.85,-18.04,0.43,0.64,17.69,-2.58,,9.06
+146376,DSP Nifty 50 Index Fund,DSP,Index/ETF-like,Index Funds,24.8619,2026-11-13,1104.05,10.72,3.15,8.27,-1.97,9.99,7.81,,12.52,13.38,-15.50,0.26,0.38,14.70,5.39,,7.72
+152654,DSP Nifty Bank Index Fund,DSP,Index/ETF-like,Index Funds,12.5891,2026-11-13,63.51,10.00,5.90,14.81,4.95,,,,9.89,,,,,,,,2.45
+153594,DSP Nifty Healthcare Index Fund,DSP,Index/ETF-like,Index Funds,12.2644,2026-11-13,24.41,8.64,3.89,12.75,16.66,,,,15.69,,,,,,,,1.40
+153590,DSP Nifty IT Index Fund,DSP,Index/ETF-like,Index Funds,8.4190,2026-11-13,103.40,7.44,2.00,15.62,-11.38,,,,-11.57,,,,,,,,1.40
+150428,DSP Nifty Midcap 150 Quality 50 Index Fund,DSP,Index/ETF-like,Index Funds,14.4014,2026-11-13,426.87,1.93,-5.71,1.05,-3.68,8.26,,,8.84,15.78,-21.41,0.12,0.17,13.15,6.42,,4.28
+146381,DSP Nifty Next 50 Index Fund,DSP,Index/ETF-like,Index Funds,28.9388,2026-11-13,1385.39,5.78,-2.34,5.78,4.97,17.11,11.12,,14.65,18.58,-26.61,0.56,0.83,18.24,10.34,,7.72
+153348,DSP Nifty Private Bank Index Fund,DSP,Index/ETF-like,Index Funds,12.3452,2026-11-13,103.28,9.64,9.90,16.40,6.63,,,,13.32,,,,,,,,1.69
+149970,DSP Nifty SDL Plus G-Sec Jun 2028 30:70 Index Fund,DSP,Index/ETF-like,Index Funds,13.4409,2026-11-13,1649.09,0.25,0.65,2.59,4.83,7.38,,,6.56,1.04,-0.65,0.52,0.77,7.85,6.67,,4.65
+151373,DSP Nifty SDL Plus G-Sec Sep 2027 50:50 Index Fund,DSP,Index/ETF-like,Index Funds,13.0701,2026-11-13,87.64,0.34,0.88,2.72,5.25,7.39,,,7.35,0.79,-0.28,0.72,1.11,7.43,7.12,,3.74
+152243,DSP Nifty Smallcap250 Quality 50 Index Fund,DSP,Index/ETF-like,Index Funds,11.2021,2026-11-13,313.90,3.39,-2.07,3.49,-3.13,,,,3.98,,,,,,,,2.88
+152814,DSP Nifty Top 10 Equal Weight Index Fund,DSP,Index/ETF-like,Index Funds,9.6485,2026-11-13,1127.34,12.06,6.19,10.27,-5.72,,,,-1.05,,,,,,,,2.18
+153801,DSP Nifty500 Flexicap Quality 30 Index Fund,DSP,Index/ETF-like,Index Funds,9.8548,2026-11-13,199.50,6.11,-1.68,6.49,-6.41,,,,-1.17,,,,,,,,1.21
+153497,Edelweiss BSE Internet Economy Index Fund,Edelweiss,Index/ETF-like,Index Funds,12.0908,2026-11-13,38.22,8.62,3.87,19.33,8.43,,,,13.03,,,,,,,,1.49
+150671,Edelweiss CRISIL IBX 50:50 Gilt Plus SDL April 2037 Index Fund,Edelweiss,Index/ETF-like,Index Funds,13.3460,2026-11-13,896.16,1.03,-1.90,2.05,2.24,6.91,,,7.30,3.03,-3.37,0.01,0.02,7.57,6.39,,4.08
+150727,Edelweiss CRISIL IBX 50:50 Gilt Plus SDL June 2027 Index Fund,Edelweiss,Index/ETF-like,Index Funds,13.3521,2026-11-13,93.64,0.39,1.08,2.65,5.36,7.34,,,7.36,0.70,-0.16,0.74,1.17,7.41,7.11,,4.07
+150807,Edelweiss CRISIL IBX 50:50 Gilt Plus SDL Sep 2028 Index Fund,Edelweiss,Index/ETF-like,Index Funds,13.3669,2026-11-13,126.54,0.31,0.61,2.70,4.66,7.45,,,7.39,1.19,-0.82,0.51,0.76,7.59,7.07,,4.00
+151365,Edelweiss CRISIL IBX 50:50 Gilt Plus SDL Short Duration Index Fund,Edelweiss,Index/ETF-like,Index Funds,12.9157,2026-11-13,145.01,0.44,-0.07,2.19,4.25,6.97,,,7.03,1.21,-0.88,0.16,0.24,7.32,6.85,,3.74
+153335,Edelweiss CRISIL IBX AAA Bond NBFC HFC Jun 2027 Index Fund,Edelweiss,Index/ETF-like,Index Funds,11.3390,2026-11-13,81.17,0.44,1.38,3.49,6.21,,,,7.51,,,,,,,,1.73
+153115,Edelweiss CRISIL IBX AAA Financial Services Bond - Jan 2028 Index Fund,Edelweiss,Index/ETF-like,Index Funds,11.4700,2026-11-13,103.96,0.39,1.06,3.12,5.51,,,,7.25,,,,,,,,1.95
+148555,Edelweiss MSCI India Domestic & World Healthcare 45 Index Fund,Edelweiss,Index/ETF-like,Index Funds,26.1562,2026-11-13,195.18,9.45,5.65,18.14,22.69,21.88,15.77,,17.30,12.99,-12.15,1.04,1.58,17.66,10.99,,6.03
+149343,Edelweiss NIFTY Large Midcap 250 Index Fund,Edelweiss,Index/ETF-like,Index Funds,17.6025,2026-11-13,345.33,6.91,-0.77,5.34,0.58,12.81,,,12.28,15.10,-18.87,0.41,0.59,17.37,9.93,,4.94
+149247,Edelweiss NIFTY PSU Bond Plus SDL Apr 2027 50:50 Index Fund,Edelweiss,Index/ETF-like,Index Funds,13.5427,2026-11-13,2120.13,0.46,1.34,3.14,5.85,7.45,6.21,,6.16,0.71,-0.23,0.92,1.53,7.43,5.59,,5.07
+149254,Edelweiss Nifty 100 Quality 30 Index Fund,Edelweiss,Index/ETF-like,Index Funds,14.9373,2026-11-13,120.57,5.67,-2.12,4.44,-0.70,9.67,8.52,,7.89,13.24,-21.03,0.20,0.29,13.67,6.69,,5.10
+149250,Edelweiss Nifty 50 Index Fund,Edelweiss,Index/ETF-like,Index Funds,14.9449,2026-11-13,292.59,10.73,3.26,8.42,-1.82,10.01,7.77,,8.02,13.36,-15.49,0.26,0.38,12.04,5.41,,5.10
+152616,Edelweiss Nifty Alpha Low Volatility 30 Index Fund,Edelweiss,Index/ETF-like,Index Funds,9.9921,2026-11-13,91.97,6.81,-3.45,4.10,-1.39,,,,-0.35,,,,,,,,2.48
+150902,Edelweiss Nifty Midcap150 Momentum 50 Index Fund,Edelweiss,Index/ETF-like,Index Funds,18.8811,2026-11-13,1762.28,4.92,-0.90,4.19,1.62,13.49,,,16.99,19.49,-25.79,0.39,0.56,21.11,11.88,,3.95
+150899,Edelweiss Nifty Next 50 Index Fund,Edelweiss,Index/ETF-like,Index Funds,17.0687,2026-11-13,294.24,5.80,-2.21,5.99,5.20,17.25,,,14.28,18.56,-26.43,0.57,0.84,18.51,15.29,,3.95
+150892,Edelweiss Nifty Smallcap 250 Index Fund,Edelweiss,Index/ETF-like,Index Funds,18.7272,2026-11-13,271.81,0.68,-2.21,7.26,5.62,12.41,,,16.93,20.33,-26.12,0.33,0.47,18.87,11.70,,3.95
+152985,Edelweiss Nifty500 Multicap Momentum Quality 50 Index Fund,Edelweiss,Index/ETF-like,Index Funds,9.0494,2026-11-13,607.51,2.58,-2.58,-1.69,-3.44,,,,-4.73,,,,,,,,2.02
+118581,Franklin India NSE Nifty 50 Index Fund,Franklin Templeton,Index/ETF-like,Index Funds,215.4704,2026-11-13,712.27,10.77,3.21,8.27,-1.96,9.97,7.78,12.43,11.63,13.35,-15.40,0.25,0.38,12.74,-3.86,,13.86
 153704,Groww Nifty 50 Index Fund,Groww,Index/ETF-like,Index Funds,10.0946,2026-11-13,26.67,10.70,3.09,8.10,-2.27,,,,0.84,,,,,,,,1.31
 153230,Groww Nifty India Railways PSU Index Fund,Groww,Index/ETF-like,Index Funds,7.2766,2026-11-13,59.21,1.76,-9.03,-16.89,-22.38,,,,-15.81,,,,,,,,1.76
 153939,Groww Nifty Midcap 150 Index Fund,Groww,Index/ETF-like,Index Funds,10.1563,2026-11-13,15.39,3.96,-3.72,2.69,,,,,,,,,,,,,0.99
@@ -1016,10 +1095,57 @@ CODE,NAME,AMC,CATEGORY,SUBCAT,NAV,NAVDATE,AUM_CR,R1M,R3M,R6M,R1Y,R3Y,R5Y,R10Y,SI
 152637,Groww Nifty Non-Cyclical Consumer Index Fund,Groww,Index/ETF-like,Index Funds,10.5619,2026-11-13,41.20,7.56,-1.17,6.53,-4.99,,,,2.24,,,,,,,,2.47
 152431,Groww Nifty Smallcap 250 Index Fund,Groww,Index/ETF-like,Index Funds,11.9878,2026-11-13,137.59,0.64,-2.25,7.13,5.39,,,,6.70,,,,,,,,2.70
 152092,Groww Nifty Total Market Index Fund,Groww,Index/ETF-like,Index Funds,14.3016,2026-11-13,370.29,7.15,0.26,6.72,0.37,11.60,,,12.64,14.67,-18.89,0.34,0.50,,,,3.05
+151728,HDFC BSE 500 Index Fund,HDFC,Index/ETF-like,Index Funds,16.0704,2026-11-13,322.63,7.61,0.41,6.68,-0.01,11.26,,,14.27,14.41,-18.82,0.32,0.47,11.65,8.01,,3.56
+119065,HDFC BSE Sensex Index Fund,HDFC,Index/ETF-like,Index Funds,781.5365,2026-11-13,8484.10,11.79,4.54,10.17,-2.74,8.85,7.11,12.75,11.94,13.46,-16.11,0.18,0.27,12.71,-1.89,,13.86
+153517,HDFC CRISIL-IBX Financial Services 3-6 Months Debt Index Fund,HDFC,Index/ETF-like,Index Funds,11.0915,2026-11-13,2212.63,0.46,1.55,3.62,7.04,,,,7.02,,,,,,,,1.52
+149870,HDFC NIFTY 100 Equal Weight Index Fund,HDFC,Index/ETF-like,Index Funds,17.7610,2026-11-13,526.30,6.84,-1.57,5.42,3.15,14.72,,,12.97,15.64,-21.60,0.50,0.75,16.90,11.92,,4.72
+149868,HDFC NIFTY 100 Index Fund,HDFC,Index/ETF-like,Index Funds,15.5888,2026-11-13,469.19,9.78,2.05,7.71,-0.95,10.98,,,9.89,13.85,-17.34,0.32,0.47,12.84,6.82,,4.72
+152889,HDFC NIFTY LargeMidcap 250 Index Fund,HDFC,Index/ETF-like,Index Funds,10.3137,2026-11-13,459.22,6.90,-0.72,5.37,0.64,,,,1.49,,,,,,,,2.09
+151724,HDFC NIFTY Midcap 150 Index Fund,HDFC,Index/ETF-like,Index Funds,19.3947,2026-11-13,700.43,3.97,-3.57,2.90,1.86,14.19,,,20.47,17.21,-21.08,0.44,0.64,18.19,12.60,,3.56
+149288,HDFC NIFTY Next 50 index Fund,HDFC,Index/ETF-like,Index Funds,17.2572,2026-11-13,2656.92,5.77,-2.42,5.68,4.85,16.90,10.83,,11.49,18.60,-26.67,0.55,0.81,17.75,12.38,,5.03
+152521,HDFC NIFTY Realty Index Fund,HDFC,Index/ETF-like,Index Funds,10.3432,2026-11-13,96.61,10.93,2.36,20.67,-2.27,,,,1.31,,,,,,,,2.63
+151570,HDFC NIFTY SDL Plus G-Sec Jun 2027 40:60 Index Fund,HDFC,Index/ETF-like,Index Funds,12.8988,2026-11-13,48.65,0.39,1.08,2.67,5.36,7.34,,,7.24,0.70,-0.17,0.74,1.17,7.36,7.11,,3.64
+151727,HDFC NIFTY Smallcap 250 Index Fund,HDFC,Index/ETF-like,Index Funds,19.5415,2026-11-13,752.22,0.67,-2.42,6.98,5.20,12.04,,,20.73,20.34,-26.19,0.31,0.44,16.95,11.31,,3.56
+152713,HDFC NIFTY100 Low Volatility 30 Index Fund,HDFC,Index/ETF-like,Index Funds,10.5076,2026-11-13,219.29,7.82,-1.64,5.04,-2.70,,,,2.09,,,,,,,,2.34
+152430,HDFC NIFTY200 Momentum 30 Index Fund,HDFC,Index/ETF-like,Index Funds,10.3160,2026-11-13,602.33,4.67,-1.52,2.89,-3.30,,,,1.16,,,,,,,,2.71
+149107,HDFC NIFTY50 Equal Weight Index Fund,HDFC,Index/ETF-like,Index Funds,18.9918,2026-11-13,1790.83,8.35,-0.09,5.25,1.76,12.85,11.32,,13.06,13.86,-18.03,0.43,0.64,16.47,9.40,,5.23
+152778,HDFC NIFTY500 Multicap 50:25:25 Index Fund,HDFC,Index/ETF-like,Index Funds,10.2734,2026-11-13,509.38,6.05,-0.43,6.40,1.49,,,,1.24,,,,,,,,2.22
+119063,HDFC Nifty 50 Index Fund,HDFC,Index/ETF-like,Index Funds,246.1960,2026-11-13,23710.13,10.72,3.10,8.17,-2.12,9.90,7.76,12.72,11.96,13.39,-15.52,0.25,0.37,13.06,-3.48,,13.86
+151495,HDFC Nifty G-Sec Apr 2029 Index Fund,HDFC,Index/ETF-like,Index Funds,13.0570,2026-11-13,155.94,0.39,0.01,2.25,4.03,7.40,,,7.53,1.54,-0.94,0.35,0.51,7.60,7.09,,3.68
+150845,HDFC Nifty G-Sec Dec 2026 Index Fund,HDFC,Index/ETF-like,Index Funds,13.1677,2026-11-13,935.48,0.45,1.29,2.71,5.48,7.10,,,7.09,0.60,-0.14,0.49,0.81,7.18,6.90,,4.01
+150847,HDFC Nifty G-Sec July 2031 Index Fund,HDFC,Index/ETF-like,Index Funds,13.3012,2026-11-13,635.98,0.83,-1.27,2.44,3.31,7.43,,,7.36,2.51,-2.62,0.20,0.29,7.89,6.86,,4.01
+151181,HDFC Nifty G-Sec Jun 2027 Index Fund,HDFC,Index/ETF-like,Index Funds,13.1101,2026-11-13,574.46,0.34,0.96,2.54,5.06,7.23,,,7.13,0.83,-0.23,0.49,0.75,7.35,7.01,,3.93
+151489,HDFC Nifty G-Sec Jun 2036 Index Fund,HDFC,Index/ETF-like,Index Funds,13.0233,2026-11-13,850.16,0.99,-1.85,1.90,2.75,7.26,,,7.46,3.30,-3.51,0.10,0.14,7.52,6.81,,3.67
+151183,HDFC Nifty G-Sec Sep 2032 Index Fund,HDFC,Index/ETF-like,Index Funds,13.1410,2026-11-13,626.87,0.66,-1.73,1.80,2.84,7.29,,,7.20,2.63,-3.00,0.14,0.21,7.80,6.88,,3.93
+153097,HDFC Nifty India Digital Index Fund,HDFC,Index/ETF-like,Index Funds,8.9022,2026-11-13,152.06,5.29,-0.25,16.59,-5.15,,,,-5.87,,,,,,,,1.92
+153405,HDFC Nifty Top 20 Equal Weight Index Fund,HDFC,Index/ETF-like,Index Funds,10.6951,2026-11-13,91.16,10.71,3.01,11.03,-2.41,,,,4.21,,,,,,,,1.64
+153264,HDFC Nifty100 Quality 30 Index Fund,HDFC,Index/ETF-like,Index Funds,10.9964,2026-11-13,141.30,5.69,-2.09,4.40,-0.79,,,,5.65,,,,,,,,1.73
 149966,HSBC CRISIL IBX 50:50 Gilt Plus SDL Apr 2028 Index Fund,HSBC,Index/ETF-like,Index Funds,13.4346,2026-11-13,1757.75,0.23,0.65,2.65,4.82,7.37,,,6.61,1.10,-0.71,0.48,0.71,7.80,6.98,,4.61
 151479,HSBC CRISIL IBX Gilt June 2027 Index Fund,HSBC,Index/ETF-like,Index Funds,12.8828,2026-11-13,181.19,0.36,1.00,2.55,5.11,7.25,,,7.13,0.82,-0.22,0.51,0.78,7.31,7.03,,3.63
 151157,HSBC NIFTY 50 Index Fund,HSBC,Index/ETF-like,Index Funds,29.8091,2026-11-13,389.06,10.72,3.15,8.23,-2.02,9.94,,,8.93,13.38,-15.51,0.25,0.38,9.99,5.34,,3.96
 151160,HSBC NIFTY NEXT 50 Index Fund,HSBC,Index/ETF-like,Index Funds,32.0144,2026-11-13,177.08,5.78,-2.40,5.82,4.63,16.82,,,14.52,18.61,-26.59,0.55,0.81,18.07,14.88,,3.96
+153411,ICICI Prudential CRISIL-IBX Financial Services 3-6 Months Debt Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,11.1983,2026-11-13,512.69,0.43,1.50,3.52,6.85,,,,7.08,,,,,,,,1.65
+149219,ICICI Prudential NASDAQ 100 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,22.8772,2026-11-13,3571.60,-9.61,-8.36,-6.41,18.55,26.82,16.87,,17.58,19.85,-23.84,0.93,1.41,28.84,10.70,,5.07
+150452,ICICI Prudential Nifty 200 Momentum 30 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,16.7577,2026-11-13,555.29,4.66,-1.50,2.94,-3.19,8.91,,,12.59,19.47,-31.82,0.17,0.25,15.62,7.19,,4.27
+153161,ICICI Prudential Nifty 500 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,10.7253,2026-11-13,100.16,7.50,0.27,6.44,-0.09,,,,3.59,,,,,,,,1.89
+150643,ICICI Prudential Nifty Auto Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,22.5838,2026-11-13,241.22,9.97,-5.04,8.62,2.73,19.99,,,21.84,21.25,-28.33,0.61,0.91,25.50,15.77,,4.09
+149858,ICICI Prudential Nifty Bank Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,17.6229,2026-11-13,778.25,9.99,5.87,14.77,4.98,12.21,,,13.10,15.61,-18.31,0.41,0.63,11.89,7.59,,4.70
+150733,ICICI Prudential Nifty G-Sec Dec 2030 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,13.3935,2026-11-13,814.82,0.62,-0.88,1.79,3.38,7.26,,,7.40,2.17,-1.85,0.19,0.27,7.80,7.03,,4.09
+150468,ICICI Prudential Nifty IT Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,11.3800,2026-11-13,442.82,7.39,1.78,15.28,-11.74,3.05,,,3.10,23.58,-42.21,-0.10,-0.14,3.60,-3.09,,4.24
+152482,ICICI Prudential Nifty LargeMidcap 250 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,12.6681,2026-11-13,295.34,6.90,-0.74,5.33,0.60,,,,8.70,,,,,,,,2.67
+149389,ICICI Prudential Nifty Midcap 150 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,20.3165,2026-11-13,1280.52,3.98,-3.55,2.93,1.98,14.25,,,15.43,17.22,-21.09,0.45,0.65,21.60,12.66,,4.89
+120684,ICICI Prudential Nifty Next 50 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,67.8332,2026-11-13,9921.25,5.78,-2.44,5.57,4.77,16.93,10.93,13.18,14.00,18.60,-26.68,0.55,0.81,16.52,-6.65,,13.86
+149210,ICICI Prudential Nifty PSU Bond Plus SDL Sep 2027 40:60 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,13.4870,2026-11-13,8061.28,0.34,0.95,3.01,5.42,7.44,6.11,,6.01,0.83,-0.25,0.77,1.25,7.49,5.43,,5.12
+150930,ICICI Prudential Nifty Pharma Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,22.0903,2026-11-13,150.77,9.42,6.85,19.59,25.92,22.66,,,22.64,14.87,-16.59,0.97,1.52,21.50,18.98,,3.91
+153679,ICICI Prudential Nifty Private Bank Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,10.7655,2026-11-13,49.48,9.62,9.81,16.31,6.65,,,,5.69,,,,,,,,1.32
+150729,ICICI Prudential Nifty SDL Dec 2028 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,13.4701,2026-11-13,879.79,0.29,0.31,2.87,4.40,7.48,,,7.57,1.58,-1.16,0.40,0.59,7.67,7.01,,4.08
+149999,ICICI Prudential Nifty SDL Sep 2027 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,13.3696,2026-11-13,1419.58,0.33,0.83,2.91,5.44,7.52,,,6.47,0.86,-0.39,0.82,1.26,7.74,6.34,,4.64
+149283,ICICI Prudential Nifty Smallcap 250 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,18.3993,2026-11-13,774.95,0.66,-2.45,6.93,5.14,12.01,12.94,,12.88,20.34,-26.18,0.31,0.44,19.74,11.29,,5.03
+153614,ICICI Prudential Nifty Top 15 Equal Weight Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,9.9484,2026-11-13,30.34,11.80,3.60,9.41,-4.34,,,,-0.53,,,,,,,,1.38
+153546,ICICI Prudential Nifty200 Quality 30 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,9.6135,2026-11-13,25.58,2.52,-5.70,-0.99,-6.67,,,,-3.09,,,,,,,,1.43
+152936,ICICI Prudential Nifty200 Value 30 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,11.0118,2026-11-13,195.12,6.89,-1.78,-3.23,5.24,,,,5.51,,,,,,,,2.06
+150639,ICICI Prudential Nifty50 Equal Weight Index Fund-,ICICI Prudential,Index/ETF-like,Index Funds,17.4816,2026-11-13,263.91,8.36,-0.09,5.28,1.80,12.80,,,14.02,13.85,-18.09,0.42,0.63,16.38,9.34,,4.11
+152365,ICICI Prudential Nifty50 Value 20 Index Fund,ICICI Prudential,Index/ETF-like,Index Funds,10.5638,2026-11-13,99.38,9.91,2.91,4.88,-4.47,,,,2.02,,,,,,,,2.77
 151593,Invesco India Nifty G-sec Jul 2027 Index Fund,Invesco,Index/ETF-like,Index Funds,1287.9396,2026-11-13,80.85,0.35,0.99,2.56,5.12,7.27,,,7.20,0.81,-0.22,0.54,0.82,7.33,7.05,,3.65
 151597,Invesco India Nifty G-sec Sep 2032 Index Fund,Invesco,Index/ETF-like,Index Funds,1287.3799,2026-11-13,51.18,0.66,-1.56,1.91,2.96,7.34,,,7.20,2.57,-2.88,0.17,0.24,7.53,6.93,,3.63
 153787,JioBlackRock Nifty 50 Index Fund,Jio BlackRock,Index/ETF-like,Index Funds,10.2098,2026-11-13,271.00,10.74,3.15,8.29,-1.90,,,,1.73,,,,,,,,1.23
@@ -1027,6 +1153,38 @@ CODE,NAME,AMC,CATEGORY,SUBCAT,NAV,NAVDATE,AUM_CR,R1M,R3M,R6M,R1Y,R3Y,R5Y,R10Y,SI
 153788,JioBlackRock Nifty Midcap 150 Index Fund,Jio BlackRock,Index/ETF-like,Index Funds,10.6981,2026-11-13,283.30,3.98,-3.59,2.90,2.00,,,,4.99,,,,,,,,1.23
 153789,JioBlackRock Nifty Next 50 Index Fund,Jio BlackRock,Index/ETF-like,Index Funds,10.8870,2026-11-13,221.57,5.78,-2.41,5.71,5.08,,,,7.01,,,,,,,,1.23
 153790,JioBlackRock Nifty Smallcap 250 Index Fund,Jio BlackRock,Index/ETF-like,Index Funds,10.6310,2026-11-13,399.28,0.66,-2.44,6.99,5.35,,,,4.30,,,,,,,,1.23
+153660,KOTAK NIFTY 200 QUALITY 30 INDEX FUND,Kotak Mahindra,Index/ETF-like,Index Funds,9.6550,2026-11-13,16.92,2.56,-5.62,-0.76,-6.43,,,,-2.59,,,,,,,,1.32
+152039,Kotak BSE Housing Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,12.9000,2026-11-13,12.89,5.03,-4.39,3.38,-6.74,7.37,,,7.30,19.34,-26.59,0.09,0.12,,,,3.19
+153286,Kotak BSE Sensex Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,10.9100,2026-11-13,23.97,11.77,4.51,10.14,-2.80,,,,5.41,,,,,,,,1.73
+153313,Kotak CRISIL- IBX AAA Bond Financial Services Index - Dec 2026 Fund,Kotak Mahindra,Index/ETF-like,Index Funds,11.3296,2026-11-13,112.62,0.53,1.68,3.65,6.62,,,,7.42,,,,,,,,1.73
+152869,Kotak CRISIL-IBX AAA Financial Services Index-Sep 2027 Fund,Kotak Mahindra,Index/ETF-like,Index Funds,11.6958,2026-11-13,494.17,0.40,1.25,3.28,5.78,,,,7.43,,,,,,,,2.14
+153372,Kotak CRISIL-IBX Financial Services 3-6 Months Debt Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,11.2011,2026-11-13,290.81,0.43,1.46,3.42,6.66,,,,6.94,,,,,,,,1.68
+153875,Kotak CRISIL-IBX Financial Services 9 to 12 Months Debt Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,10.7082,2026-11-13,1001.22,0.38,1.30,3.41,6.08,,,,6.16,,,,,,,,1.12
+152663,Kotak NIFTY 100 Low Volatility 30 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,10.9634,2026-11-13,112.09,7.83,-1.67,5.20,-2.59,,,,3.63,,,,,,,,2.42
+153146,Kotak Nifty 100 Equal Weight Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,11.2380,2026-11-13,47.46,6.88,-1.44,5.68,3.44,,,,6.57,,,,,,,,1.87
+151781,Kotak Nifty 200 Momentum 30 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,14.7160,2026-11-13,587.48,4.70,-1.45,3.03,-3.05,9.23,,,11.63,19.45,-31.60,0.19,0.27,,,,3.40
+153150,Kotak Nifty 50 Equal Weight Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,11.4820,2026-11-13,67.14,8.36,0.25,5.76,2.15,,,,7.79,,,,,,,,1.87
+148978,Kotak Nifty 50 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,16.7360,2026-11-13,1155.95,10.73,3.15,8.31,-1.94,9.90,7.77,,9.99,13.38,-15.65,0.25,0.37,12.47,5.31,,5.39
+153680,Kotak Nifty AAA Bond Financial Services Mar 2028 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,10.7500,2026-11-13,243.97,0.33,0.88,3.03,5.10,,,,5.51,,,,,,,,1.33
+153781,Kotak Nifty Alpha 50 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,10.5700,2026-11-13,45.79,-0.53,-3.77,6.18,5.05,,,,4.58,,,,,,,,1.23
+153353,Kotak Nifty Commodities Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,12.0520,2026-11-13,295.38,7.27,-2.58,-5.62,3.20,,,,10.56,,,,,,,,1.66
+151911,Kotak Nifty Financial Services Ex-Bank Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,16.9510,2026-11-13,97.69,7.70,-1.09,5.61,2.60,16.00,,,17.75,19.79,-17.06,0.49,0.78,,,,3.23
+152098,Kotak Nifty G-Sec July 2033 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,12.4128,2026-11-13,21.60,0.98,-1.56,1.88,2.95,7.15,,,7.22,2.41,-2.90,0.11,0.16,,,,3.09
+152870,Kotak Nifty India Tourism Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,9.0080,2026-11-13,38.13,11.71,3.41,16.22,-5.29,,,,-3.64,,,,,,,,2.12
+153401,Kotak Nifty Midcap 150 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,11.6780,2026-11-13,44.00,3.99,-3.54,2.97,1.88,,,,10.43,,,,,,,,1.63
+152916,Kotak Nifty Midcap 150 Momentum 50 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,9.6680,2026-11-13,450.77,4.94,-0.88,3.97,1.61,,,,-2.26,,,,,,,,2.09
+152767,Kotak Nifty Midcap 50 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,11.0080,2026-11-13,81.61,5.39,-2.78,4.43,3.64,,,,3.81,,,,,,,,2.23
+148745,Kotak Nifty Next 50 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,21.4003,2026-11-13,1267.14,5.80,-2.38,5.76,5.05,17.21,11.23,,14.99,18.59,-26.34,0.57,0.83,18.86,12.85,,5.66
+149855,Kotak Nifty SDL Apr 2027 Top 12 Equal Weight Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,13.3734,2026-11-13,6417.01,0.51,1.28,2.81,5.86,7.52,,,6.34,0.66,-0.15,1.07,1.87,7.56,6.13,,4.73
+149865,Kotak Nifty SDL Apr 2032 Top 12 Equal Weight Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,13.4368,2026-11-13,3122.68,0.54,-1.08,2.65,3.47,7.07,,,6.39,2.48,-2.53,0.11,0.16,7.90,6.64,,4.73
+151420,Kotak Nifty SDL Jul 2033 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,12.9430,2026-11-13,181.82,0.81,-1.22,2.54,3.21,7.04,,,7.13,2.55,-2.61,0.08,0.12,7.21,6.47,,3.72
+150725,Kotak Nifty SDL Plus AAA PSU Bond Jul 2028 60 - 40 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,13.3558,2026-11-13,504.41,0.21,0.61,2.85,4.80,7.39,,,7.33,1.20,-0.63,0.48,0.69,7.53,6.94,,4.07
+153223,Kotak Nifty SmallCap 250 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,11.6540,2026-11-13,77.77,0.67,-2.39,6.99,5.29,,,,8.31,,,,,,,,1.79
+151649,Kotak Nifty Smallcap 50 Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,23.2690,2026-11-13,243.86,2.88,0.05,12.78,12.75,16.40,,,25.92,21.39,-25.01,0.48,0.69,22.47,15.59,,3.57
+153461,Kotak Nifty Top 10 Equal Weight Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,9.7720,2026-11-13,39.10,12.10,6.18,10.26,-5.80,,,,-1.81,,,,,,,,1.53
+120308,LIC MF BSE Sensex Index Fund,LIC,Index/ETF-like,Index Funds,164.6444,2026-11-13,91.05,11.74,4.47,9.96,-3.02,8.57,6.90,12.39,11.35,13.43,-16.11,0.16,0.24,12.22,-2.14,,13.86
+120307,LIC MF Nifty 50 Index Fund,LIC,Index/ETF-like,Index Funds,150.7329,2026-11-13,364.51,10.69,3.07,8.05,-2.40,9.74,7.65,12.36,11.49,13.37,-15.50,0.24,0.36,12.61,-3.91,,13.86
+151937,LIC MF Nifty Next 50 Index Fund,LIC,Index/ETF-like,Index Funds,59.9094,2026-11-13,111.26,5.75,-2.41,6.05,5.25,17.18,,,16.13,18.57,-26.43,0.56,0.83,,,,3.29
 150792,Mirae Asset CRISIL IBX Gilt Index - April 2033 Index Fund,Mirae Asset,Index/ETF-like,Index Funds,13.3715,2026-11-13,209.87,0.71,-1.66,1.77,2.50,7.12,,,7.42,2.51,-2.92,0.09,0.14,7.74,6.73,,4.06
 153634,Mirae Asset CRISIL-IBX Financial Services 9-12 Months Debt Index Fund,Mirae Asset,Index/ETF-like,Index Funds,10.8597,2026-11-13,139.02,0.39,1.21,3.31,5.98,,,,6.13,,,,,,,,1.38
 152972,Mirae Asset Nifty 50 Index Fund,Mirae Asset,Index/ETF-like,Index Funds,10.5029,2026-11-13,72.12,10.74,3.14,8.21,-2.05,,,,2.85,,,,,,,,2.05
@@ -1034,6 +1192,90 @@ CODE,NAME,AMC,CATEGORY,SUBCAT,NAV,NAVDATE,AUM_CR,R1M,R3M,R6M,R1Y,R3Y,R5Y,R10Y,SI
 150358,Mirae Asset Nifty SDL Jun 2027 Index Fund,Mirae Asset,Index/ETF-like,Index Funds,13.3645,2026-11-13,474.44,0.39,1.08,2.85,5.65,7.52,,,6.46,0.72,-0.17,0.98,1.61,7.71,6.60,,4.62
 151691,Mirae Asset Nifty SDL June 2028 Index Fund,Mirae Asset,Index/ETF-like,Index Funds,12.9388,2026-11-13,80.22,0.18,0.63,2.96,4.97,7.57,,,7.37,1.31,-0.92,0.55,0.79,7.57,7.06,,3.61
 152968,Mirae Asset Nifty Total Market Index Fund,Mirae Asset,Index/ETF-like,Index Funds,10.6926,2026-11-13,50.98,7.16,0.71,7.27,1.00,,,,2.95,,,,,,,,2.04
+153596,Motilal Oswal BSE 1000 Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,10.2988,2026-11-13,62.39,7.02,0.28,7.00,0.53,,,,1.13,,,,,,,,1.37
+149800,Motilal Oswal Nifty 200 Momentum 30 Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,15.3598,2026-11-13,942.44,4.67,-1.51,2.89,-3.47,9.01,,,10.09,19.48,-31.65,0.18,0.25,16.04,7.31,,4.74
+147794,Motilal Oswal Nifty 50 Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,21.9689,2026-11-13,889.80,10.73,3.13,8.25,-1.97,10.01,7.85,,12.31,13.39,-15.51,0.26,0.38,14.56,5.41,,6.88
+147625,Motilal Oswal Nifty 500 Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,27.7772,2026-11-13,3114.02,7.51,0.43,6.74,0.44,11.86,9.55,,15.16,14.54,-18.62,0.36,0.52,17.22,8.66,,7.17
+152875,Motilal Oswal Nifty 500 Momentum 50 Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,8.5156,2026-11-13,803.89,3.43,-0.32,5.81,0.95,,,,-7.12,,,,,,,,2.12
+147620,Motilal Oswal Nifty Bank Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,22.7083,2026-11-13,556.93,9.99,5.85,14.75,4.89,12.18,10.10,,11.89,15.62,-18.35,0.41,0.62,12.62,7.60,,7.17
+153138,Motilal Oswal Nifty Capital Market Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,14.0424,2026-11-13,648.34,11.71,10.35,9.87,25.50,,,,21.92,,,,,,,,1.90
+152712,Motilal Oswal Nifty India Defence Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,11.8988,2026-11-13,5383.82,-1.77,-7.47,-0.20,11.05,,,,4.46,,,,,,,,2.35
+151814,Motilal Oswal Nifty Microcap 250 Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,18.7368,2026-11-13,2452.33,-0.11,-1.91,11.07,8.39,13.62,,,20.17,22.14,-29.39,0.36,0.53,,,,3.34
+153027,Motilal Oswal Nifty MidSmall Financial Services Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,14.6172,2026-11-13,118.47,4.72,-2.15,3.76,9.96,,,,20.09,,,,,,,,1.97
+153023,Motilal Oswal Nifty MidSmall Healthcare Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,13.0807,2026-11-13,48.15,8.39,3.30,14.55,22.09,,,,13.64,,,,,,,,1.97
+153025,Motilal Oswal Nifty MidSmall India Consumption Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,9.6635,2026-11-13,24.50,5.31,-3.51,5.05,-5.52,,,,-3.08,,,,,,,,1.97
+147622,Motilal Oswal Nifty Midcap 150 Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,41.2111,2026-11-13,3995.19,3.99,-3.53,2.99,2.10,14.52,14.21,,21.54,17.23,-21.02,0.46,0.67,24.31,12.94,,7.17
+147796,Motilal Oswal Nifty Next 50 Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,26.2195,2026-11-13,510.58,5.77,-2.41,5.69,4.88,17.14,11.08,,15.11,18.60,-26.40,0.56,0.83,18.64,10.42,,6.88
+147623,Motilal Oswal Nifty Smallcap 250 Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,40.2321,2026-11-13,950.68,0.68,-2.27,7.16,5.40,12.32,13.11,,21.07,20.35,-26.16,0.32,0.46,24.18,11.59,,7.17
+148381,Motilal Oswal S&P 500 Index Fund,Motilal Oswal,Index/ETF-like,Index Funds,32.8945,2026-11-13,4580.59,-4.17,-4.20,0.15,19.52,24.95,15.98,,20.25,14.13,-19.37,1.14,1.70,15.95,8.60,,6.54
+152062,NAVI BSE SENSEX INDEX FUND,Navi,Index/ETF-like,Index Funds,12.7233,2026-11-13,19.05,11.72,4.46,9.99,-2.73,8.80,,,7.84,13.42,-16.11,0.18,0.26,,,,3.19
+149039,Navi Nifty 50 Index Fund,Navi,Index/ETF-like,Index Funds,16.6272,2026-11-13,4095.04,10.74,3.18,8.30,-1.93,10.02,7.84,,10.04,13.39,-15.49,0.26,0.38,12.48,5.42,,5.33
+152751,Navi Nifty 500 Multicap 50:25:25 Index Fund,Navi,Index/ETF-like,Index Funds,10.3382,2026-11-13,27.49,6.03,-0.44,6.26,1.53,,,,1.53,,,,,,,,2.28
+149804,Navi Nifty Bank Index Fund,Navi,Index/ETF-like,Index Funds,16.1101,2026-11-13,639.90,9.99,5.90,14.82,4.93,12.22,,,10.54,15.64,-18.39,0.42,0.63,11.82,7.56,,4.77
+150515,Navi Nifty India Manufacturing Index Fund,Navi,Index/ETF-like,Index Funds,19.5417,2026-11-13,83.35,5.93,-3.48,2.94,4.68,18.27,,,17.45,16.68,-23.03,0.65,0.97,21.78,15.50,,4.21
+149447,Navi Nifty Next 50 Index Fund,Navi,Index/ETF-like,Index Funds,17.4036,2026-11-13,1309.49,5.79,-2.33,5.80,4.96,17.09,,,12.24,18.60,-26.29,0.56,0.82,17.91,12.59,,4.81
+153362,Navi Nifty Smallcap250 Momentum Quality 100 Index Fund,Navi,Index/ETF-like,Index Funds,12.2733,2026-11-13,41.11,1.57,0.35,9.34,7.50,,,,13.54,,,,,,,,1.67
+152535,Navi NiftyIT Index Fund,Navi,Index/ETF-like,Index Funds,9.5572,2026-11-13,22.02,7.32,1.82,15.03,-11.84,,,,-1.61,,,,,,,,2.63
+153567,Nippon India BSE Sensex Next 30 Index Fund,Nippon India,Index/ETF-like,Index Funds,10.9503,2026-11-13,87.59,6.16,-2.95,1.54,5.13,,,,7.67,,,,,,,,1.42
+152992,Nippon India CRISIL - IBX AAA Financial Services - Dec 2026 Index Fund,Nippon India,Index/ETF-like,Index Funds,11.6064,2026-11-13,124.65,0.52,1.66,3.65,6.67,,,,7.49,,,,,,,,2.04
+152996,Nippon India CRISIL - IBX AAA Financial Services - Jan 2028 Index Fund,Nippon India,Index/ETF-like,Index Funds,11.5390,2026-11-13,82.46,0.37,1.04,3.14,5.46,,,,7.18,,,,,,,,2.04
+118791,Nippon India Index Fund - BSE Sensex Plan,Nippon India,Index/ETF-like,Index Funds,44.4351,2026-11-13,925.19,11.79,4.55,10.18,-2.71,8.86,7.13,12.76,11.64,13.45,-16.08,0.18,0.27,12.47,-1.60,,13.86
+118741,Nippon India Index Fund - Nifty 50 Plan,Nippon India,Index/ETF-like,Index Funds,46.4833,2026-11-13,3798.67,10.73,3.14,8.28,-1.95,10.01,7.82,12.72,11.79,13.38,-15.46,0.26,0.38,12.82,-3.43,,13.86
+148721,Nippon India Nifty 50 Value 20 Index Fund,Nippon India,Index/ETF-like,Index Funds,18.4357,2026-11-13,812.45,9.90,2.90,4.81,-4.55,7.72,7.91,,11.52,13.33,-22.77,0.07,0.10,14.71,3.37,,5.72
+152842,Nippon India Nifty 500 Equal Weight Index Fund,Nippon India,Index/ETF-like,Index Funds,9.6646,2026-11-13,513.32,2.48,-3.82,3.41,1.01,,,,-1.26,,,,,,,,2.17
+153474,Nippon India Nifty 500 Low Volatility 50 Index Fund,Nippon India,Index/ETF-like,Index Funds,10.8676,2026-11-13,27.63,7.41,-0.89,3.11,-1.07,,,,6.42,,,,,,,,1.52
+152881,Nippon India Nifty 500 Momentum 50 Index Fund,Nippon India,Index/ETF-like,Index Funds,8.6079,2026-11-13,1281.03,3.44,-0.29,6.47,1.90,,,,-7.00,,,,,,,,2.12
+153470,Nippon India Nifty 500 Quality 50 Index Fund,Nippon India,Index/ETF-like,Index Funds,10.7774,2026-11-13,42.84,3.42,-4.35,0.08,-0.92,,,,5.94,,,,,,,,1.52
+150012,Nippon India Nifty AAA CPSE Bond Plus SDL - Apr 2027 Maturity 60:40 Index Fund,Nippon India,Index/ETF-like,Index Funds,13.3061,2026-11-13,2914.65,0.49,1.45,3.26,6.13,7.47,,,6.32,0.63,-0.18,1.06,1.85,7.46,6.02,,4.63
+150487,Nippon India Nifty Alpha Low Volatility 30 Index Fund,Nippon India,Index/ETF-like,Index Funds,16.0060,2026-11-13,1278.02,6.81,-3.43,4.15,-1.35,9.25,,,12.06,13.85,-24.91,0.20,0.28,14.65,7.73,,4.23
+153064,Nippon India Nifty Auto Index Fund,Nippon India,Index/ETF-like,Index Funds,11.9867,2026-11-13,48.60,9.95,-5.06,8.72,2.84,,,,9.43,,,,,,,,1.93
+152389,Nippon India Nifty Bank Index Fund,Nippon India,Index/ETF-like,Index Funds,13.1771,2026-11-13,226.95,9.97,5.80,14.68,4.83,,,,11.02,,,,,,,,2.71
+150920,Nippon India Nifty G-Sec Jun 2036 Maturity Index Fund,Nippon India,Index/ETF-like,Index Funds,13.1285,2026-11-13,730.57,0.98,-1.85,1.89,2.67,7.26,,,7.27,3.22,-3.47,0.10,0.15,7.76,6.81,,3.90
+151440,Nippon India Nifty G-Sec Oct 2028 Maturity Index Fund,Nippon India,Index/ETF-like,Index Funds,13.0244,2026-11-13,127.05,0.28,0.24,2.32,4.24,7.26,,,7.42,1.28,-1.12,0.34,0.49,7.43,6.99,,3.69
+150906,Nippon India Nifty G-Sec Sep 2027 Maturity Index Fund,Nippon India,Index/ETF-like,Index Funds,13.0750,2026-11-13,354.38,0.33,0.93,2.51,5.03,7.22,,,7.11,0.85,-0.26,0.47,0.71,7.36,7.00,,3.93
+152392,Nippon India Nifty IT Index Fund,Nippon India,Index/ETF-like,Index Funds,8.7874,2026-11-13,247.01,7.35,1.77,15.23,-11.72,,,,-4.14,,,,,,,,2.71
+153806,Nippon India Nifty India Manufacturing Index Fund,Nippon India,Index/ETF-like,Index Funds,11.2179,2026-11-13,21.52,5.97,-3.40,3.08,4.80,,,,10.61,,,,,,,,1.21
+148726,Nippon India Nifty Midcap 150 Index Fund,Nippon India,Index/ETF-like,Index Funds,26.3118,2026-11-13,2751.71,4.01,-3.53,2.99,2.05,14.31,14.00,,18.48,17.19,-21.07,0.45,0.65,22.78,12.73,,5.72
+153060,Nippon India Nifty Realty Index Fund,Nippon India,Index/ETF-like,Index Funds,8.5433,2026-11-13,57.99,10.99,2.49,20.76,-2.16,,,,-7.82,,,,,,,,1.93
+150824,Nippon India Nifty SDL Plus G-Sec - Jun 2028 Maturity 70:30 Index Fund,Nippon India,Index/ETF-like,Index Funds,13.2301,2026-11-13,332.90,0.23,0.67,2.79,4.92,7.46,,,7.32,1.12,-0.73,0.55,0.81,7.56,7.04,,3.97
+151390,Nippon India Nifty SDL Plus G-Sec - Jun 2029 Maturity 70:30 Index Fund,Nippon India,Index/ETF-like,Index Funds,13.0458,2026-11-13,321.48,0.56,0.28,2.78,4.40,7.49,,,7.42,1.46,-0.94,0.46,0.67,7.61,7.06,,3.73
+148519,Nippon India Nifty Smallcap 250 Index Fund,Nippon India,Index/ETF-like,Index Funds,35.5907,2026-11-13,3463.17,0.69,-2.31,7.12,5.39,11.92,12.83,,23.20,20.36,-26.15,0.31,0.43,22.04,11.18,,6.07
+153432,SBI BSE PSU BANK INDEX FUND,SBI,Index/ETF-like,Index Funds,14.9630,2026-11-13,347.72,13.97,6.14,15.73,11.58,,,,27.50,,,,,,,,1.63
+151769,SBI BSE Sensex Index Fund,SBI,Index/ETF-like,Index Funds,13.4773,2026-11-13,302.37,11.79,4.55,10.18,-2.76,8.80,,,8.93,13.45,-16.09,0.18,0.26,,,,3.46
+150706,SBI CRISIL IBX Gilt Index - April 2029 Fund,SBI,Index/ETF-like,Index Funds,13.4193,2026-11-13,1949.31,0.44,0.00,2.23,4.02,7.38,,,7.56,1.57,-1.06,0.34,0.48,7.71,7.09,,4.09
+150681,SBI CRISIL IBX Gilt Index - June 2036 Fund,SBI,Index/ETF-like,Index Funds,13.4217,2026-11-13,2622.56,1.00,-1.77,1.96,2.78,7.20,,,7.53,3.28,-3.46,0.08,0.12,7.80,6.72,,4.09
+150711,SBI CRISIL IBX SDL Index - September 2027 Fund,SBI,Index/ETF-like,Index Funds,13.3628,2026-11-13,1771.03,0.32,0.82,2.82,5.37,7.48,,,7.51,0.85,-0.29,0.78,1.23,7.59,7.19,,4.09
+119827,SBI NIFTY INDEX FUND,SBI,Index/ETF-like,Index Funds,235.3616,2026-11-13,13870.55,10.71,3.11,8.20,-2.10,9.91,7.77,12.64,11.61,13.39,-15.53,0.25,0.37,12.78,-3.73,,13.86
+152908,SBI Nifty 500 Index Fund,SBI,Index/ETF-like,Index Funds,9.9060,2026-11-13,775.31,7.50,0.34,6.58,0.14,,,,0.97,,,,,,,,2.11
+153250,SBI Nifty Bank Index Fund,SBI,Index/ETF-like,Index Funds,12.2512,2026-11-13,204.89,10.00,5.86,14.74,5.06,,,,13.46,,,,,,,,1.75
+153320,SBI Nifty IT Index Fund,SBI,Index/ETF-like,Index Funds,8.1068,2026-11-13,126.38,7.36,1.73,15.21,-11.81,,,,-9.49,,,,,,,,1.71
+153015,SBI Nifty India Consumption Index Fund,SBI,Index/ETF-like,Index Funds,10.4546,2026-11-13,261.33,9.33,-1.46,7.08,-2.85,,,,2.14,,,,,,,,2.02
+150673,SBI Nifty Midcap 150 Index Fund,SBI,Index/ETF-like,Index Funds,19.7941,2026-11-13,1239.21,3.99,-3.56,2.97,1.99,14.27,,,18.00,17.23,-21.10,0.45,0.65,21.62,12.68,,4.09
+148945,SBI Nifty Next 50 Index Fund,SBI,Index/ETF-like,Index Funds,20.2480,2026-11-13,2302.35,5.79,-2.42,5.74,4.93,17.13,11.05,,13.66,18.61,-26.50,0.56,0.83,18.40,12.64,,5.47
+150677,SBI Nifty Smallcap 250 Index Fund,SBI,Index/ETF-like,Index Funds,19.5553,2026-11-13,1759.43,0.67,-2.41,6.98,5.17,12.05,,,17.65,20.37,-26.19,0.31,0.44,18.97,11.32,,4.09
+153718,SBI Nifty100 Low Volatility 30 Index Fund,SBI,Index/ETF-like,Index Funds,10.2630,2026-11-13,57.22,7.81,-1.70,4.98,-2.76,,,,1.40,,,,,,,,1.29
+153662,SBI Nifty200 Momentum 30 Index Fund,SBI,Index/ETF-like,Index Funds,9.7697,2026-11-13,117.14,4.67,-1.54,2.83,-3.34,,,,-0.96,,,,,,,,1.33
+153555,SBI Nifty200 Quality 30 Index Fund,SBI,Index/ETF-like,Index Funds,9.7669,2026-11-13,323.44,2.52,-5.68,-0.94,-6.63,,,,-3.02,,,,,,,,1.43
+152370,SBI Nifty50 Equal Weight Index Fund,SBI,Index/ETF-like,Index Funds,12.5031,2026-11-13,1058.57,8.35,-0.12,5.22,1.72,,,,7.69,,,,,,,,2.77
+149483,Sundaram Nifty 100 Equal Weight Fund (Formerly Known as Principal Nifty 100 Equal Weight Fund),Sundaram,Index/ETF-like,Index Funds,196.7553,2026-11-13,145.61,6.81,-1.56,5.54,3.53,14.66,,,11.82,15.38,-21.19,0.50,0.76,16.43,11.89,,4.86
+153420,Tata BSE Quality Index Fund,Tata,Index/ETF-like,Index Funds,11.1421,2026-11-13,56.87,3.68,-5.07,-2.41,-1.65,,,,9.76,,,,,,,,1.60
+153132,Tata BSE Select Business Groups Index Fund,Tata,Index/ETF-like,Index Funds,10.4721,2026-11-13,228.27,10.73,-0.10,3.43,0.10,,,,3.63,,,,,,,,1.90
+152557,Tata Nifty Auto Index Fund,Tata,Index/ETF-like,Index Funds,12.7430,2026-11-13,106.90,9.95,-5.03,8.60,2.52,,,,9.49,,,,,,,,2.54
+152951,Tata Nifty Capital Markets Index Fund,Tata,Index/ETF-like,Index Funds,16.0820,2026-11-13,943.51,11.70,10.46,9.89,25.35,,,,26.60,,,,,,,,2.04
+152577,Tata Nifty Financial Services Index Fund,Tata,Index/ETF-like,Index Funds,13.1141,2026-11-13,73.52,10.42,5.75,11.52,1.96,,,,10.44,,,,,,,,2.54
+151301,Tata Nifty G-Sec Dec 2026 Index Fund,Tata,Index/ETF-like,Index Funds,12.9802,2026-11-13,72.96,0.44,1.30,2.77,5.56,7.16,,,7.03,0.59,-0.13,0.57,0.95,7.19,6.94,,3.81
+151273,Tata Nifty G-Sec Dec 2029 Index Fund,Tata,Index/ETF-like,Index Funds,13.1124,2026-11-13,133.46,0.35,-0.12,2.18,3.94,7.44,,,7.34,1.66,-1.08,0.35,0.51,7.68,7.11,,3.82
+152742,Tata Nifty India Tourism Index Fund,Tata,Index/ETF-like,Index Funds,9.5628,2026-11-13,266.99,11.69,3.37,16.13,-5.40,,,,-2.43,,,,,,,,2.29
+152564,Tata Nifty MidSmall Healthcare Index Fund,Tata,Index/ETF-like,Index Funds,15.9130,2026-11-13,210.49,8.41,3.37,14.67,22.32,,,,19.70,,,,,,,,2.54
+153581,Tata Nifty Midcap 150 Index Fund,Tata,Index/ETF-like,Index Funds,10.8056,2026-11-13,320.39,3.99,-3.57,2.92,1.87,,,,3.70,,,,,,,,1.39
+150738,Tata Nifty Midcap 150 Momentum 50 Index Fund,Tata,Index/ETF-like,Index Funds,18.7800,2026-11-13,1227.87,4.92,-0.92,3.78,1.24,12.96,,,16.27,19.52,-25.92,0.36,0.52,21.38,11.36,,4.04
+153858,Tata Nifty Next 50 Index Fund,Tata,Index/ETF-like,Index Funds,10.7599,2026-11-13,123.79,5.78,-2.39,5.75,4.91,,,,6.16,,,,,,,,1.10
+152570,Tata Nifty Realty Index Fund,Tata,Index/ETF-like,Index Funds,9.4648,2026-11-13,63.70,10.97,2.50,20.81,-2.33,,,,-2.39,,,,,,,,2.54
+150326,Tata Nifty SDL Plus AAA PSU Bond Dec 2027 60 40 Index Fund,Tata,Index/ETF-like,Index Funds,13.4616,2026-11-13,645.23,0.36,0.80,2.87,5.04,7.37,,,6.65,0.91,-0.37,0.63,0.99,7.68,6.89,,4.61
+152836,Tata Nifty200 Alpha 30 Index Fund,Tata,Index/ETF-like,Index Funds,9.1636,2026-11-13,203.15,6.06,-0.05,6.78,4.97,,,,-2.43,,,,,,,,2.17
+152588,Tata Nifty500 Multicap India Manufacturing 50:30:20 Index Fund,Tata,Index/ETF-like,Index Funds,12.5682,2026-11-13,136.99,7.47,-1.15,5.23,5.60,,,,9.26,,,,,,,,2.54
+152595,Tata Nifty500 Multicap Infrastructure 50:30:20 Index Fund,Tata,Index/ETF-like,Index Funds,11.1308,2026-11-13,74.84,7.55,-1.10,2.47,-0.17,,,,4.04,,,,,,,,2.54
+118881,Taurus Nifty 50 Index Fund,Taurus,Index/ETF-like,Index Funds,51.0755,2026-11-13,6.53,10.57,3.01,7.90,-2.71,9.17,7.10,12.40,11.53,13.26,-15.56,0.20,0.30,12.57,-3.24,,13.86
 143341,UTI - Nifty Next 50 Index Fund,UTI,Index/ETF-like,Index Funds,27.1041,2026-11-13,7368.30,5.79,-2.39,5.75,4.98,17.18,11.07,,12.60,18.61,-26.45,0.56,0.83,17.84,9.63,,8.38
 151764,UTI BSE Housing Index Fund,UTI,Index/ETF-like,Index Funds,13.8610,2026-11-13,23.70,5.08,-4.27,3.46,-6.66,7.39,,,10.20,19.30,-26.63,0.09,0.12,,,,3.43
 149881,UTI BSE Low Volatility Index Fund,UTI,Index/ETF-like,Index Funds,15.9208,2026-11-13,459.33,5.44,-4.22,-1.28,-7.93,7.08,,,11.30,11.88,-18.65,0.03,0.04,14.90,5.38,,4.69
@@ -1043,6 +1285,7 @@ CODE,NAME,AMC,CATEGORY,SUBCAT,NAV,NAVDATE,AUM_CR,R1M,R3M,R6M,R1Y,R3Y,R5Y,R10Y,SI
 151487,UTI NIFTY SDL Plus AAA PSU Bond Apr 2028- 75:25 Index Fund,UTI,Index/ETF-like,Index Funds,13.0359,2026-11-13,32.75,0.21,0.65,2.90,4.91,7.44,,,7.43,1.20,-0.68,0.51,0.74,7.47,6.95,,3.69
 148703,UTI Nifty 200 Momentum 30 Index Fund,UTI,Index/ETF-like,Index Funds,21.3579,2026-11-13,8383.88,4.66,-1.51,3.06,-3.09,9.36,8.18,,14.42,19.49,-31.50,0.20,0.28,17.70,7.64,,5.67
 152859,UTI Nifty 200 Quality 30 Index Fund,UTI,Index/ETF-like,Index Funds,8.7120,2026-11-13,538.00,2.55,-5.60,-0.85,-6.61,,,,-6.57,,,,,,,,2.14
+120716,UTI Nifty 50 Index Fund,UTI,Index/ETF-like,Index Funds,177.1620,2026-11-13,29284.79,10.73,3.13,8.24,-2.02,9.97,7.81,12.78,11.87,13.39,-15.51,0.25,0.38,13.01,-3.43,,13.86
 151739,UTI Nifty 500 Value 50 Index Fund,UTI,Index/ETF-like,Index Funds,21.8330,2026-11-13,830.22,4.79,-3.34,-4.49,3.47,18.75,,,25.28,19.28,-22.63,0.64,0.95,25.24,18.46,,3.51
 153086,UTI Nifty Alpha Low-Volatility 30 Index Fund,UTI,Index/ETF-like,Index Funds,9.6816,2026-11-13,71.48,6.79,-3.48,4.04,-1.53,,,,-2.79,,,,,,,,1.94
 153270,UTI Nifty India Manufacturing Index Fund,UTI,Index/ETF-like,Index Funds,12.4913,2026-11-13,30.75,5.93,-3.48,2.99,4.42,,,,15.20,,,,,,,,1.73
@@ -1055,6 +1298,7 @@ CODE,NAME,AMC,CATEGORY,SUBCAT,NAV,NAVDATE,AUM_CR,R1M,R3M,R6M,R1Y,R3Y,R5Y,R10Y,SI
 152157,Zerodha CASE ELSS Tax Saver Nifty LargeMidcap 250 Index Fund,Zerodha CASE,Index/ETF-like,Index Funds,14.6155,2026-11-13,289.40,6.94,-0.62,5.67,1.26,13.30,,,13.40,15.10,-18.72,0.43,0.64,,,,3.01
 153906,Zerodha CASE Nifty 50 Index Fund,Zerodha CASE,Index/ETF-like,Index Funds,10.0790,2026-11-13,70.46,10.75,3.21,8.36,-1.99,,,,-1.28,,,,,,,,1.07
 152156,Zerodha CASE Nifty LargeMidcap 250 Index Fund,Zerodha CASE,Index/ETF-like,Index Funds,14.5831,2026-11-13,1570.43,6.93,-0.63,5.62,1.17,13.22,,,13.32,15.11,-18.75,0.43,0.63,,,,3.01
+152755,kotak BSE PSU Index Fund,Kotak Mahindra,Index/ETF-like,Index Funds,9.3760,2026-11-13,80.12,6.04,-2.28,-3.31,1.09,,,,-0.16,,,,,,,,2.27
 132140,Aditya Birla Sun Life Global Emerging Opportunities Fund,Aditya Birla Sun Life,Other,FoF Overseas,31.8370,2026-11-12,286.44,-12.08,-11.27,-10.52,6.55,16.47,7.49,10.26,7.90,17.27,-19.75,0.54,0.74,10.02,-1.63,36.42,12.08
 132009,Aditya Birla Sun Life Global Excellence Equity Fund Of Fund,Aditya Birla Sun Life,Other,FoF Overseas,45.6405,2026-11-12,227.31,-5.62,-4.81,0.83,13.94,20.07,11.95,10.40,9.07,13.18,-18.77,0.91,1.32,7.18,-5.79,29.68,12.08
 149291,Aditya Birla Sun Life US Equity Passive FOF,Aditya Birla Sun Life,Other,FoF Overseas,21.5093,2026-11-13,521.36,-9.66,-8.66,-6.32,17.24,26.47,16.87,,16.49,18.43,-23.37,0.98,1.48,29.31,10.26,100.00,5.01
@@ -1097,250 +1341,6 @@ CODE,NAME,AMC,CATEGORY,SUBCAT,NAV,NAVDATE,AUM_CR,R1M,R3M,R6M,R1Y,R3Y,R5Y,R10Y,SI
 152090,Motilal Oswal Developed Market Ex US ETFs Overseas Equity Passive FOF,Motilal Oswal,Other,FoF Overseas,18.1661,2026-11-13,38.77,-0.82,-5.53,-0.55,19.63,22.24,,,21.52,13.50,-14.27,0.99,1.39,,,,3.13
 148760,SBI US Specific Equity Active FoF,SBI,Other,FoF Overseas,23.9785,2026-11-13,1213.72,-5.64,-6.55,-6.37,14.03,24.16,14.46,,16.75,16.70,-21.80,0.95,1.42,20.61,6.88,99.28,5.62
 119602,Sundaram Global Brand Theme-Equity Active FOF,Sundaram,Other,FoF Overseas,47.1795,2026-11-12,170.97,-2.68,-3.31,1.38,9.43,17.81,11.42,13.09,9.15,11.56,-17.74,0.84,1.23,9.13,-6.70,53.62,13.84
-153529,ANGEL ONE NIFTY 50 INDEX FUND,Angel One,Other,Index Funds,10.3682,2026-11-13,33.04,10.71,3.13,8.20,-2.10,,,,2.10,,,,,,,,1.46
-153330,ANGEL ONE NIFTY TOTAL MARKET INDEX FUND,Angel One,Other,Index Funds,12.1188,2026-11-13,61.83,7.17,0.33,6.87,0.64,,,,10.77,,,,,,,,1.69
-151427,Aditya Birla Sun Life CRISIL IBX SDL Jun 2032 Index Fund,Aditya Birla Sun Life,Other,Index Funds,12.9890,2026-11-13,147.67,0.57,-1.18,2.49,3.30,7.09,,,7.20,2.39,-2.35,0.12,0.17,7.43,6.70,,3.74
-150702,Aditya Birla Sun Life Crisil IBX 50:50 Gilt Plus SDL Apr 2028 Index Fund,Aditya Birla Sun Life,Other,Index Funds,13.4412,2026-11-13,405.82,0.24,0.66,2.66,4.72,7.38,,,7.44,1.11,-0.81,0.49,0.72,7.53,7.01,,4.07
-150353,Aditya Birla Sun Life Crisil IBX 60:40 SDL+AAA PSU-APR 2027 Index Fund,Aditya Birla Sun Life,Other,Index Funds,13.3013,2026-11-13,1323.75,0.48,1.36,3.05,5.95,7.41,,,6.36,0.60,-0.14,0.99,1.73,7.49,6.16,,4.62
-150778,Aditya Birla Sun Life Crisil IBX Gilt -Apr 2029 Index Fund,Aditya Birla Sun Life,Other,Index Funds,13.4703,2026-11-13,613.09,0.41,0.02,2.24,4.07,7.42,,,7.67,1.56,-0.97,0.36,0.51,7.73,7.11,,4.06
-151577,Aditya Birla Sun Life Crisil IBX Gilt Apr 2028 Index Fund,Aditya Birla Sun Life,Other,Index Funds,12.7618,2026-11-13,21.16,0.25,0.66,2.28,4.48,6.93,,,6.87,1.01,-0.62,0.15,0.22,7.03,6.70,,3.66
-152267,Aditya Birla Sun Life Crisil IBX Gilt April 2033 Index Fund,Aditya Birla Sun Life,Other,Index Funds,12.1554,2026-11-13,27.26,1.17,-1.47,1.90,3.20,,,,6.96,,,,,,,,2.88
-152659,Aditya Birla Sun Life Crisil IBX Gilt June 2027 Index Fund,Aditya Birla Sun Life,Other,Index Funds,11.7736,2026-11-13,12.81,0.33,0.93,2.44,4.92,,,,6.89,,,,,,,,2.44
-153030,Aditya Birla Sun Life Crisil-IBX AAA Financial Services Index-Sep 2027 Fund,Aditya Birla Sun Life,Other,Index Funds,11.5211,2026-11-13,10.41,0.40,1.26,3.35,5.92,,,,7.33,,,,,,,,2.00
-153179,Aditya Birla Sun Life Crisil-IBX Financial Services 3 to 6 months Debt Index Fund,Aditya Birla Sun Life,Other,Index Funds,11.4164,2026-11-13,2484.77,0.45,1.55,3.60,6.88,,,,7.19,,,,,,,,1.90
-153443,Aditya Birla Sun Life Crisil-IBX Financial Services 9-12 Months Debt Index Fund,Aditya Birla Sun Life,Other,Index Funds,11.1531,2026-11-13,1190.07,0.36,1.27,3.35,6.02,,,,6.83,,,,,,,,1.64
-119648,Aditya Birla Sun Life Nifty 50 Index Fund,Aditya Birla Sun Life,Other,Index Funds,262.9031,2026-11-13,1478.16,10.73,3.14,8.24,-2.01,9.96,7.75,12.42,11.44,13.38,-15.51,0.25,0.38,12.60,-3.83,,13.86
-149794,Aditya Birla Sun Life Nifty SDL Apr 2027 Index Fund,Aditya Birla Sun Life,Other,Index Funds,13.4577,2026-11-13,3271.54,0.48,1.30,2.78,5.68,7.37,,,6.38,0.55,-0.10,1.05,1.94,7.48,6.05,,4.78
-151562,Aditya Birla Sun Life Nifty SDL SEP 2027 Index Fund,Aditya Birla Sun Life,Other,Index Funds,13.0618,2026-11-13,40.59,0.35,0.89,2.79,5.35,7.48,,,7.45,0.80,-0.32,0.83,1.29,7.50,7.20,,3.67
-151300,Axis CRISIL IBX 50:50 Gilt Plus SDL June 2028 Index Fund,Axis,Other,Index Funds,13.0279,2026-11-13,336.57,0.20,0.57,2.70,4.79,7.39,,,7.24,1.19,-0.81,0.47,0.68,7.48,6.97,,3.79
-147666,Axis Nifty 100 Index Fund,Axis,Other,Index Funds,23.4148,2026-11-13,2077.25,9.80,2.09,7.76,-0.86,11.13,8.19,,12.86,13.86,-17.27,0.33,0.48,15.06,6.95,,7.06
-150871,BANDHAN CRISIL IBX 90:10 SDL PLUS GILT - APRIL 2032 INDEX FUND,Bandhan,Other,Index Funds,13.1646,2026-11-13,391.93,0.57,-1.16,2.58,3.51,7.19,,,7.18,2.37,-2.31,0.16,0.23,7.70,6.74,,3.95
-150868,BANDHAN CRISIL IBX 90:10 SDL PLUS GILT - NOV 2026 INDEX FUND,Bandhan,Other,Index Funds,13.2019,2026-11-13,89.82,0.47,1.36,2.82,5.70,7.35,,,7.22,0.50,-0.10,1.11,2.17,7.37,7.16,,3.99
-150888,BANDHAN CRISIL IBX 90:10 SDL PLUS GILT - SEPTEMBER 2027 INDEX FUND,Bandhan,Other,Index Funds,13.2590,2026-11-13,143.55,0.36,0.88,2.94,5.50,7.55,,,7.35,0.85,-0.38,0.86,1.33,7.63,7.24,,3.97
-148792,BANDHAN CRISIL IBX GILT APRIL 2028 INDEX FUND,Bandhan,Other,Index Funds,14.0699,2026-11-13,3399.65,0.26,0.71,2.42,4.80,7.29,6.09,,6.22,0.99,-0.56,0.48,0.73,7.37,5.19,,5.64
-151408,BANDHAN CRISIL IBX GILT APRIL 2032 INDEX FUND,Bandhan,Other,Index Funds,13.0513,2026-11-13,416.31,0.74,-1.42,2.19,3.15,7.40,,,7.37,2.55,-2.76,0.19,0.27,7.73,6.90,,3.74
-148789,BANDHAN CRISIL IBX GILT JUNE 2027 INDEX FUND,Bandhan,Other,Index Funds,14.0153,2026-11-13,5281.38,0.36,1.01,2.57,5.11,7.24,6.01,,6.14,0.80,-0.21,0.51,0.79,7.26,5.12,,5.64
-149832,BANDHAN NIFTY 100 INDEX FUND,Bandhan,Other,Index Funds,15.6852,2026-11-13,258.13,9.80,2.09,7.79,-0.79,11.21,,,10.70,13.87,-17.26,0.33,0.49,13.08,7.03,,4.71
-152793,BANDHAN NIFTY BANK INDEX FUND,Bandhan,Other,Index Funds,11.9979,2026-11-13,20.81,9.99,5.85,14.71,4.82,,,,8.73,,,,,,,,2.21
-152716,BANDHAN NIFTY TOTAL MARKET INDEX FUND,Bandhan,Other,Index Funds,10.4568,2026-11-13,47.80,7.16,0.29,6.68,0.35,,,,1.87,,,,,,,,2.34
-150591,BANDHAN NIFTY200 MOMENTUM 30 INDEX FUND,Bandhan,Other,Index Funds,15.7241,2026-11-13,121.48,4.66,-1.53,2.85,-3.35,8.74,,,11.25,19.49,-31.73,0.17,0.23,15.46,7.02,,4.19
-118482,BANDHAN Nifty 50 Index Fund,Bandhan,Other,Index Funds,56.3772,2026-11-13,2777.63,10.74,3.15,8.26,-2.00,9.98,7.89,12.86,11.98,13.39,-15.52,0.26,0.38,13.03,-3.16,,13.86
-152264,BANDHAN Nifty Smallcap 250 Index Fund,Bandhan,Other,Index Funds,13.0138,2026-11-13,100.16,0.66,-2.38,7.03,5.28,,,,9.47,,,,,,,,2.88
-150636,BANDHAN Nifty100 Low Volatility 30 Index Fund,Bandhan,Other,Index Funds,15.9500,2026-11-13,1614.87,7.82,-1.74,4.96,-2.76,10.49,,,12.12,12.32,-18.24,0.28,0.42,13.64,7.83,,4.10
-153506,Bajaj Finserv Nifty 50 Index Fund,Bajaj Finserv,Other,Index Funds,10.2826,2026-11-13,38.30,10.72,3.13,8.17,-2.36,,,,1.35,,,,,,,,1.49
-153479,Bajaj Finserv Nifty Next 50 Index Fund,Bajaj Finserv,Other,Index Funds,11.6240,2026-11-13,32.06,5.77,-2.39,5.64,4.24,,,,7.52,,,,,,,,1.50
-152844,Bandhan BSE Healthcare Index Fund,Bandhan,Other,Index Funds,12.2106,2026-11-13,22.09,8.42,3.58,14.78,18.85,,,,9.76,,,,,,,,2.18
-153838,Bandhan BSE India Sector Leaders Index Fund,Bandhan,Other,Index Funds,9.9781,2026-11-13,25.46,9.14,0.99,6.58,-1.95,,,,1.13,,,,,,,,1.13
-153407,Bandhan CRISIL-IBX Financial Services 3-6 Months Debt Index Fund,Bandhan,Other,Index Funds,11.2171,2026-11-13,331.74,0.45,1.57,3.62,6.88,,,,7.10,,,,,,,,1.66
-153114,Bandhan Nifty 200 Quality 30 Index Fund,Bandhan,Other,Index Funds,9.3950,2026-11-13,13.46,2.51,-5.69,-0.94,-6.65,,,,-3.49,,,,,,,,1.94
-153003,Bandhan Nifty 500 Momentum 50 Index Fund,Bandhan,Other,Index Funds,9.1846,2026-11-13,37.10,3.41,-0.38,5.77,1.08,,,,-4.05,,,,,,,,2.04
-152990,Bandhan Nifty 500 Value 50 Index Fund,Bandhan,Other,Index Funds,11.1073,2026-11-13,37.43,4.78,-3.37,-4.58,3.44,,,,5.33,,,,,,,,2.04
-152177,Bandhan Nifty Alpha 50 Index Fund,Bandhan,Other,Index Funds,14.3496,2026-11-13,599.98,-0.53,-3.70,6.37,5.21,11.96,,,12.52,22.08,-31.84,0.30,0.43,,,,3.01
-153213,Bandhan Nifty Alpha Low Volatility 30 Index Fund,Bandhan,Other,Index Funds,10.1640,2026-11-13,9.24,6.82,-3.43,4.15,-1.36,,,,1.49,,,,,,,,1.80
-152041,Bandhan Nifty IT Index Fund,Bandhan,Other,Index Funds,10.8975,2026-11-13,32.75,7.34,1.72,15.09,-12.00,3.34,,,2.38,23.74,-42.44,-0.09,-0.12,,,,3.20
-152855,Bandhan Nifty Midcap 150 Index Fund,Bandhan,Other,Index Funds,10.3320,2026-11-13,94.68,3.94,-3.60,2.82,1.75,,,,0.88,,,,,,,,2.15
-153350,Bandhan Nifty Next 50 Index Fund,Bandhan,Other,Index Funds,12.8745,2026-11-13,35.46,5.77,-2.44,5.66,4.92,,,,15.44,,,,,,,,1.70
-152329,Baroda BNP Paribas Nifty 50 Index Fund,Baroda BNP Paribas,Other,Index Funds,11.8838,2026-11-13,53.95,10.67,3.10,8.20,-2.12,,,,6.72,,,,,,,,2.79
-153000,Baroda BNP Paribas Nifty Midcap 150 Index Fund,Baroda BNP Paribas,Other,Index Funds,10.9059,2026-11-13,10.27,3.88,-3.81,2.50,1.38,,,,3.10,,,,,,,,2.02
-152931,Baroda BNP Paribas Nifty200 Momentum 30 Index Fund,Baroda BNP Paribas,Other,Index Funds,8.1322,2026-11-13,21.75,4.63,-1.61,2.78,-3.64,,,,-9.27,,,,,,,,2.08
-153219,DSP BSE SENSEX Next 30 Index Fund,DSP,Other,Index Funds,12.1855,2026-11-13,25.85,6.15,-2.92,1.68,5.22,,,,11.75,,,,,,,,1.79
-151329,DSP CRISIL-IBX 50:50 Gilt Plus SDL - April 2033 Index Fund,DSP,Other,Index Funds,13.0411,2026-11-13,279.10,0.82,-1.40,2.14,3.10,7.21,,,7.25,2.32,-2.71,0.14,0.22,7.58,6.74,,3.79
-141877,DSP Nifty 50 Equal Weight Index Fund,DSP,Other,Index Funds,28.0194,2026-11-13,2647.34,8.34,-0.07,5.37,1.89,12.91,11.39,,12.04,13.85,-18.04,0.43,0.64,17.69,-2.58,,9.06
-146376,DSP Nifty 50 Index Fund,DSP,Other,Index Funds,24.8619,2026-11-13,1104.05,10.72,3.15,8.27,-1.97,9.99,7.81,,12.52,13.38,-15.50,0.26,0.38,14.70,5.39,,7.72
-152654,DSP Nifty Bank Index Fund,DSP,Other,Index Funds,12.5891,2026-11-13,63.51,10.00,5.90,14.81,4.95,,,,9.89,,,,,,,,2.45
-153594,DSP Nifty Healthcare Index Fund,DSP,Other,Index Funds,12.2644,2026-11-13,24.41,8.64,3.89,12.75,16.66,,,,15.69,,,,,,,,1.40
-153590,DSP Nifty IT Index Fund,DSP,Other,Index Funds,8.4190,2026-11-13,103.40,7.44,2.00,15.62,-11.38,,,,-11.57,,,,,,,,1.40
-150428,DSP Nifty Midcap 150 Quality 50 Index Fund,DSP,Other,Index Funds,14.4014,2026-11-13,426.87,1.93,-5.71,1.05,-3.68,8.26,,,8.84,15.78,-21.41,0.12,0.17,13.15,6.42,,4.28
-146381,DSP Nifty Next 50 Index Fund,DSP,Other,Index Funds,28.9388,2026-11-13,1385.39,5.78,-2.34,5.78,4.97,17.11,11.12,,14.65,18.58,-26.61,0.56,0.83,18.24,10.34,,7.72
-153348,DSP Nifty Private Bank Index Fund,DSP,Other,Index Funds,12.3452,2026-11-13,103.28,9.64,9.90,16.40,6.63,,,,13.32,,,,,,,,1.69
-149970,DSP Nifty SDL Plus G-Sec Jun 2028 30:70 Index Fund,DSP,Other,Index Funds,13.4409,2026-11-13,1649.09,0.25,0.65,2.59,4.83,7.38,,,6.56,1.04,-0.65,0.52,0.77,7.85,6.67,,4.65
-151373,DSP Nifty SDL Plus G-Sec Sep 2027 50:50 Index Fund,DSP,Other,Index Funds,13.0701,2026-11-13,87.64,0.34,0.88,2.72,5.25,7.39,,,7.35,0.79,-0.28,0.72,1.11,7.43,7.12,,3.74
-152243,DSP Nifty Smallcap250 Quality 50 Index Fund,DSP,Other,Index Funds,11.2021,2026-11-13,313.90,3.39,-2.07,3.49,-3.13,,,,3.98,,,,,,,,2.88
-152814,DSP Nifty Top 10 Equal Weight Index Fund,DSP,Other,Index Funds,9.6485,2026-11-13,1127.34,12.06,6.19,10.27,-5.72,,,,-1.05,,,,,,,,2.18
-153801,DSP Nifty500 Flexicap Quality 30 Index Fund,DSP,Other,Index Funds,9.8548,2026-11-13,199.50,6.11,-1.68,6.49,-6.41,,,,-1.17,,,,,,,,1.21
-153497,Edelweiss BSE Internet Economy Index Fund,Edelweiss,Other,Index Funds,12.0908,2026-11-13,38.22,8.62,3.87,19.33,8.43,,,,13.03,,,,,,,,1.49
-150671,Edelweiss CRISIL IBX 50:50 Gilt Plus SDL April 2037 Index Fund,Edelweiss,Other,Index Funds,13.3460,2026-11-13,896.16,1.03,-1.90,2.05,2.24,6.91,,,7.30,3.03,-3.37,0.01,0.02,7.57,6.39,,4.08
-150727,Edelweiss CRISIL IBX 50:50 Gilt Plus SDL June 2027 Index Fund,Edelweiss,Other,Index Funds,13.3521,2026-11-13,93.64,0.39,1.08,2.65,5.36,7.34,,,7.36,0.70,-0.16,0.74,1.17,7.41,7.11,,4.07
-150807,Edelweiss CRISIL IBX 50:50 Gilt Plus SDL Sep 2028 Index Fund,Edelweiss,Other,Index Funds,13.3669,2026-11-13,126.54,0.31,0.61,2.70,4.66,7.45,,,7.39,1.19,-0.82,0.51,0.76,7.59,7.07,,4.00
-151365,Edelweiss CRISIL IBX 50:50 Gilt Plus SDL Short Duration Index Fund,Edelweiss,Other,Index Funds,12.9157,2026-11-13,145.01,0.44,-0.07,2.19,4.25,6.97,,,7.03,1.21,-0.88,0.16,0.24,7.32,6.85,,3.74
-153335,Edelweiss CRISIL IBX AAA Bond NBFC HFC Jun 2027 Index Fund,Edelweiss,Other,Index Funds,11.3390,2026-11-13,81.17,0.44,1.38,3.49,6.21,,,,7.51,,,,,,,,1.73
-153115,Edelweiss CRISIL IBX AAA Financial Services Bond - Jan 2028 Index Fund,Edelweiss,Other,Index Funds,11.4700,2026-11-13,103.96,0.39,1.06,3.12,5.51,,,,7.25,,,,,,,,1.95
-148555,Edelweiss MSCI India Domestic & World Healthcare 45 Index Fund,Edelweiss,Other,Index Funds,26.1562,2026-11-13,195.18,9.45,5.65,18.14,22.69,21.88,15.77,,17.30,12.99,-12.15,1.04,1.58,17.66,10.99,,6.03
-149343,Edelweiss NIFTY Large Midcap 250 Index Fund,Edelweiss,Other,Index Funds,17.6025,2026-11-13,345.33,6.91,-0.77,5.34,0.58,12.81,,,12.28,15.10,-18.87,0.41,0.59,17.37,9.93,,4.94
-149247,Edelweiss NIFTY PSU Bond Plus SDL Apr 2027 50:50 Index Fund,Edelweiss,Other,Index Funds,13.5427,2026-11-13,2120.13,0.46,1.34,3.14,5.85,7.45,6.21,,6.16,0.71,-0.23,0.92,1.53,7.43,5.59,,5.07
-149254,Edelweiss Nifty 100 Quality 30 Index Fund,Edelweiss,Other,Index Funds,14.9373,2026-11-13,120.57,5.67,-2.12,4.44,-0.70,9.67,8.52,,7.89,13.24,-21.03,0.20,0.29,13.67,6.69,,5.10
-149250,Edelweiss Nifty 50 Index Fund,Edelweiss,Other,Index Funds,14.9449,2026-11-13,292.59,10.73,3.26,8.42,-1.82,10.01,7.77,,8.02,13.36,-15.49,0.26,0.38,12.04,5.41,,5.10
-152616,Edelweiss Nifty Alpha Low Volatility 30 Index Fund,Edelweiss,Other,Index Funds,9.9921,2026-11-13,91.97,6.81,-3.45,4.10,-1.39,,,,-0.35,,,,,,,,2.48
-150902,Edelweiss Nifty Midcap150 Momentum 50 Index Fund,Edelweiss,Other,Index Funds,18.8811,2026-11-13,1762.28,4.92,-0.90,4.19,1.62,13.49,,,16.99,19.49,-25.79,0.39,0.56,21.11,11.88,,3.95
-150899,Edelweiss Nifty Next 50 Index Fund,Edelweiss,Other,Index Funds,17.0687,2026-11-13,294.24,5.80,-2.21,5.99,5.20,17.25,,,14.28,18.56,-26.43,0.57,0.84,18.51,15.29,,3.95
-150892,Edelweiss Nifty Smallcap 250 Index Fund,Edelweiss,Other,Index Funds,18.7272,2026-11-13,271.81,0.68,-2.21,7.26,5.62,12.41,,,16.93,20.33,-26.12,0.33,0.47,18.87,11.70,,3.95
-152985,Edelweiss Nifty500 Multicap Momentum Quality 50 Index Fund,Edelweiss,Other,Index Funds,9.0494,2026-11-13,607.51,2.58,-2.58,-1.69,-3.44,,,,-4.73,,,,,,,,2.02
-118581,Franklin India NSE Nifty 50 Index Fund,Franklin Templeton,Other,Index Funds,215.4704,2026-11-13,712.27,10.77,3.21,8.27,-1.96,9.97,7.78,12.43,11.63,13.35,-15.40,0.25,0.38,12.74,-3.86,,13.86
-151728,HDFC BSE 500 Index Fund,HDFC,Other,Index Funds,16.0704,2026-11-13,322.63,7.61,0.41,6.68,-0.01,11.26,,,14.27,14.41,-18.82,0.32,0.47,11.65,8.01,,3.56
-119065,HDFC BSE Sensex Index Fund,HDFC,Other,Index Funds,781.5365,2026-11-13,8484.10,11.79,4.54,10.17,-2.74,8.85,7.11,12.75,11.94,13.46,-16.11,0.18,0.27,12.71,-1.89,,13.86
-153517,HDFC CRISIL-IBX Financial Services 3-6 Months Debt Index Fund,HDFC,Other,Index Funds,11.0915,2026-11-13,2212.63,0.46,1.55,3.62,7.04,,,,7.02,,,,,,,,1.52
-149870,HDFC NIFTY 100 Equal Weight Index Fund,HDFC,Other,Index Funds,17.7610,2026-11-13,526.30,6.84,-1.57,5.42,3.15,14.72,,,12.97,15.64,-21.60,0.50,0.75,16.90,11.92,,4.72
-149868,HDFC NIFTY 100 Index Fund,HDFC,Other,Index Funds,15.5888,2026-11-13,469.19,9.78,2.05,7.71,-0.95,10.98,,,9.89,13.85,-17.34,0.32,0.47,12.84,6.82,,4.72
-152889,HDFC NIFTY LargeMidcap 250 Index Fund,HDFC,Other,Index Funds,10.3137,2026-11-13,459.22,6.90,-0.72,5.37,0.64,,,,1.49,,,,,,,,2.09
-151724,HDFC NIFTY Midcap 150 Index Fund,HDFC,Other,Index Funds,19.3947,2026-11-13,700.43,3.97,-3.57,2.90,1.86,14.19,,,20.47,17.21,-21.08,0.44,0.64,18.19,12.60,,3.56
-149288,HDFC NIFTY Next 50 index Fund,HDFC,Other,Index Funds,17.2572,2026-11-13,2656.92,5.77,-2.42,5.68,4.85,16.90,10.83,,11.49,18.60,-26.67,0.55,0.81,17.75,12.38,,5.03
-152521,HDFC NIFTY Realty Index Fund,HDFC,Other,Index Funds,10.3432,2026-11-13,96.61,10.93,2.36,20.67,-2.27,,,,1.31,,,,,,,,2.63
-151570,HDFC NIFTY SDL Plus G-Sec Jun 2027 40:60 Index Fund,HDFC,Other,Index Funds,12.8988,2026-11-13,48.65,0.39,1.08,2.67,5.36,7.34,,,7.24,0.70,-0.17,0.74,1.17,7.36,7.11,,3.64
-151727,HDFC NIFTY Smallcap 250 Index Fund,HDFC,Other,Index Funds,19.5415,2026-11-13,752.22,0.67,-2.42,6.98,5.20,12.04,,,20.73,20.34,-26.19,0.31,0.44,16.95,11.31,,3.56
-152713,HDFC NIFTY100 Low Volatility 30 Index Fund,HDFC,Other,Index Funds,10.5076,2026-11-13,219.29,7.82,-1.64,5.04,-2.70,,,,2.09,,,,,,,,2.34
-152430,HDFC NIFTY200 Momentum 30 Index Fund,HDFC,Other,Index Funds,10.3160,2026-11-13,602.33,4.67,-1.52,2.89,-3.30,,,,1.16,,,,,,,,2.71
-149107,HDFC NIFTY50 Equal Weight Index Fund,HDFC,Other,Index Funds,18.9918,2026-11-13,1790.83,8.35,-0.09,5.25,1.76,12.85,11.32,,13.06,13.86,-18.03,0.43,0.64,16.47,9.40,,5.23
-152778,HDFC NIFTY500 Multicap 50:25:25 Index Fund,HDFC,Other,Index Funds,10.2734,2026-11-13,509.38,6.05,-0.43,6.40,1.49,,,,1.24,,,,,,,,2.22
-119063,HDFC Nifty 50 Index Fund,HDFC,Other,Index Funds,246.1960,2026-11-13,23710.13,10.72,3.10,8.17,-2.12,9.90,7.76,12.72,11.96,13.39,-15.52,0.25,0.37,13.06,-3.48,,13.86
-151495,HDFC Nifty G-Sec Apr 2029 Index Fund,HDFC,Other,Index Funds,13.0570,2026-11-13,155.94,0.39,0.01,2.25,4.03,7.40,,,7.53,1.54,-0.94,0.35,0.51,7.60,7.09,,3.68
-150845,HDFC Nifty G-Sec Dec 2026 Index Fund,HDFC,Other,Index Funds,13.1677,2026-11-13,935.48,0.45,1.29,2.71,5.48,7.10,,,7.09,0.60,-0.14,0.49,0.81,7.18,6.90,,4.01
-150847,HDFC Nifty G-Sec July 2031 Index Fund,HDFC,Other,Index Funds,13.3012,2026-11-13,635.98,0.83,-1.27,2.44,3.31,7.43,,,7.36,2.51,-2.62,0.20,0.29,7.89,6.86,,4.01
-151181,HDFC Nifty G-Sec Jun 2027 Index Fund,HDFC,Other,Index Funds,13.1101,2026-11-13,574.46,0.34,0.96,2.54,5.06,7.23,,,7.13,0.83,-0.23,0.49,0.75,7.35,7.01,,3.93
-151489,HDFC Nifty G-Sec Jun 2036 Index Fund,HDFC,Other,Index Funds,13.0233,2026-11-13,850.16,0.99,-1.85,1.90,2.75,7.26,,,7.46,3.30,-3.51,0.10,0.14,7.52,6.81,,3.67
-151183,HDFC Nifty G-Sec Sep 2032 Index Fund,HDFC,Other,Index Funds,13.1410,2026-11-13,626.87,0.66,-1.73,1.80,2.84,7.29,,,7.20,2.63,-3.00,0.14,0.21,7.80,6.88,,3.93
-153097,HDFC Nifty India Digital Index Fund,HDFC,Other,Index Funds,8.9022,2026-11-13,152.06,5.29,-0.25,16.59,-5.15,,,,-5.87,,,,,,,,1.92
-153405,HDFC Nifty Top 20 Equal Weight Index Fund,HDFC,Other,Index Funds,10.6951,2026-11-13,91.16,10.71,3.01,11.03,-2.41,,,,4.21,,,,,,,,1.64
-153264,HDFC Nifty100 Quality 30 Index Fund,HDFC,Other,Index Funds,10.9964,2026-11-13,141.30,5.69,-2.09,4.40,-0.79,,,,5.65,,,,,,,,1.73
-153411,ICICI Prudential CRISIL-IBX Financial Services 3-6 Months Debt Index Fund,ICICI Prudential,Other,Index Funds,11.1983,2026-11-13,512.69,0.43,1.50,3.52,6.85,,,,7.08,,,,,,,,1.65
-149219,ICICI Prudential NASDAQ 100 Index Fund,ICICI Prudential,Other,Index Funds,22.8772,2026-11-13,3571.60,-9.61,-8.36,-6.41,18.55,26.82,16.87,,17.58,19.85,-23.84,0.93,1.41,28.84,10.70,,5.07
-150452,ICICI Prudential Nifty 200 Momentum 30 Index Fund,ICICI Prudential,Other,Index Funds,16.7577,2026-11-13,555.29,4.66,-1.50,2.94,-3.19,8.91,,,12.59,19.47,-31.82,0.17,0.25,15.62,7.19,,4.27
-153161,ICICI Prudential Nifty 500 Index Fund,ICICI Prudential,Other,Index Funds,10.7253,2026-11-13,100.16,7.50,0.27,6.44,-0.09,,,,3.59,,,,,,,,1.89
-150643,ICICI Prudential Nifty Auto Index Fund,ICICI Prudential,Other,Index Funds,22.5838,2026-11-13,241.22,9.97,-5.04,8.62,2.73,19.99,,,21.84,21.25,-28.33,0.61,0.91,25.50,15.77,,4.09
-149858,ICICI Prudential Nifty Bank Index Fund,ICICI Prudential,Other,Index Funds,17.6229,2026-11-13,778.25,9.99,5.87,14.77,4.98,12.21,,,13.10,15.61,-18.31,0.41,0.63,11.89,7.59,,4.70
-150733,ICICI Prudential Nifty G-Sec Dec 2030 Index Fund,ICICI Prudential,Other,Index Funds,13.3935,2026-11-13,814.82,0.62,-0.88,1.79,3.38,7.26,,,7.40,2.17,-1.85,0.19,0.27,7.80,7.03,,4.09
-150468,ICICI Prudential Nifty IT Index Fund,ICICI Prudential,Other,Index Funds,11.3800,2026-11-13,442.82,7.39,1.78,15.28,-11.74,3.05,,,3.10,23.58,-42.21,-0.10,-0.14,3.60,-3.09,,4.24
-152482,ICICI Prudential Nifty LargeMidcap 250 Index Fund,ICICI Prudential,Other,Index Funds,12.6681,2026-11-13,295.34,6.90,-0.74,5.33,0.60,,,,8.70,,,,,,,,2.67
-149389,ICICI Prudential Nifty Midcap 150 Index Fund,ICICI Prudential,Other,Index Funds,20.3165,2026-11-13,1280.52,3.98,-3.55,2.93,1.98,14.25,,,15.43,17.22,-21.09,0.45,0.65,21.60,12.66,,4.89
-120684,ICICI Prudential Nifty Next 50 Index Fund,ICICI Prudential,Other,Index Funds,67.8332,2026-11-13,9921.25,5.78,-2.44,5.57,4.77,16.93,10.93,13.18,14.00,18.60,-26.68,0.55,0.81,16.52,-6.65,,13.86
-149210,ICICI Prudential Nifty PSU Bond Plus SDL Sep 2027 40:60 Index Fund,ICICI Prudential,Other,Index Funds,13.4870,2026-11-13,8061.28,0.34,0.95,3.01,5.42,7.44,6.11,,6.01,0.83,-0.25,0.77,1.25,7.49,5.43,,5.12
-150930,ICICI Prudential Nifty Pharma Index Fund,ICICI Prudential,Other,Index Funds,22.0903,2026-11-13,150.77,9.42,6.85,19.59,25.92,22.66,,,22.64,14.87,-16.59,0.97,1.52,21.50,18.98,,3.91
-153679,ICICI Prudential Nifty Private Bank Index Fund,ICICI Prudential,Other,Index Funds,10.7655,2026-11-13,49.48,9.62,9.81,16.31,6.65,,,,5.69,,,,,,,,1.32
-150729,ICICI Prudential Nifty SDL Dec 2028 Index Fund,ICICI Prudential,Other,Index Funds,13.4701,2026-11-13,879.79,0.29,0.31,2.87,4.40,7.48,,,7.57,1.58,-1.16,0.40,0.59,7.67,7.01,,4.08
-149999,ICICI Prudential Nifty SDL Sep 2027 Index Fund,ICICI Prudential,Other,Index Funds,13.3696,2026-11-13,1419.58,0.33,0.83,2.91,5.44,7.52,,,6.47,0.86,-0.39,0.82,1.26,7.74,6.34,,4.64
-149283,ICICI Prudential Nifty Smallcap 250 Index Fund,ICICI Prudential,Other,Index Funds,18.3993,2026-11-13,774.95,0.66,-2.45,6.93,5.14,12.01,12.94,,12.88,20.34,-26.18,0.31,0.44,19.74,11.29,,5.03
-153614,ICICI Prudential Nifty Top 15 Equal Weight Index Fund,ICICI Prudential,Other,Index Funds,9.9484,2026-11-13,30.34,11.80,3.60,9.41,-4.34,,,,-0.53,,,,,,,,1.38
-153546,ICICI Prudential Nifty200 Quality 30 Index Fund,ICICI Prudential,Other,Index Funds,9.6135,2026-11-13,25.58,2.52,-5.70,-0.99,-6.67,,,,-3.09,,,,,,,,1.43
-152936,ICICI Prudential Nifty200 Value 30 Index Fund,ICICI Prudential,Other,Index Funds,11.0118,2026-11-13,195.12,6.89,-1.78,-3.23,5.24,,,,5.51,,,,,,,,2.06
-150639,ICICI Prudential Nifty50 Equal Weight Index Fund-,ICICI Prudential,Other,Index Funds,17.4816,2026-11-13,263.91,8.36,-0.09,5.28,1.80,12.80,,,14.02,13.85,-18.09,0.42,0.63,16.38,9.34,,4.11
-152365,ICICI Prudential Nifty50 Value 20 Index Fund,ICICI Prudential,Other,Index Funds,10.5638,2026-11-13,99.38,9.91,2.91,4.88,-4.47,,,,2.02,,,,,,,,2.77
-153660,KOTAK NIFTY 200 QUALITY 30 INDEX FUND,Kotak Mahindra,Other,Index Funds,9.6550,2026-11-13,16.92,2.56,-5.62,-0.76,-6.43,,,,-2.59,,,,,,,,1.32
-152039,Kotak BSE Housing Index Fund,Kotak Mahindra,Other,Index Funds,12.9000,2026-11-13,12.89,5.03,-4.39,3.38,-6.74,7.37,,,7.30,19.34,-26.59,0.09,0.12,,,,3.19
-153286,Kotak BSE Sensex Index Fund,Kotak Mahindra,Other,Index Funds,10.9100,2026-11-13,23.97,11.77,4.51,10.14,-2.80,,,,5.41,,,,,,,,1.73
-153313,Kotak CRISIL- IBX AAA Bond Financial Services Index - Dec 2026 Fund,Kotak Mahindra,Other,Index Funds,11.3296,2026-11-13,112.62,0.53,1.68,3.65,6.62,,,,7.42,,,,,,,,1.73
-152869,Kotak CRISIL-IBX AAA Financial Services Index-Sep 2027 Fund,Kotak Mahindra,Other,Index Funds,11.6958,2026-11-13,494.17,0.40,1.25,3.28,5.78,,,,7.43,,,,,,,,2.14
-153372,Kotak CRISIL-IBX Financial Services 3-6 Months Debt Index Fund,Kotak Mahindra,Other,Index Funds,11.2011,2026-11-13,290.81,0.43,1.46,3.42,6.66,,,,6.94,,,,,,,,1.68
-153875,Kotak CRISIL-IBX Financial Services 9 to 12 Months Debt Index Fund,Kotak Mahindra,Other,Index Funds,10.7082,2026-11-13,1001.22,0.38,1.30,3.41,6.08,,,,6.16,,,,,,,,1.12
-152663,Kotak NIFTY 100 Low Volatility 30 Index Fund,Kotak Mahindra,Other,Index Funds,10.9634,2026-11-13,112.09,7.83,-1.67,5.20,-2.59,,,,3.63,,,,,,,,2.42
-153146,Kotak Nifty 100 Equal Weight Index Fund,Kotak Mahindra,Other,Index Funds,11.2380,2026-11-13,47.46,6.88,-1.44,5.68,3.44,,,,6.57,,,,,,,,1.87
-151781,Kotak Nifty 200 Momentum 30 Index Fund,Kotak Mahindra,Other,Index Funds,14.7160,2026-11-13,587.48,4.70,-1.45,3.03,-3.05,9.23,,,11.63,19.45,-31.60,0.19,0.27,,,,3.40
-153150,Kotak Nifty 50 Equal Weight Index Fund,Kotak Mahindra,Other,Index Funds,11.4820,2026-11-13,67.14,8.36,0.25,5.76,2.15,,,,7.79,,,,,,,,1.87
-148978,Kotak Nifty 50 Index Fund,Kotak Mahindra,Other,Index Funds,16.7360,2026-11-13,1155.95,10.73,3.15,8.31,-1.94,9.90,7.77,,9.99,13.38,-15.65,0.25,0.37,12.47,5.31,,5.39
-153680,Kotak Nifty AAA Bond Financial Services Mar 2028 Index Fund,Kotak Mahindra,Other,Index Funds,10.7500,2026-11-13,243.97,0.33,0.88,3.03,5.10,,,,5.51,,,,,,,,1.33
-153781,Kotak Nifty Alpha 50 Index Fund,Kotak Mahindra,Other,Index Funds,10.5700,2026-11-13,45.79,-0.53,-3.77,6.18,5.05,,,,4.58,,,,,,,,1.23
-153353,Kotak Nifty Commodities Index Fund,Kotak Mahindra,Other,Index Funds,12.0520,2026-11-13,295.38,7.27,-2.58,-5.62,3.20,,,,10.56,,,,,,,,1.66
-151911,Kotak Nifty Financial Services Ex-Bank Index Fund,Kotak Mahindra,Other,Index Funds,16.9510,2026-11-13,97.69,7.70,-1.09,5.61,2.60,16.00,,,17.75,19.79,-17.06,0.49,0.78,,,,3.23
-152098,Kotak Nifty G-Sec July 2033 Index Fund,Kotak Mahindra,Other,Index Funds,12.4128,2026-11-13,21.60,0.98,-1.56,1.88,2.95,7.15,,,7.22,2.41,-2.90,0.11,0.16,,,,3.09
-152870,Kotak Nifty India Tourism Index Fund,Kotak Mahindra,Other,Index Funds,9.0080,2026-11-13,38.13,11.71,3.41,16.22,-5.29,,,,-3.64,,,,,,,,2.12
-153401,Kotak Nifty Midcap 150 Index Fund,Kotak Mahindra,Other,Index Funds,11.6780,2026-11-13,44.00,3.99,-3.54,2.97,1.88,,,,10.43,,,,,,,,1.63
-152916,Kotak Nifty Midcap 150 Momentum 50 Index Fund,Kotak Mahindra,Other,Index Funds,9.6680,2026-11-13,450.77,4.94,-0.88,3.97,1.61,,,,-2.26,,,,,,,,2.09
-152767,Kotak Nifty Midcap 50 Index Fund,Kotak Mahindra,Other,Index Funds,11.0080,2026-11-13,81.61,5.39,-2.78,4.43,3.64,,,,3.81,,,,,,,,2.23
-148745,Kotak Nifty Next 50 Index Fund,Kotak Mahindra,Other,Index Funds,21.4003,2026-11-13,1267.14,5.80,-2.38,5.76,5.05,17.21,11.23,,14.99,18.59,-26.34,0.57,0.83,18.86,12.85,,5.66
-149855,Kotak Nifty SDL Apr 2027 Top 12 Equal Weight Index Fund,Kotak Mahindra,Other,Index Funds,13.3734,2026-11-13,6417.01,0.51,1.28,2.81,5.86,7.52,,,6.34,0.66,-0.15,1.07,1.87,7.56,6.13,,4.73
-149865,Kotak Nifty SDL Apr 2032 Top 12 Equal Weight Index Fund,Kotak Mahindra,Other,Index Funds,13.4368,2026-11-13,3122.68,0.54,-1.08,2.65,3.47,7.07,,,6.39,2.48,-2.53,0.11,0.16,7.90,6.64,,4.73
-151420,Kotak Nifty SDL Jul 2033 Index Fund,Kotak Mahindra,Other,Index Funds,12.9430,2026-11-13,181.82,0.81,-1.22,2.54,3.21,7.04,,,7.13,2.55,-2.61,0.08,0.12,7.21,6.47,,3.72
-150725,Kotak Nifty SDL Plus AAA PSU Bond Jul 2028 60 - 40 Index Fund,Kotak Mahindra,Other,Index Funds,13.3558,2026-11-13,504.41,0.21,0.61,2.85,4.80,7.39,,,7.33,1.20,-0.63,0.48,0.69,7.53,6.94,,4.07
-153223,Kotak Nifty SmallCap 250 Index Fund,Kotak Mahindra,Other,Index Funds,11.6540,2026-11-13,77.77,0.67,-2.39,6.99,5.29,,,,8.31,,,,,,,,1.79
-151649,Kotak Nifty Smallcap 50 Index Fund,Kotak Mahindra,Other,Index Funds,23.2690,2026-11-13,243.86,2.88,0.05,12.78,12.75,16.40,,,25.92,21.39,-25.01,0.48,0.69,22.47,15.59,,3.57
-153461,Kotak Nifty Top 10 Equal Weight Index Fund,Kotak Mahindra,Other,Index Funds,9.7720,2026-11-13,39.10,12.10,6.18,10.26,-5.80,,,,-1.81,,,,,,,,1.53
-120308,LIC MF BSE Sensex Index Fund,LIC,Other,Index Funds,164.6444,2026-11-13,91.05,11.74,4.47,9.96,-3.02,8.57,6.90,12.39,11.35,13.43,-16.11,0.16,0.24,12.22,-2.14,,13.86
-120307,LIC MF Nifty 50 Index Fund,LIC,Other,Index Funds,150.7329,2026-11-13,364.51,10.69,3.07,8.05,-2.40,9.74,7.65,12.36,11.49,13.37,-15.50,0.24,0.36,12.61,-3.91,,13.86
-151937,LIC MF Nifty Next 50 Index Fund,LIC,Other,Index Funds,59.9094,2026-11-13,111.26,5.75,-2.41,6.05,5.25,17.18,,,16.13,18.57,-26.43,0.56,0.83,,,,3.29
-153596,Motilal Oswal BSE 1000 Index Fund,Motilal Oswal,Other,Index Funds,10.2988,2026-11-13,62.39,7.02,0.28,7.00,0.53,,,,1.13,,,,,,,,1.37
-149800,Motilal Oswal Nifty 200 Momentum 30 Index Fund,Motilal Oswal,Other,Index Funds,15.3598,2026-11-13,942.44,4.67,-1.51,2.89,-3.47,9.01,,,10.09,19.48,-31.65,0.18,0.25,16.04,7.31,,4.74
-147794,Motilal Oswal Nifty 50 Index Fund,Motilal Oswal,Other,Index Funds,21.9689,2026-11-13,889.80,10.73,3.13,8.25,-1.97,10.01,7.85,,12.31,13.39,-15.51,0.26,0.38,14.56,5.41,,6.88
-147625,Motilal Oswal Nifty 500 Index Fund,Motilal Oswal,Other,Index Funds,27.7772,2026-11-13,3114.02,7.51,0.43,6.74,0.44,11.86,9.55,,15.16,14.54,-18.62,0.36,0.52,17.22,8.66,,7.17
-152875,Motilal Oswal Nifty 500 Momentum 50 Index Fund,Motilal Oswal,Other,Index Funds,8.5156,2026-11-13,803.89,3.43,-0.32,5.81,0.95,,,,-7.12,,,,,,,,2.12
-147620,Motilal Oswal Nifty Bank Index Fund,Motilal Oswal,Other,Index Funds,22.7083,2026-11-13,556.93,9.99,5.85,14.75,4.89,12.18,10.10,,11.89,15.62,-18.35,0.41,0.62,12.62,7.60,,7.17
-153138,Motilal Oswal Nifty Capital Market Index Fund,Motilal Oswal,Other,Index Funds,14.0424,2026-11-13,648.34,11.71,10.35,9.87,25.50,,,,21.92,,,,,,,,1.90
-152712,Motilal Oswal Nifty India Defence Index Fund,Motilal Oswal,Other,Index Funds,11.8988,2026-11-13,5383.82,-1.77,-7.47,-0.20,11.05,,,,4.46,,,,,,,,2.35
-151814,Motilal Oswal Nifty Microcap 250 Index Fund,Motilal Oswal,Other,Index Funds,18.7368,2026-11-13,2452.33,-0.11,-1.91,11.07,8.39,13.62,,,20.17,22.14,-29.39,0.36,0.53,,,,3.34
-153027,Motilal Oswal Nifty MidSmall Financial Services Index Fund,Motilal Oswal,Other,Index Funds,14.6172,2026-11-13,118.47,4.72,-2.15,3.76,9.96,,,,20.09,,,,,,,,1.97
-153023,Motilal Oswal Nifty MidSmall Healthcare Index Fund,Motilal Oswal,Other,Index Funds,13.0807,2026-11-13,48.15,8.39,3.30,14.55,22.09,,,,13.64,,,,,,,,1.97
-153025,Motilal Oswal Nifty MidSmall India Consumption Index Fund,Motilal Oswal,Other,Index Funds,9.6635,2026-11-13,24.50,5.31,-3.51,5.05,-5.52,,,,-3.08,,,,,,,,1.97
-147622,Motilal Oswal Nifty Midcap 150 Index Fund,Motilal Oswal,Other,Index Funds,41.2111,2026-11-13,3995.19,3.99,-3.53,2.99,2.10,14.52,14.21,,21.54,17.23,-21.02,0.46,0.67,24.31,12.94,,7.17
-147796,Motilal Oswal Nifty Next 50 Index Fund,Motilal Oswal,Other,Index Funds,26.2195,2026-11-13,510.58,5.77,-2.41,5.69,4.88,17.14,11.08,,15.11,18.60,-26.40,0.56,0.83,18.64,10.42,,6.88
-147623,Motilal Oswal Nifty Smallcap 250 Index Fund,Motilal Oswal,Other,Index Funds,40.2321,2026-11-13,950.68,0.68,-2.27,7.16,5.40,12.32,13.11,,21.07,20.35,-26.16,0.32,0.46,24.18,11.59,,7.17
-148381,Motilal Oswal S&P 500 Index Fund,Motilal Oswal,Other,Index Funds,32.8945,2026-11-13,4580.59,-4.17,-4.20,0.15,19.52,24.95,15.98,,20.25,14.13,-19.37,1.14,1.70,15.95,8.60,,6.54
-152062,NAVI BSE SENSEX INDEX FUND,Navi,Other,Index Funds,12.7233,2026-11-13,19.05,11.72,4.46,9.99,-2.73,8.80,,,7.84,13.42,-16.11,0.18,0.26,,,,3.19
-149039,Navi Nifty 50 Index Fund,Navi,Other,Index Funds,16.6272,2026-11-13,4095.04,10.74,3.18,8.30,-1.93,10.02,7.84,,10.04,13.39,-15.49,0.26,0.38,12.48,5.42,,5.33
-152751,Navi Nifty 500 Multicap 50:25:25 Index Fund,Navi,Other,Index Funds,10.3382,2026-11-13,27.49,6.03,-0.44,6.26,1.53,,,,1.53,,,,,,,,2.28
-149804,Navi Nifty Bank Index Fund,Navi,Other,Index Funds,16.1101,2026-11-13,639.90,9.99,5.90,14.82,4.93,12.22,,,10.54,15.64,-18.39,0.42,0.63,11.82,7.56,,4.77
-150515,Navi Nifty India Manufacturing Index Fund,Navi,Other,Index Funds,19.5417,2026-11-13,83.35,5.93,-3.48,2.94,4.68,18.27,,,17.45,16.68,-23.03,0.65,0.97,21.78,15.50,,4.21
-149447,Navi Nifty Next 50 Index Fund,Navi,Other,Index Funds,17.4036,2026-11-13,1309.49,5.79,-2.33,5.80,4.96,17.09,,,12.24,18.60,-26.29,0.56,0.82,17.91,12.59,,4.81
-153362,Navi Nifty Smallcap250 Momentum Quality 100 Index Fund,Navi,Other,Index Funds,12.2733,2026-11-13,41.11,1.57,0.35,9.34,7.50,,,,13.54,,,,,,,,1.67
-152535,Navi NiftyIT Index Fund,Navi,Other,Index Funds,9.5572,2026-11-13,22.02,7.32,1.82,15.03,-11.84,,,,-1.61,,,,,,,,2.63
-153567,Nippon India BSE Sensex Next 30 Index Fund,Nippon India,Other,Index Funds,10.9503,2026-11-13,87.59,6.16,-2.95,1.54,5.13,,,,7.67,,,,,,,,1.42
-152992,Nippon India CRISIL - IBX AAA Financial Services - Dec 2026 Index Fund,Nippon India,Other,Index Funds,11.6064,2026-11-13,124.65,0.52,1.66,3.65,6.67,,,,7.49,,,,,,,,2.04
-152996,Nippon India CRISIL - IBX AAA Financial Services - Jan 2028 Index Fund,Nippon India,Other,Index Funds,11.5390,2026-11-13,82.46,0.37,1.04,3.14,5.46,,,,7.18,,,,,,,,2.04
-118791,Nippon India Index Fund - BSE Sensex Plan,Nippon India,Other,Index Funds,44.4351,2026-11-13,925.19,11.79,4.55,10.18,-2.71,8.86,7.13,12.76,11.64,13.45,-16.08,0.18,0.27,12.47,-1.60,,13.86
-118741,Nippon India Index Fund - Nifty 50 Plan,Nippon India,Other,Index Funds,46.4833,2026-11-13,3798.67,10.73,3.14,8.28,-1.95,10.01,7.82,12.72,11.79,13.38,-15.46,0.26,0.38,12.82,-3.43,,13.86
-148721,Nippon India Nifty 50 Value 20 Index Fund,Nippon India,Other,Index Funds,18.4357,2026-11-13,812.45,9.90,2.90,4.81,-4.55,7.72,7.91,,11.52,13.33,-22.77,0.07,0.10,14.71,3.37,,5.72
-152842,Nippon India Nifty 500 Equal Weight Index Fund,Nippon India,Other,Index Funds,9.6646,2026-11-13,513.32,2.48,-3.82,3.41,1.01,,,,-1.26,,,,,,,,2.17
-153474,Nippon India Nifty 500 Low Volatility 50 Index Fund,Nippon India,Other,Index Funds,10.8676,2026-11-13,27.63,7.41,-0.89,3.11,-1.07,,,,6.42,,,,,,,,1.52
-152881,Nippon India Nifty 500 Momentum 50 Index Fund,Nippon India,Other,Index Funds,8.6079,2026-11-13,1281.03,3.44,-0.29,6.47,1.90,,,,-7.00,,,,,,,,2.12
-153470,Nippon India Nifty 500 Quality 50 Index Fund,Nippon India,Other,Index Funds,10.7774,2026-11-13,42.84,3.42,-4.35,0.08,-0.92,,,,5.94,,,,,,,,1.52
-150012,Nippon India Nifty AAA CPSE Bond Plus SDL - Apr 2027 Maturity 60:40 Index Fund,Nippon India,Other,Index Funds,13.3061,2026-11-13,2914.65,0.49,1.45,3.26,6.13,7.47,,,6.32,0.63,-0.18,1.06,1.85,7.46,6.02,,4.63
-150487,Nippon India Nifty Alpha Low Volatility 30 Index Fund,Nippon India,Other,Index Funds,16.0060,2026-11-13,1278.02,6.81,-3.43,4.15,-1.35,9.25,,,12.06,13.85,-24.91,0.20,0.28,14.65,7.73,,4.23
-153064,Nippon India Nifty Auto Index Fund,Nippon India,Other,Index Funds,11.9867,2026-11-13,48.60,9.95,-5.06,8.72,2.84,,,,9.43,,,,,,,,1.93
-152389,Nippon India Nifty Bank Index Fund,Nippon India,Other,Index Funds,13.1771,2026-11-13,226.95,9.97,5.80,14.68,4.83,,,,11.02,,,,,,,,2.71
-150920,Nippon India Nifty G-Sec Jun 2036 Maturity Index Fund,Nippon India,Other,Index Funds,13.1285,2026-11-13,730.57,0.98,-1.85,1.89,2.67,7.26,,,7.27,3.22,-3.47,0.10,0.15,7.76,6.81,,3.90
-151440,Nippon India Nifty G-Sec Oct 2028 Maturity Index Fund,Nippon India,Other,Index Funds,13.0244,2026-11-13,127.05,0.28,0.24,2.32,4.24,7.26,,,7.42,1.28,-1.12,0.34,0.49,7.43,6.99,,3.69
-150906,Nippon India Nifty G-Sec Sep 2027 Maturity Index Fund,Nippon India,Other,Index Funds,13.0750,2026-11-13,354.38,0.33,0.93,2.51,5.03,7.22,,,7.11,0.85,-0.26,0.47,0.71,7.36,7.00,,3.93
-152392,Nippon India Nifty IT Index Fund,Nippon India,Other,Index Funds,8.7874,2026-11-13,247.01,7.35,1.77,15.23,-11.72,,,,-4.14,,,,,,,,2.71
-153806,Nippon India Nifty India Manufacturing Index Fund,Nippon India,Other,Index Funds,11.2179,2026-11-13,21.52,5.97,-3.40,3.08,4.80,,,,10.61,,,,,,,,1.21
-148726,Nippon India Nifty Midcap 150 Index Fund,Nippon India,Other,Index Funds,26.3118,2026-11-13,2751.71,4.01,-3.53,2.99,2.05,14.31,14.00,,18.48,17.19,-21.07,0.45,0.65,22.78,12.73,,5.72
-153060,Nippon India Nifty Realty Index Fund,Nippon India,Other,Index Funds,8.5433,2026-11-13,57.99,10.99,2.49,20.76,-2.16,,,,-7.82,,,,,,,,1.93
-150824,Nippon India Nifty SDL Plus G-Sec - Jun 2028 Maturity 70:30 Index Fund,Nippon India,Other,Index Funds,13.2301,2026-11-13,332.90,0.23,0.67,2.79,4.92,7.46,,,7.32,1.12,-0.73,0.55,0.81,7.56,7.04,,3.97
-151390,Nippon India Nifty SDL Plus G-Sec - Jun 2029 Maturity 70:30 Index Fund,Nippon India,Other,Index Funds,13.0458,2026-11-13,321.48,0.56,0.28,2.78,4.40,7.49,,,7.42,1.46,-0.94,0.46,0.67,7.61,7.06,,3.73
-148519,Nippon India Nifty Smallcap 250 Index Fund,Nippon India,Other,Index Funds,35.5907,2026-11-13,3463.17,0.69,-2.31,7.12,5.39,11.92,12.83,,23.20,20.36,-26.15,0.31,0.43,22.04,11.18,,6.07
-153432,SBI BSE PSU BANK INDEX FUND,SBI,Other,Index Funds,14.9630,2026-11-13,347.72,13.97,6.14,15.73,11.58,,,,27.50,,,,,,,,1.63
-151769,SBI BSE Sensex Index Fund,SBI,Other,Index Funds,13.4773,2026-11-13,302.37,11.79,4.55,10.18,-2.76,8.80,,,8.93,13.45,-16.09,0.18,0.26,,,,3.46
-150706,SBI CRISIL IBX Gilt Index - April 2029 Fund,SBI,Other,Index Funds,13.4193,2026-11-13,1949.31,0.44,0.00,2.23,4.02,7.38,,,7.56,1.57,-1.06,0.34,0.48,7.71,7.09,,4.09
-150681,SBI CRISIL IBX Gilt Index - June 2036 Fund,SBI,Other,Index Funds,13.4217,2026-11-13,2622.56,1.00,-1.77,1.96,2.78,7.20,,,7.53,3.28,-3.46,0.08,0.12,7.80,6.72,,4.09
-150711,SBI CRISIL IBX SDL Index - September 2027 Fund,SBI,Other,Index Funds,13.3628,2026-11-13,1771.03,0.32,0.82,2.82,5.37,7.48,,,7.51,0.85,-0.29,0.78,1.23,7.59,7.19,,4.09
-119827,SBI NIFTY INDEX FUND,SBI,Other,Index Funds,235.3616,2026-11-13,13870.55,10.71,3.11,8.20,-2.10,9.91,7.77,12.64,11.61,13.39,-15.53,0.25,0.37,12.78,-3.73,,13.86
-152908,SBI Nifty 500 Index Fund,SBI,Other,Index Funds,9.9060,2026-11-13,775.31,7.50,0.34,6.58,0.14,,,,0.97,,,,,,,,2.11
-153250,SBI Nifty Bank Index Fund,SBI,Other,Index Funds,12.2512,2026-11-13,204.89,10.00,5.86,14.74,5.06,,,,13.46,,,,,,,,1.75
-153320,SBI Nifty IT Index Fund,SBI,Other,Index Funds,8.1068,2026-11-13,126.38,7.36,1.73,15.21,-11.81,,,,-9.49,,,,,,,,1.71
-153015,SBI Nifty India Consumption Index Fund,SBI,Other,Index Funds,10.4546,2026-11-13,261.33,9.33,-1.46,7.08,-2.85,,,,2.14,,,,,,,,2.02
-150673,SBI Nifty Midcap 150 Index Fund,SBI,Other,Index Funds,19.7941,2026-11-13,1239.21,3.99,-3.56,2.97,1.99,14.27,,,18.00,17.23,-21.10,0.45,0.65,21.62,12.68,,4.09
-148945,SBI Nifty Next 50 Index Fund,SBI,Other,Index Funds,20.2480,2026-11-13,2302.35,5.79,-2.42,5.74,4.93,17.13,11.05,,13.66,18.61,-26.50,0.56,0.83,18.40,12.64,,5.47
-150677,SBI Nifty Smallcap 250 Index Fund,SBI,Other,Index Funds,19.5553,2026-11-13,1759.43,0.67,-2.41,6.98,5.17,12.05,,,17.65,20.37,-26.19,0.31,0.44,18.97,11.32,,4.09
-153718,SBI Nifty100 Low Volatility 30 Index Fund,SBI,Other,Index Funds,10.2630,2026-11-13,57.22,7.81,-1.70,4.98,-2.76,,,,1.40,,,,,,,,1.29
-153662,SBI Nifty200 Momentum 30 Index Fund,SBI,Other,Index Funds,9.7697,2026-11-13,117.14,4.67,-1.54,2.83,-3.34,,,,-0.96,,,,,,,,1.33
-153555,SBI Nifty200 Quality 30 Index Fund,SBI,Other,Index Funds,9.7669,2026-11-13,323.44,2.52,-5.68,-0.94,-6.63,,,,-3.02,,,,,,,,1.43
-152370,SBI Nifty50 Equal Weight Index Fund,SBI,Other,Index Funds,12.5031,2026-11-13,1058.57,8.35,-0.12,5.22,1.72,,,,7.69,,,,,,,,2.77
-149483,Sundaram Nifty 100 Equal Weight Fund (Formerly Known as Principal Nifty 100 Equal Weight Fund),Sundaram,Other,Index Funds,196.7553,2026-11-13,145.61,6.81,-1.56,5.54,3.53,14.66,,,11.82,15.38,-21.19,0.50,0.76,16.43,11.89,,4.86
-153420,Tata BSE Quality Index Fund,Tata,Other,Index Funds,11.1421,2026-11-13,56.87,3.68,-5.07,-2.41,-1.65,,,,9.76,,,,,,,,1.60
-153132,Tata BSE Select Business Groups Index Fund,Tata,Other,Index Funds,10.4721,2026-11-13,228.27,10.73,-0.10,3.43,0.10,,,,3.63,,,,,,,,1.90
-152557,Tata Nifty Auto Index Fund,Tata,Other,Index Funds,12.7430,2026-11-13,106.90,9.95,-5.03,8.60,2.52,,,,9.49,,,,,,,,2.54
-152951,Tata Nifty Capital Markets Index Fund,Tata,Other,Index Funds,16.0820,2026-11-13,943.51,11.70,10.46,9.89,25.35,,,,26.60,,,,,,,,2.04
-152577,Tata Nifty Financial Services Index Fund,Tata,Other,Index Funds,13.1141,2026-11-13,73.52,10.42,5.75,11.52,1.96,,,,10.44,,,,,,,,2.54
-151301,Tata Nifty G-Sec Dec 2026 Index Fund,Tata,Other,Index Funds,12.9802,2026-11-13,72.96,0.44,1.30,2.77,5.56,7.16,,,7.03,0.59,-0.13,0.57,0.95,7.19,6.94,,3.81
-151273,Tata Nifty G-Sec Dec 2029 Index Fund,Tata,Other,Index Funds,13.1124,2026-11-13,133.46,0.35,-0.12,2.18,3.94,7.44,,,7.34,1.66,-1.08,0.35,0.51,7.68,7.11,,3.82
-152742,Tata Nifty India Tourism Index Fund,Tata,Other,Index Funds,9.5628,2026-11-13,266.99,11.69,3.37,16.13,-5.40,,,,-2.43,,,,,,,,2.29
-152564,Tata Nifty MidSmall Healthcare Index Fund,Tata,Other,Index Funds,15.9130,2026-11-13,210.49,8.41,3.37,14.67,22.32,,,,19.70,,,,,,,,2.54
-153581,Tata Nifty Midcap 150 Index Fund,Tata,Other,Index Funds,10.8056,2026-11-13,320.39,3.99,-3.57,2.92,1.87,,,,3.70,,,,,,,,1.39
-150738,Tata Nifty Midcap 150 Momentum 50 Index Fund,Tata,Other,Index Funds,18.7800,2026-11-13,1227.87,4.92,-0.92,3.78,1.24,12.96,,,16.27,19.52,-25.92,0.36,0.52,21.38,11.36,,4.04
-153858,Tata Nifty Next 50 Index Fund,Tata,Other,Index Funds,10.7599,2026-11-13,123.79,5.78,-2.39,5.75,4.91,,,,6.16,,,,,,,,1.10
-152570,Tata Nifty Realty Index Fund,Tata,Other,Index Funds,9.4648,2026-11-13,63.70,10.97,2.50,20.81,-2.33,,,,-2.39,,,,,,,,2.54
-150326,Tata Nifty SDL Plus AAA PSU Bond Dec 2027 60 40 Index Fund,Tata,Other,Index Funds,13.4616,2026-11-13,645.23,0.36,0.80,2.87,5.04,7.37,,,6.65,0.91,-0.37,0.63,0.99,7.68,6.89,,4.61
-152836,Tata Nifty200 Alpha 30 Index Fund,Tata,Other,Index Funds,9.1636,2026-11-13,203.15,6.06,-0.05,6.78,4.97,,,,-2.43,,,,,,,,2.17
-152588,Tata Nifty500 Multicap India Manufacturing 50:30:20 Index Fund,Tata,Other,Index Funds,12.5682,2026-11-13,136.99,7.47,-1.15,5.23,5.60,,,,9.26,,,,,,,,2.54
-152595,Tata Nifty500 Multicap Infrastructure 50:30:20 Index Fund,Tata,Other,Index Funds,11.1308,2026-11-13,74.84,7.55,-1.10,2.47,-0.17,,,,4.04,,,,,,,,2.54
-118881,Taurus Nifty 50 Index Fund,Taurus,Other,Index Funds,51.0755,2026-11-13,6.53,10.57,3.01,7.90,-2.71,9.17,7.10,12.40,11.53,13.26,-15.56,0.20,0.30,12.57,-3.24,,13.86
-120716,UTI Nifty 50 Index Fund,UTI,Other,Index Funds,177.1620,2026-11-13,29284.79,10.73,3.13,8.24,-2.02,9.97,7.81,12.78,11.87,13.39,-15.51,0.25,0.38,13.01,-3.43,,13.86
-152755,kotak BSE PSU Index Fund,Kotak Mahindra,Other,Index Funds,9.3760,2026-11-13,80.12,6.04,-2.28,-3.31,1.09,,,,-0.16,,,,,,,,2.27
 146407,ADITYA BIRLA SUN LIFE BAL BHAVISHYA YOJNA,Aditya Birla Sun Life,Solution Oriented,Children's Fund,24.0400,2026-11-13,1241.88,5.86,0.54,8.48,4.75,12.31,9.54,,11.97,14.78,-18.93,0.40,0.57,14.07,6.83,43.78,7.75
 135762,Axis Children's Fund,Axis,Solution Oriented,Children's Fund,31.0814,2026-11-13,763.57,6.33,1.32,8.07,2.31,10.49,6.08,11.23,10.93,10.64,-12.34,0.35,0.51,11.13,1.66,35.27,10.92
 135764,Axis Children's Fund,Axis,Solution Oriented,Children's Fund,31.6758,2026-11-13,135.25,6.33,1.32,8.07,2.31,10.60,6.24,11.39,11.12,10.64,-12.27,0.36,0.52,11.35,1.79,43.48,10.92

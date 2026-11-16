@@ -666,7 +666,7 @@
       return ra - rb || a.i - b.i;
     });
     var max = N(O(S.settings).maxOpenTrades);
-    var h = weekBlock(S, N(O(S.settings).capital) || 0) + targetsSection(S, ui) + '<div class="sec"><h2>Open trades</h2><span class="cnt">' + open.length + (max !== null && max > 0 ? ' of ' + cnt(max) + ' max' : '') + '</span></div>';
+    var h = '<div class="btns hintpad">' + btn('opt-open', null, 'Options: risk calculator + paper signals', 'sm', { icon: 'flask' }) + '</div>' + weekBlock(S, N(O(S.settings).capital) || 0) + targetsSection(S, ui) + '<div class="sec"><h2>Open trades</h2><span class="cnt">' + open.length + (max !== null && max > 0 ? ' of ' + cnt(max) + ' max' : '') + '</span></div>';
     if (!open.length) {
       h += '<div class="empty"><div class="ei">' + ic('trades') + '</div><h3>No open trades</h3>' +
         '<p>When you tap “I bought it” on a buy idea, the trade appears here with its stop-loss, targets and a daily call to hold, book half or exit.</p></div>';
@@ -1364,6 +1364,43 @@
     });
     var head = '<p class="lead"><b>' + esc(sel) + '</b> · ' + A(r.stocks).length + ' stocks · ' + (N(r.buys) || 0) + ' BUY' + (r.gateOpen === false ? ' · market below 200-day average: no new buys' : '') + '</p>';
     return shell('Index stocks', chips + head + (m.loading ? skCard('Index', 4) : tbl(['Stock', 'Price', '1D', '20D', 'Call'], rows)), foot);
+  }
+
+  /* ---------- Options (paper only) ---------- */
+  var OPT_LOT = { NIFTY: 65, BANKNIFTY: 30 };
+  function optCalc(cap, riskPct, prem, lot) {
+    if (!(cap > 0) || !(riskPct > 0) || !(prem > 0) || !(lot > 0)) return null;
+    var stop = prem * 0.70, tgt = prem * 1.50, cost = 50 + 0.0015 * (prem + stop) * lot;
+    var riskLot = (prem - stop) * lot + cost, byRisk = Math.floor(cap * riskPct / 100 / riskLot), byCash = Math.floor(cap * 0.25 / (prem * lot));
+    var lots = Math.max(0, Math.min(byRisk, byCash));
+    return { lots: lots, qty: lots * lot, cost: lots * prem * lot, stop: stop, tgt: tgt, maxLoss: lots * riskLot, maxGain: lots * ((tgt - prem) * lot - (50 + 0.0015 * (prem + tgt) * lot)), riskLot: riskLot };
+  }
+  function optSheet(S, ui) {
+    var o = O(ui.opt), r = O(o.res), c = O(o.calc), foot = btn('sheet-close', null, 'Close', '');
+    var idx = T(c.idx) || 'NIFTY', cap = N(c.cap) || N(O(S.settings).capital) || 100000, rp = N(c.risk) || 2, prem = N(c.prem);
+    var h = '<div class="card warnbox"><b>Paper only.</b> Use this to size a trade and to see if the signals would have made money. 88% of individual F&amp;O traders lost money in FY26 (SEBI).</div>';
+    h += '<h3 class="skh">Risk calculator</h3><div class="ixc">' + ['NIFTY', 'BANKNIFTY'].map(function (k) {
+      return '<button type="button" class="rchip' + (k === idx ? ' on' : '') + '" data-c="opt-idx" data-id="' + k + '"><span>' + k + ' · lot ' + OPT_LOT[k] + '</span></button>'; }).join('') + '</div>' +
+      field('cap', 'Capital', String(cap), { pre: '₹' }) + field('risk', 'Max loss per trade', String(rp), { post: '% of capital' }) + field('prem', 'Option premium', prem ? String(prem) : '', { pre: '₹', ph: 'e.g. 120' }) +
+      '<div class="btns">' + btn('opt-calc', null, 'Calculate', '', {}) + '</div>';
+    var k = optCalc(cap, rp, prem, OPT_LOT[idx]);
+    if (k) h += k.lots < 1 ? '<div class="card rules"><b class="down">Don’t trade.</b> One lot risks ' + rsB(k.riskLot) + ', more than your limit.</div>' :
+      tbl(['Lots', 'Qty', 'Pay', 'Stop', 'Target', 'Max loss', 'Max gain'], ['<tr><td><b>' + k.lots + '</b></td><td>' + k.qty + '</td><td>' + rsB(k.cost) + '</td><td class="down">₹' + k.stop.toFixed(1) + '</td><td class="up">₹' + k.tgt.toFixed(1) + '</td><td class="down">' + rsB(k.maxLoss) + '</td><td class="up">' + rsB(k.maxGain) + '</td></tr>']) +
+      '<div class="hint hintpad"><span class="t">Place the stop-loss order (SL, ₹' + k.stop.toFixed(1) + ') at your broker the moment you buy. Exit everything by 3:15 pm.</span></div>';
+    // paper record
+    if (!isObj(o.res)) return shell('Options', h + skCard('Paper record', 3), foot);
+    var st = O(r.stats);
+    h += '<h3 class="skh">Paper signals</h3><div class="card rules"><b class="' + (st.proven === true ? 'up' : 'down') + '">' + esc(T(st.verdict)) + '</b>' +
+      '<div class="mut">' + (N(st.trades) || 0) + ' trades · ' + (N(st.wins) || 0) + ' won · net ' + rsS(st.netRs) + ' per lot · worst ' + rsS(st.worstRs) + '</div></div>';
+    var op = A(r.open);
+    if (op.length) h += tbl(['Option', 'Buy', 'Stop', 'Target', 'Now'], op.map(function (t) {
+      return '<tr><td><b>' + esc(T(t.idx)) + ' ' + (N(t.strike) || 0) + ' ' + esc(T(t.side)) + '</b></td><td>₹' + (N(t.entry) || 0).toFixed(1) + '</td><td class="down">₹' + (N(t.stop) || 0).toFixed(1) + '</td><td class="up">₹' + (N(t.target) || 0).toFixed(1) + '</td><td>₹' + (N(t.last) || 0).toFixed(1) + '</td></tr>'; }));
+    var cl = A(r.closed);
+    if (cl.length) h += tbl(['Day', 'Option', 'Buy', 'Sell', 'P&L/lot'], cl.slice(0, 30).map(function (t) {
+      return '<tr><td>' + dShort(t.openedAt) + '</td><td>' + esc(T(t.idx).replace('BANKNIFTY', 'BNF')) + ' ' + (N(t.strike) || 0) + ' ' + esc(T(t.side)) + '</td><td>₹' + (N(t.entry) || 0).toFixed(1) + '</td><td>₹' + (N(t.exit) || 0).toFixed(1) + '</td><td class="' + tone(t.pnlRs) + '">' + rsS(t.pnlRs) + '</td></tr>'; }));
+    else if (!op.length) h += '<div class="hint hintpad"><span class="t">No paper trades yet. They start at the next scan after 9:45 am when the rule fires.</span></div>';
+    texts(r.rules).forEach(function (x) { h += '<div class="hint"><span class="t">· ' + esc(x) + '</span></div>'; });
+    return shell('Options', h, foot);
   }
   /* ---------- Money flow ---------- */
   function crSigned(v) {
@@ -2216,6 +2253,7 @@
     if (kind === 'sector') return sectorSheet(S, ui, data);
     if (kind === 'fund') return fundSheet(S, ui, data);
     if (kind === 'index') return indexSheet(S, ui);
+    if (kind === 'opt') return optSheet(S, ui);
     if (kind === 'resettrack') return shell('Reset the live record?', '<p class="lead">All picks recorded on this phone since the live record began will be deleted and the count starts again from zero. The replay is kept. Trades, holdings and strategies are not affected.</p>',
         btn('sheet-close', null, 'Keep it', 'ghost') + btn('submit', null, 'Reset record', 'dan'));
     if (kind === 'take') {

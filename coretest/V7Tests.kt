@@ -100,3 +100,49 @@ object V9Tests {
         T.eq(Indices.view(Indices.parse(null), "x", d.flows, ent, true) { it }["ready"], false, "no data: not ready")
     }
 }
+
+object V10Tests {
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v10-options" to ::opts)
+    private fun ms(day: Int, min: Int) = Clock.msAt(day, min)
+    fun opts() {
+        val mon = java.time.LocalDate.of(2026, 11, 16).toEpochDay().toInt()      // Monday
+        T.eq(Options.expiry(mon, true), mon + 1, "Nifty: next Tuesday")
+        T.eq(Options.expiry(mon + 1, true), mon + 8, "on expiry Tuesday: the following week (no 0-DTE)")
+        T.eq(java.time.LocalDate.ofEpochDay(Options.expiry(mon, false).toLong()).toString(), "2026-11-24", "Bank Nifty: last Tuesday of the month")
+        T.eq(java.time.LocalDate.ofEpochDay(Options.expiry(mon + 8, false).toLong()).toString(), "2026-12-29", "after the monthly expiry: next month's")
+        val atm = Options.price(true, 24000.0, 24000.0, 7 / 365.0, 0.14)
+        T.check(atm in 150.0..230.0, "ATM 7-day call at 14% IV ≈ ₹180: $atm")
+        T.check(Options.price(false, 24000.0, 24000.0, 7 / 365.0, 0.14) in 130.0..220.0, "ATM put similar")
+        T.check(Options.price(true, 24000.0, 25000.0, 1 / 365.0, 0.14) == 0.05, "far OTM floors at 5 paise")
+        // uptrend daily bars, then a breakout above yesterday's high
+        val d = Series("^NSEI", 120); var p = 20000.0
+        for (i in 0 until 100) { p *= 1.003; d.add(mon - 100 + i, p, p * 1.004, p * 0.996, p, 1e6) }
+        val prevHigh = p * 1.004
+        T.eq(Options.signal(d, mon, prevHigh + 10), "CE", "uptrend + above yesterday's high → CALL")
+        T.eq(Options.signal(d, mon, prevHigh - 10), "", "no breakout → nothing")
+        val book = ArrayList<OptTrade>()
+        val spots = { x: Double -> mapOf("^NSEI" to x) }
+        T.eq(Options.step(book, ms(mon, 9 * 60 + 30), spots(prevHigh + 50), mapOf("^NSEI" to d), 14.0).size, 0, "before 09:45: no trade")
+        Options.step(book, ms(mon, 10 * 60), spots(prevHigh + 50), mapOf("^NSEI" to d), 14.0)
+        T.check(book.size == 1 && book[0].side == "CE" && book[0].lot == 65 && book[0].strike % 50 == 0, "one NIFTY ATM CE, 1 lot = 65")
+        val t = book[0]
+        T.check(Math.abs(t.stop - t.entry * 0.7) < 0.02 && Math.abs(t.target - t.entry * 1.5) < 0.02, "stop −30%, target +50%")
+        Options.step(book, ms(mon, 10 * 60 + 15), spots(prevHigh + 80), mapOf("^NSEI" to d), 14.0)
+        T.eq(book.size, 1, "max one trade per index per day")
+        Options.step(book, ms(mon, 10 * 60 + 30), spots(prevHigh - 400), mapOf("^NSEI" to d), 14.0)
+        T.check(t.status == "CLOSED" && t.reason == "Stop-loss" && t.pnlRs < 0, "index falls → stop-loss, loss booked with costs: ${t.pnlRs}")
+        T.check(t.exit < t.stop, "exit is at the scan's price (app delay), can be below the stop")
+        val b2 = ArrayList<OptTrade>()
+        Options.step(b2, ms(mon, 11 * 60), spots(prevHigh + 50), mapOf("^NSEI" to d), 14.0)
+        Options.step(b2, ms(mon, 15 * 60 + 15), spots(prevHigh + 60), mapOf("^NSEI" to d), 14.0)
+        T.check(b2[0].status == "CLOSED" && b2[0].reason.startsWith("Time exit"), "3:15 pm time exit")
+        val b3 = ArrayList<OptTrade>()
+        Options.step(b3, ms(mon, 10 * 60), spots(prevHigh + 50), mapOf("^NSEI" to d), 0.0)
+        T.eq(b3.size, 0, "no VIX → no paper trade (never guesses volatility)")
+        val st = Options.stats(book + b2)
+        T.check(st["trades"] == 2 && st["proven"] == false && (st["verdict"] as String).startsWith("Paper only"), "under 40 trades: paper only")
+        T.check(Options.view(book, emptyMap(), 14.0)["ok"] == true, "view")
+        val back = OptTrade.from(Json.parseObject(Json.stringify(t.toMap()))!!)
+        T.check(back.id == t.id && back.pnlRs == t.pnlRs && back.status == "CLOSED", "saves and loads")
+    }
+}

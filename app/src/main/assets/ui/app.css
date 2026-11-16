@@ -1180,3 +1180,4 @@ svg.chart .xd { fill: var(--text); stroke: var(--bg); stroke-width: 1.5; }
 .ixc { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; }
 .ixc .rchip { flex: none; }
 .btt td.gray { color: var(--muted); }
+.warnbox { padding: 12px 14px; font-size: 13.5px; border-color: rgba(255, 196, 77, .35); background: rgba(255, 196, 77, .07); }

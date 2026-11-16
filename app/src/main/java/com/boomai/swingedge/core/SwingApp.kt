@@ -144,7 +144,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -529,9 +529,12 @@ class SwingApp(private val p: Platform) {
             return true
         }
 
+        optionsTick(now, iq)
+
         // 2. prices
         val all = LinkedHashSet<String>()
         all.add(idxSym)
+        all.add("^NSEBANK")
         all.addAll(universe)
         for (h in st.holdings) all.add(h.sym)
         for (t in st.trades) if (t.status == "OPEN") all.add(t.sym)
@@ -1676,6 +1679,7 @@ class SwingApp(private val p: Platform) {
                 "funds" -> LinkedHashMap(Funds.view(fundData(a.bool("force"))))
                 "fundInfo" -> Funds.info(fundData(false), a.str("code"))
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
+                "options" -> synchronized(optLock) { Options.view(optLoad(), optSpots, optVix) }
                 "indexView" -> {
                     flowData(false)
                     val idx = Indices.parse(try { p.read("mf_indices.csv") } catch (t: Throwable) { null })
@@ -1867,6 +1871,43 @@ class SwingApp(private val p: Platform) {
         }
     }
 
+    // ------------------------------------------------------------------ options (paper only)
+
+    private val optLock = Any()
+    private var optBook: MutableList<OptTrade>? = null
+    @Volatile private var optSpots: Map<String, Double> = emptyMap()
+    @Volatile private var optVix = 0.0
+
+    private fun optLoad(): MutableList<OptTrade> {
+        optBook?.let { return it }
+        val l = ArrayList<OptTrade>()
+        try {
+            val m = Json.parseObject(p.read(OPT_FILE) ?: "")
+            if (m != null) { for (x in m.list("trades")) (x as? Map<*, *>)?.let { @Suppress("UNCHECKED_CAST") l.add(OptTrade.from(it as Map<String, Any?>)) }; optVix = m.num("vix", 0.0) }
+        } catch (t: Throwable) { log("options load: $t") }
+        optBook = l
+        return l
+    }
+
+    /** One paper-options step per scan: index levels + VIX, then the fixed rule. Never throws, never blocks the stock scan for long. */
+    private fun optionsTick(now: Long, iq: Intraday) {
+        try {
+            val got = fetchParsed(listOf("^NSEBANK", Options.VIX), { h, s -> Yahoo.intradayUrl(h, s) }, { s, t -> Yahoo.intraday(s, t) }, "Scanning…", 1, 2)
+            val spots = HashMap<String, Double>()
+            if (iq.ltp > 0) spots[Params.INDEX_SYMBOL] = iq.ltp
+            got["^NSEBANK"]?.let { if (it.ltp > 0) spots["^NSEBANK"] = it.ltp }
+            val vix = got[Options.VIX]?.ltp ?: 0.0
+            synchronized(optLock) {
+                val book = optLoad()
+                val notes = Options.step(book, now, spots, mapOf(Params.INDEX_SYMBOL to cache.get(Params.INDEX_SYMBOL), "^NSEBANK" to cache.get("^NSEBANK")), vix)
+                optSpots = spots
+                if (vix > 0) optVix = vix
+                if (notes.isNotEmpty()) for (n in notes) feed("info", "Options (paper)", n)
+                p.write(OPT_FILE, Json.stringify(mapOf("vix" to optVix, "trades" to book.map { it.toMap() })))
+            }
+        } catch (t: Throwable) { log("options tick: $t") }
+    }
+
     @Volatile private var fundCache: FundData? = null
     @Volatile private var fundFetchedAt = 0L
     private val fundLock = Any()
@@ -2056,6 +2097,7 @@ class SwingApp(private val p: Platform) {
         const val CHANGES_FILE = "symbolchange.csv"
         const val ALT_FILE = "alt_tickers.json"
         const val HOLD_MAX_DAYS = 120
+        const val OPT_FILE = "opt_paper.json"
         const val TRAIL_ATR = 5.0
         const val FLOW_BASE = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/"
         val FLOW_FILES = listOf("flows.csv", "industries.csv", "holders.csv", "deals.csv", "indices.csv")

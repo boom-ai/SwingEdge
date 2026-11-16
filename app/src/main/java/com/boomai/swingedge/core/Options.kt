@@ -1,0 +1,215 @@
+package com.boomai.swingedge.core
+
+/*
+ * Index options, PAPER ONLY. One simple, fixed rule, tracked with the app's real delay (it only acts at its
+ * 15-minute scans) and realistic costs, so the record shows what following it would really have done.
+ * Premiums are ESTIMATED with Black-Scholes from the index level and India VIX (no free live option-chain feed),
+ * plus 1% slippage on each side. Nothing here throws.
+ *
+ * Rule (fixed in advance, not tuned):
+ *  - window 09:45–14:30 IST, at most one trade per index per day, none on expiry day (no 0-DTE)
+ *  - CALL when daily close > EMA20 > EMA50 and the index trades above yesterday's high
+ *  - PUT  when daily close < EMA20 < EMA50 and the index trades below yesterday's low
+ *  - at-the-money strike, nearest expiry that is not today
+ *  - stop-loss: premium −30%; target: premium +50%; time exit: first scan at/after 15:15
+ */
+
+class OptCfg(val name: String, val yahoo: String, val lot: Int, val step: Int, val weekly: Boolean, val ivMult: Double)
+
+class OptTrade(
+    var id: String = "", var idx: String = "", var side: String = "", var strike: Int = 0, var expiry: Int = 0,
+    var openedAt: Long = 0, var spot0: Double = 0.0, var entry: Double = 0.0, var stop: Double = 0.0, var target: Double = 0.0,
+    var lot: Int = 0, var status: String = "OPEN", var closedAt: Long = 0, var exit: Double = 0.0, var reason: String = "",
+    var last: Double = 0.0, var pnlRs: Double = 0.0
+) {
+    fun toMap(): Map<String, Any?> = linkedMapOf(
+        "id" to id, "idx" to idx, "side" to side, "strike" to strike, "expiry" to expiry, "openedAt" to openedAt, "spot0" to spot0,
+        "entry" to entry, "stop" to stop, "target" to target, "lot" to lot, "status" to status, "closedAt" to closedAt,
+        "exit" to exit, "reason" to reason, "last" to last, "pnlRs" to pnlRs
+    )
+    companion object {
+        fun from(m: Map<String, Any?>): OptTrade = OptTrade(
+            m.str("id"), m.str("idx"), m.str("side"), m.int("strike"), m.int("expiry"), m.long("openedAt"), m.num("spot0", 0.0),
+            m.num("entry", 0.0), m.num("stop", 0.0), m.num("target", 0.0), m.int("lot"), m.str("status").ifEmpty { "OPEN" },
+            m.long("closedAt"), m.num("exit", 0.0), m.str("reason"), m.num("last", 0.0), m.num("pnlRs", 0.0))
+    }
+}
+
+object Options {
+    val CFG = listOf(
+        OptCfg("NIFTY", "^NSEI", 65, 50, true, 1.0),
+        OptCfg("BANKNIFTY", "^NSEBANK", 30, 100, false, 1.25)
+    )
+    const val VIX = "^INDIAVIX"
+    const val START_MIN = 9 * 60 + 45
+    const val LAST_ENTRY_MIN = 14 * 60 + 30
+    const val EXIT_MIN = 15 * 60 + 15
+    const val SL = 0.30
+    const val TGT = 0.50
+    const val SLIP = 0.01
+    /** brokerage ₹20 per order x2 + exchange/SEBI/stamp/GST, plus STT 0.1% of sell premium — per lot, round trip */
+    const val FIXED_COST = 50.0
+    const val PCT_COST = 0.0015
+    const val MAX_KEEP = 400
+
+    // ---------------------------------------------------------------- pricing
+
+    private fun ncdf(x: Double): Double {
+        // Abramowitz-Stegun 26.2.17
+        val t = 1.0 / (1.0 + 0.2316419 * Math.abs(x))
+        val d = 0.3989422804014327 * Math.exp(-x * x / 2)
+        val p = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))))
+        return if (x >= 0) 1 - p else p
+    }
+
+    /** Black-Scholes premium; [years] floored at a few hours so expiry-day maths stays finite. */
+    fun price(call: Boolean, spot: Double, strike: Double, years: Double, iv: Double, r: Double = 0.065): Double {
+        if (!(spot > 0) || !(strike > 0) || !(iv > 0)) return Double.NaN
+        val t = maxOf(years, 2.0 / (252 * 6.25))
+        val sq = iv * Math.sqrt(t)
+        val d1 = (Math.log(spot / strike) + (r + iv * iv / 2) * t) / sq
+        val d2 = d1 - sq
+        val v = if (call) spot * ncdf(d1) - strike * Math.exp(-r * t) * ncdf(d2) else strike * Math.exp(-r * t) * ncdf(-d2) - spot * ncdf(-d1)
+        return maxOf(0.05, v)
+    }
+
+    /** Expiry (epoch day): weekly = next Tuesday strictly after today; monthly = last Tuesday of the month, strictly after today. */
+    fun expiry(day: Int, weekly: Boolean): Int {
+        if (weekly) {
+            var d = day + 1
+            while (Clock.dow(d) != 1) d++
+            return d
+        }
+        var m = day
+        while (true) {
+            val e = lastTuesday(m)
+            if (e > day) return e
+            m = e + 7
+        }
+    }
+
+    private fun lastTuesday(day: Int): Int {
+        val ld = java.time.LocalDate.ofEpochDay(day.toLong())
+        var x = ld.withDayOfMonth(ld.lengthOfMonth())
+        while (x.dayOfWeek.value != 2) x = x.minusDays(1)
+        return x.toEpochDay().toInt()
+    }
+
+    fun yearsTo(nowMs: Long, expiryDay: Int): Double {
+        val expMs = expiryDay.toLong() * 86_400_000L + (15 * 60 + 30 - 330) * 60_000L   // 15:30 IST
+        return maxOf(0.0, (expMs - nowMs) / (365.0 * 86_400_000.0))
+    }
+
+    fun costRs(entry: Double, exit: Double, lot: Int): Double = FIXED_COST + PCT_COST * (entry + exit) * lot
+
+    // ---------------------------------------------------------------- signal
+
+    private fun emaLast(c: DoubleArray, n: Int, len: Int): Double {
+        if (n < len) return Double.NaN
+        val k = 2.0 / (len + 1); var e = c[0]
+        for (i in 1 until n) e = c[i] * k + e * (1 - k)
+        return e
+    }
+
+    /** "CE", "PE" or "" from daily bars (completed days before today) and the live index level. */
+    fun signal(daily: Series?, today: Int, spot: Double): String {
+        if (daily == null || !(spot > 0)) return ""
+        var n = daily.n
+        while (n > 0 && daily.d[n - 1] >= today) n--          // only finished days
+        if (n < 60) return ""
+        val c = daily.c
+        val e20 = emaLast(c, n, 20); val e50 = emaLast(c, n, 50); val cl = c[n - 1]
+        val ph = daily.h[n - 1]; val pl = daily.l[n - 1]
+        if (cl > e20 && e20 > e50 && spot > ph) return "CE"
+        if (cl < e20 && e20 < e50 && spot < pl) return "PE"
+        return ""
+    }
+
+    // ---------------------------------------------------------------- one scan
+
+    /**
+     * Updates the paper book at a scan. [spots] = live index levels by Yahoo symbol; [daily] = daily bars by Yahoo symbol;
+     * [vix] = India VIX level (percent). Returns notes for the feed.
+     */
+    fun step(book: MutableList<OptTrade>, nowMs: Long, spots: Map<String, Double>, daily: Map<String, Series?>, vix: Double): List<String> {
+        val notes = ArrayList<String>()
+        try {
+            val day = Clock.epochDay(nowMs); val min = Clock.minuteOfDay(nowMs)
+            val iv0 = if (vix > 5 && vix < 100) vix / 100.0 else Double.NaN
+            // 1. manage open trades
+            for (t in book) {
+                if (t.status != "OPEN") continue
+                val cfg = CFG.firstOrNull { it.name == t.idx } ?: continue
+                val spot = spots[cfg.yahoo] ?: continue
+                val iv = if (iv0.isNaN()) continue else iv0 * cfg.ivMult
+                val px = price(t.side == "CE", spot, t.strike.toDouble(), yearsTo(nowMs, t.expiry), iv)
+                if (px.isNaN()) continue
+                t.last = r2(px)
+                val stale = Clock.epochDay(t.openedAt) != day
+                val reason = when {
+                    px <= t.stop -> "Stop-loss"
+                    px >= t.target -> "Target"
+                    min >= EXIT_MIN || stale -> "Time exit 3:15 pm"
+                    else -> ""
+                }
+                if (reason.isNotEmpty()) {
+                    val ex = r2(px * (1 - SLIP))
+                    t.status = "CLOSED"; t.closedAt = nowMs; t.exit = ex; t.reason = reason
+                    t.pnlRs = r2((ex - t.entry) * t.lot - costRs(t.entry, ex, t.lot))
+                    notes.add("Paper ${t.idx} ${t.strike} ${t.side}: ${reason.lowercase()} at ₹${f2(ex)} (${if (t.pnlRs >= 0) "+" else "−"}₹${Math.round(Math.abs(t.pnlRs))} per lot).")
+                } else t.pnlRs = r2((px * (1 - SLIP) - t.entry) * t.lot - costRs(t.entry, px, t.lot))
+            }
+            // 2. new entries
+            if (min in START_MIN..LAST_ENTRY_MIN && Clock.isWeekday(day) && !iv0.isNaN()) {
+                for (cfg in CFG) {
+                    if (book.any { it.idx == cfg.name && Clock.epochDay(it.openedAt) == day }) continue
+                    val spot = spots[cfg.yahoo] ?: continue
+                    val exp = expiry(day, cfg.weekly)
+                    val side = signal(daily[cfg.yahoo], day, spot)
+                    if (side.isEmpty()) continue
+                    val strike = (Math.round(spot / cfg.step) * cfg.step).toInt()
+                    val px = price(side == "CE", spot, strike.toDouble(), yearsTo(nowMs, exp), iv0 * cfg.ivMult)
+                    if (px.isNaN() || px < 5) continue
+                    val en = r2(px * (1 + SLIP))
+                    val t = OptTrade(cfg.name + "-" + day + "-" + side, cfg.name, side, strike, exp, nowMs, r2(spot), en, r2(en * (1 - SL)), r2(en * (1 + TGT)), cfg.lot, last = r2(px))
+                    book.add(t)
+                    notes.add("Paper BUY ${cfg.name} $strike ${side} at ₹${f2(en)}. Stop ₹${f2(t.stop)}, target ₹${f2(t.target)}.")
+                }
+            }
+            while (book.size > MAX_KEEP) { val i = book.indexOfFirst { it.status != "OPEN" }; if (i < 0) break; book.removeAt(i) }
+        } catch (e: Throwable) { notes.add("Options paper step skipped: ${e.javaClass.simpleName}") }
+        return notes
+    }
+
+    private fun r2(x: Double) = Math.rint(x * 100) / 100
+    private fun f2(x: Double) = String.format(java.util.Locale.US, "%.2f", x)
+
+    fun stats(book: List<OptTrade>): Map<String, Any?> {
+        val c = book.filter { it.status == "CLOSED" }
+        val pnl = c.map { it.pnlRs }
+        val mean = if (pnl.isEmpty()) 0.0 else pnl.average()
+        val sd = if (pnl.size < 2) 0.0 else Math.sqrt(pnl.sumOf { (it - mean) * (it - mean) } / (pnl.size - 1))
+        val t = if (sd > 0) mean / (sd / Math.sqrt(pnl.size.toDouble())) else 0.0
+        val proven = pnl.size >= 40 && t >= 2.0
+        return linkedMapOf("trades" to c.size, "wins" to c.count { it.pnlRs > 0 }, "netRs" to r2(pnl.sum()), "avgRs" to r2(mean),
+            "worstRs" to (pnl.minOrNull() ?: 0.0), "t" to r2(t), "proven" to proven,
+            "verdict" to when {
+                c.size < 40 -> "Paper only. ${c.size} of 40 trades needed before judging."
+                proven -> "Paper record positive and statistically solid over ${c.size} trades. Still estimated prices — start with 1 lot."
+                else -> "Paper record over ${c.size} trades is not good enough. Don't trade this with real money."
+            })
+    }
+
+    fun view(book: List<OptTrade>, spots: Map<String, Double>, vix: Double): Map<String, Any?> = linkedMapOf(
+        "ok" to true,
+        "open" to book.filter { it.status == "OPEN" }.map { it.toMap() },
+        "closed" to book.filter { it.status == "CLOSED" }.sortedByDescending { it.closedAt }.take(60).map { it.toMap() },
+        "stats" to stats(book),
+        "spots" to CFG.map { linkedMapOf("idx" to it.name, "spot" to (spots[it.yahoo] ?: 0.0), "lot" to it.lot, "expiry" to expiryLabel(it)) },
+        "vix" to vix,
+        "rules" to listOf("Paper only, estimated premiums.", "Buys 09:45–2:30 pm, max 1 per index per day, never on expiry day.",
+            "Stop −30%, target +50%, exit by 3:15 pm.", "Acts only at the app's 15-minute scans.")
+    )
+
+    private fun expiryLabel(c: OptCfg): String = if (c.weekly) "weekly, Tuesday" else "monthly, last Tuesday"
+}

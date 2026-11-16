@@ -905,6 +905,12 @@
       var q = String(a.q == null ? '' : a.q);
       setTimeout(function () { finish('search', { ok: true, q: q, results: doSearch(q), list: listMeta() }, 0); }, 70);
     },
+    options: function (a) { setTimeout(function () {
+      var now = Date.now(), d = 86400000;
+      finish('options', { ok: true, vix: 13.8, open: [{ idx: 'NIFTY', side: 'CE', strike: 24850, entry: 118.6, stop: 83.0, target: 177.9, last: 131.2, openedAt: now - 3600000, lot: 65 }],
+        closed: [{ idx: 'NIFTY', side: 'PE', strike: 24700, entry: 102.4, exit: 70.1, pnlRs: -2195, reason: 'Stop-loss', openedAt: now - 2 * d, lot: 65 }, { idx: 'BANKNIFTY', side: 'CE', strike: 53600, entry: 410.0, exit: 618.2, pnlRs: 6120, reason: 'Target', openedAt: now - 3 * d, lot: 30 }],
+        stats: { trades: 2, wins: 1, netRs: 3925, avgRs: 1962, worstRs: -2195, proven: false, verdict: 'Paper only. 2 of 40 trades needed before judging.' },
+        rules: ['Paper only, estimated premiums.', 'Buys 09:45–2:30 pm, max 1 per index per day, never on expiry day.', 'Stop −30%, target +50%, exit by 3:15 pm.', 'Acts only at the app’s 15-minute scans.'] }, 0); }, 200); },
     indexView: function (a) { setTimeout(function () {
       var IX = { 'Nifty 50': ['RELIANCE', 'HDFCBANK', 'ICICIBANK', 'INFY', 'TCS', 'LT', 'ITC', 'MARUTI', 'TITAN', 'BAJFINANCE', 'TATAMOTORS', 'HAL'], 'Nifty Bank': ['HDFCBANK', 'ICICIBANK', 'KOTAKBANK', 'AXISBANK', 'SBIN', 'INDUSINDBK'], 'Nifty Midcap 150': ['POLYCAB', 'MCX', 'BHEL', 'CUMMINSIND', 'MOTILALOFS', 'SANSERA'] };
       var nm = IX[a.index] ? a.index : 'Nifty 50', calls = ['BUY', 'WAIT', 'AVOID', 'NA'];

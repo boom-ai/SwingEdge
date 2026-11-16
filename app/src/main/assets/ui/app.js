@@ -165,6 +165,7 @@
       if (name === 'stockInfo') { onInfoResult(res, ok, err); return; }
       if (name === 'moneyFlow') { onMoney(res, ok, err); return; }
       if (name === 'flowSector') { onSector(res, ok, err); return; }
+      if (name === 'options') { ui.opt = ui.opt || { calc: {} }; if (ok) ui.opt.res = res; if (sheet && sheet.kind === 'opt') paintSheet(true); return; }
       if (name === 'indexView') { var im = ui.index || (ui.index = {}); im.loading = false; if (ok) { im.res = res; im.sel = SE.T(res && res.index); } else im.err = err; if (sheet && sheet.kind === 'index') paintSheet(true); return; }
       if (name === 'funds') { var fm = ui.funds || (ui.funds = {}); fm.loading = false; if (ok) { fm.res = res; fm.err = ''; fm.at = Date.now(); } else fm.err = err; if (ui.tab === 'funds') render(); return; }
       if (name === 'fundInfo') { ui.fundInfo = ui.fundInfo || {}; var fc = SE.T(res && res.code) || (sheet && sheet.kind === 'fund' ? SE.T(sheet.data.id) : ''); if (fc) ui.fundInfo[fc] = ok ? res : { ok: false, error: err }; if (sheet && sheet.kind === 'fund') paintSheet(true); return; }
@@ -511,6 +512,12 @@
     m.loading = false;
     if (ok) { m.res = res; m.err = ''; m.at = Date.now(); } else { m.err = err; }
     if (ui.tab === 'money') render();
+  }
+  function optRead() {
+    var c = ui.opt.calc || (ui.opt.calc = {});
+    var a = num('cap'), b = num('risk'), p = num('prem');
+    check([['cap', a !== null && a >= 1000, 'Enter your capital'], ['risk', b !== null && b > 0 && b <= 10, '0.1 to 10%'], ['prem', p !== null && p > 0 && p < 100000, 'Enter the premium']]);
+    if (a !== null) c.cap = a; if (b !== null) c.risk = b; c.prem = p;
   }
   function loadIndex(name) {
     var m = ui.index || (ui.index = {});
@@ -918,6 +925,9 @@
     switch (c) {
       case 'tab': setTab(id); if (id === 'money') loadMoney(false); if (id === 'funds') loadFunds(false); break;
       case 'money-refresh': loadMoney(true); break;
+      case 'opt-open': ui.opt = ui.opt || { calc: {} }; openSheet('opt', {}, true); try { bridge().action('options', '{}'); } catch (e) {} break;
+      case 'opt-idx': ui.opt = ui.opt || { calc: {} }; ui.opt.calc = ui.opt.calc || {}; optRead(); ui.opt.calc.idx = id; paintSheet(true); break;
+      case 'opt-calc': ui.opt = ui.opt || { calc: {} }; optRead(); paintSheet(true); break;
       case 'index-open': ui.index = ui.index || {}; openSheet('index', {}, true); loadIndex(ui.index.sel || ''); break;
       case 'index-pick': loadIndex(id); break;
       case 'short-toggle': ui.showShort = !ui.showShort; render(); break;
@@ -1047,6 +1057,7 @@
   pull();
   if (ui.tab === 'money') loadMoney(false);
   if (ui.tab === 'funds') loadFunds(false);
+  else if (qs.sheet === 'opt') { ui.opt = { calc: { prem: 120 } }; openSheet('opt', {}, true); try { bridge().action('options', '{}'); } catch (e) {} }
   else if (qs.sheet === 'index') { ui.index = {}; openSheet('index', {}, true); loadIndex(qs.index || ''); }
   else if (qs.sheet === 'fund') { ui.fundInfo = {}; openSheet('fund', { id: qs.code || '1' }, true); try { bridge().action('fundInfo', JSON.stringify({ code: qs.code || '1' })); } catch (e) {} }
   try {

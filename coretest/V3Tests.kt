@@ -397,7 +397,7 @@ object V3Tests {
         val buys = SetupScore.topBuys(t, 15)
         T.check(buys.isNotEmpty(), "the fake universe has BUY candidates (${buys.size})")
         T.eq(ideas.map { it.str("sym") }, buys.map { it.sym }, "ideas = top BUYs, score desc then symbol")
-        T.check(ideas.size <= 15 && ideas.all { it.str("label") == "BUY" && it.num("score") >= 85 && !it.bool("proven") && it.int("horizonDays") == 60 }, "ideas: BUY, >= 85, proven false, 60 days")
+        T.check(ideas.size <= 15 && ideas.all { it.str("label") == "BUY" && it.num("score") >= 85 && !it.bool("proven") && it.int("horizonDays") == 120 }, "ideas: BUY, >= 85, proven false, up to 120 days")
         T.check(ideas.zipWithNext().all { it.first.num("score") >= it.second.num("score") }, "ideas sorted by score")
         for (x in ideas) {
             val e = t.entries[x.str("sym")]!!

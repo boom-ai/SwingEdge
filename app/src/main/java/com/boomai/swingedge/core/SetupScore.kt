@@ -282,3 +282,33 @@ object SetupScore {
         return out
     }
 }
+
+/**
+ * Market gate (REPORT8 / FINAL): new buys only while the equal-weight index of the scanned universe is above its
+ * 200-day average. Built from the stocks' own daily closes (mean daily return across stocks, compounded).
+ * Returns null when there is not enough history (then the gate stays open).
+ */
+object MarketGate {
+    const val SMA = 200
+    fun open(series: List<Series>): Boolean? {
+        try {
+            val sum = HashMap<Int, Double>(); val cnt = HashMap<Int, Int>()
+            for (s in series) {
+                val from = maxOf(1, s.n - 320)
+                for (i in from until s.n) {
+                    val p = s.c[i - 1]; val x = s.c[i]
+                    if (!(p > 0) || !(x > 0)) continue
+                    val r = x / p - 1
+                    if (r > 0.35 || r < -0.35) continue
+                    sum[s.d[i]] = (sum[s.d[i]] ?: 0.0) + r; cnt[s.d[i]] = (cnt[s.d[i]] ?: 0) + 1
+                }
+            }
+            val days = sum.keys.filter { (cnt[it] ?: 0) >= 20 }.sorted()
+            if (days.size < SMA + 5) return null
+            val idx = DoubleArray(days.size); var v = 1.0
+            for ((k, dd) in days.withIndex()) { v *= 1 + sum[dd]!! / cnt[dd]!!; idx[k] = v }
+            var m = 0.0; for (k in idx.size - SMA until idx.size) m += idx[k]
+            return idx[idx.size - 1] > m / SMA
+        } catch (t: Throwable) { return null }
+    }
+}

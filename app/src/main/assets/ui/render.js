@@ -917,8 +917,9 @@
       if (hd && (hd.verdict === 'SELL' || hd.verdict === 'TRIM')) { var hq = N(hd.qty) || 0; return strip('SELL ' + (hd.verdict === 'TRIM' ? Math.floor(hq / 2) : hq), 'down', '<span>' + (hd.verdict === 'TRIM' ? 'Sell half.' : 'Sell all.') + '</span>'); }
       if (sg) return strip('BUY', 'up', '<span>Buy ≤ <b>' + pq(sg.entryMax || sg.entry) + '</b></span><span>Qty <b>' + (N(sg.qty) || 0) + '</b></span><span>Hold <b>' + (N(sg.holdDays) || 6) + ' days</b></span><span class="up">Target <b>' + pq(sg.t2 || sg.t1) + '</b></span><span class="down">Stop <b>' + pq(sg.sl) + '</b></span>');
       if (hd) return strip('HOLD', 'up', '<span>Keep it.</span>');
+      if (lab === 'BUY' && S && S.marketGate === false) return strip('WAIT', 'neutral', '<span>No new buys: market is below its 200-day average.</span>');
       var buy = lab === 'BUY', cls2 = buy ? 'up' : lab === 'AVOID' ? 'down' : 'neutral';
-      var line = buy ? '<div class="vsimple"><span>Buy ≤ <b>' + pq(c.entryHigh) + '</b></span><span>Hold <b>' + (hz || 60) + ' days</b></span><span class="up">Target <b>' + pq(c.t2 || c.t1) + '</b></span><span class="down">Stop <b>' + pq(c.stop) + '</b></span></div>'
+      var line = buy ? '<div class="vsimple"><span>Buy ≤ <b>' + pq(c.entryHigh) + '</b></span><span>Hold <b>up to 120 days</b></span><span class="up">Target <b>' + pq(c.t2 || c.t1) + '</b></span><span class="down">Stop <b>' + pq(c.stop) + '↑</b></span></div>'
         : '<div class="vsimple"><span>' + (lab === 'AVOID' ? 'Don’t buy. Sell if you hold it.' : lab === 'NA' ? 'No call for this stock.' : 'Don’t buy yet.') + '</span></div>';
       return '<section class="card vd vsim" id="st-vcard"><span class="vbig ' + cls2 + '">' + (buy ? 'BUY' : lab === 'AVOID' ? 'AVOID' : lab === 'NA' ? 'NO CALL' : 'WAIT') + '</span>' + line + '</section>';
     }
@@ -1215,19 +1216,23 @@
     var held = {};
     openTrades(S).forEach(function (t) { held[T(t.sym)] = 1; });
     A(S.holdings).forEach(function (t) { held[T(t.sym)] = 1; });
-    var buys = newSignals(S).map(function (g) {
+    var shortN = newSignals(S).length;
+    var buys = (ui.showShort === true ? newSignals(S) : []).map(function (g) {
       return { sym: g.sym, name: g.name, px: g.entryMax || g.entry, qty: N(g.qty) || 0, days: N(g.holdDays) || 6, tgt: g.t2 || g.t1, sl: g.sl };
     });
     var used = {}; buys.forEach(function (b) { used[T(b.sym)] = 1; });
     var slot = cap > 0 ? cap / 4 : 0;
     A(S.ideas).filter(function (x) { return T(x.sym) && !held[T(x.sym)] && !used[T(x.sym)] && N(x.entryHigh) > 0 && N(x.stop) > 0; }).slice(0, 4).forEach(function (x) {
       var p = N(x.entryHigh);
-      buys.push({ sym: x.sym, name: x.name, px: p, qty: slot > 0 ? Math.floor(slot / p) : 0, days: N(x.horizonDays) || 60, tgt: x.t2 || x.t1, sl: x.stop });
+      buys.push({ sym: x.sym, name: x.name, px: p, qty: slot > 0 ? Math.floor(slot / p) : 0, days: '≤' + (N(x.horizonDays) || 120), tgt: x.t2 || x.t1, sl: x.stop, trail: true });
     });
     h += '<div class="sec" id="first-buy"><h2>Buy</h2><span class="cnt">' + buys.length + '</span></div>';
+    var gateShut = S.marketGate === false;
     h += buys.length ? tbl(['Stock', 'Buy ≤', 'Qty', 'Days', 'Target', 'Stop'], buys.map(function (b) {
-      return '<tr>' + cell(b.sym, b.name) + '<td>' + pq(b.px) + '</td><td>' + (b.qty || DASH) + '</td><td><b>' + b.days + '</b></td><td class="up">' + pq(b.tgt) + '</td><td class="down">' + pq(b.sl) + '</td></tr>';
-    })) : '<div class="hint hintpad"><span class="t">Nothing to buy.</span></div>';
+      return '<tr>' + cell(b.sym, b.name) + '<td>' + pq(b.px) + '</td><td>' + (b.qty || DASH) + '</td><td><b>' + b.days + '</b></td><td class="up">' + pq(b.tgt) + '</td><td class="down">' + pq(b.sl) + (b.trail ? '↑' : '') + '</td></tr>';
+    })) : '<div class="hint hintpad"><span class="t">' + (gateShut ? 'No new buys: market is below its 200-day average.' : 'Nothing to buy.') + '</span></div>';
+    if (buys.some(function (b) { return b.trail; })) h += '<div class="hint hintpad"><span class="t">↑ Stop moves up: highest close − 5 × ATR.</span></div>';
+    if (shortN) h += '<div class="btns hintpad">' + btn('short-toggle', null, ui.showShort === true ? 'Hide 6-day calls' : 'Show ' + shortN + ' six-day calls (lose money after costs in tests)', 'sm ghost', {}) + '</div>';
     return h;
   }
   /* ---------- Bot: plain tables ---------- */

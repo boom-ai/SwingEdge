@@ -18,6 +18,8 @@ class SwingApp(private val p: Platform) {
     /** Setup-score ranking of the scanned universe from the latest scan (immutable; replaced as a whole), and its BUY rows. */
     @Volatile private var scoreTable: ScoreTable? = null
     @Volatile private var ideaItems: List<Map<String, Any?>> = emptyList()
+    /** market gate from the last scan: true = new buys allowed, false = market below its 200-day average, null = unknown */
+    @Volatile private var marketGate: Boolean? = null
 
     private val lock = ReentrantLock()
     private var st: AppState = AppState()
@@ -751,11 +753,14 @@ class SwingApp(private val p: Platform) {
             val fd = flowData(false, fetch = false)
             if (fd.ok) { val secs = MoneyFlow.sectors(fd, MoneyFlow.moneyIn(fd)).take(MoneyFlow.HOT_SECTORS).map { it.name }.toHashSet(); { s: String -> fd.ind[s]?.sector?.takeIf { it in secs } } } else null
         } catch (e: Throwable) { null }
-        val cands = SetupScore.topBuys(t, Params.IDEAS_MAX * 4)
+        val gate = MarketGate.open(have)
+        marketGate = gate
+        val cands = if (gate == false) emptyList() else SetupScore.topBuys(t, Params.IDEAS_MAX * 4)
         val ordered = if (hot == null) cands else cands.sortedWith(compareBy<ScoreEntry> { if (hot(it.sym) != null) 0 else 1 })   // stable: score order kept inside each group
         val rows = ordered.take(Params.IDEAS_MAX).map { e ->
             val m = LinkedHashMap(BuyCall.idea(e, nameOf(e.sym), bySym[e.sym], proven))
             m["hotSector"] = hot?.invoke(e.sym) ?: ""
+            m["horizonDays"] = HOLD_MAX_DAYS          // FINAL: trail 5 ATR below the highest close, sell after at most 120 sessions
             m
         }
         scoreTable = t
@@ -2008,6 +2013,7 @@ class SwingApp(private val p: Platform) {
             m["watch"] = watchItems
             m["myWatch"] = myWatch(s, now)
             m["ideas"] = ideaItems
+            m["marketGate"] = marketGate
             m["targets"] = s.targets.map { it.toMap() }
             m["track"] = if (trackView.isEmpty()) TrackEngine.view(TrackStore(), s.settings.costPct, false) else trackView
             return m
@@ -2044,6 +2050,8 @@ class SwingApp(private val p: Platform) {
         const val CHANGES_URL = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/symbolchange.csv"
         const val CHANGES_FILE = "symbolchange.csv"
         const val ALT_FILE = "alt_tickers.json"
+        const val HOLD_MAX_DAYS = 120
+        const val TRAIL_ATR = 5.0
         const val FLOW_BASE = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/"
         val FLOW_FILES = listOf("flows.csv", "industries.csv", "holders.csv", "deals.csv")
         const val FLOW_META = "mf_fetched.txt"

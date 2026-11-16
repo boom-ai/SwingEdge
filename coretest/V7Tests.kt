@@ -64,3 +64,18 @@ object V7Tests {
         T.check(Json.parseObject(SwingApp(p).action("funds", "{}"))!!.bool("ready"), "offline: saved copy")
     }
 }
+
+object V8Tests {
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v8-market-gate" to ::gate)
+    private fun mk(sym: String, drift: Double, n: Int = 260): Series {
+        val s = Series(sym, n); var p = 100.0
+        for (i in 0 until n) { p *= 1 + drift + (if (i % 2 == 0) 0.004 else -0.004); s.add(20000 + i, p, p * 1.01, p * 0.99, p, 1e6) }
+        return s
+    }
+    fun gate() {
+        T.eq(MarketGate.open((0 until 30).map { mk("U$it", 0.002) }), true, "rising market: buys allowed")
+        T.eq(MarketGate.open((0 until 30).map { mk("D$it", -0.002) }), false, "falling market: no new buys")
+        T.eq(MarketGate.open((0 until 30).map { mk("S$it", 0.002, 100) }), null, "too little history: gate unknown (open)")
+        T.eq(MarketGate.open((0 until 5).map { mk("F$it", 0.002) }), null, "too few stocks: unknown")
+    }
+}

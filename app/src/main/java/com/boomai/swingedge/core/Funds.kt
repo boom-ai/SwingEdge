@@ -31,8 +31,11 @@ object Funds {
     /** categories shown first, in this order (AMFI sub-category names) */
     val KEY = listOf(
         "Flexi Cap Fund", "Large Cap Fund", "Large & Mid Cap Fund", "Mid Cap Fund", "Small Cap Fund", "Multi Cap Fund",
-        "ELSS", "Focused Fund", "Value Fund", "Contra Fund", "Index Funds", "Balanced Advantage Fund", "Aggressive Hybrid Fund", "Multi Asset Allocation Fund"
+        "ELSS", "Focused Fund", "Value Fund", "Contra Fund", "Aggressive Hybrid Fund", "Dynamic Asset Allocation or Balanced Advantage",
+        "Multi Asset Allocation", "Equity Savings", "Conservative Hybrid Fund", "Arbitrage Fund"
     )
+    /** too mixed to rank against each other (different indices / sectors) */
+    val SKIP = setOf("Index Funds", "Sectoral/Thematic")
     const val MIN_AGE_LONG = 5.0
 
     private fun rows(csv: String?): List<Map<String, String>> {
@@ -146,7 +149,7 @@ object Funds {
         if (!data.ok) return linkedMapOf("ok" to true, "ready" to false)
         val sc = scores(data)
         val bySub = data.funds.values.groupBy { it.sub }
-        val subs = KEY.filter { bySub.containsKey(it) } + bySub.keys.filter { it !in KEY && (bySub[it]?.size ?: 0) >= 5 && (bySub[it]?.first()?.cat == "Equity" || bySub[it]?.first()?.cat == "Hybrid") }.sorted()
+        val subs = KEY.filter { bySub.containsKey(it) } + bySub.keys.filter { it !in KEY && it !in SKIP && (bySub[it]?.size ?: 0) >= 5 && (bySub[it]?.first()?.cat == "Equity" || bySub[it]?.first()?.cat == "Hybrid") }.sorted()
         val cats = subs.map { sub ->
             val list = bySub[sub] ?: emptyList()
             val ranked = list.filter { sc[it.code] != null && it.age >= MIN_AGE_LONG }.sortedWith(compareByDescending<Fund> { sc[it.code] }.thenByDescending { it.rollBeat }.thenBy { it.code })
@@ -174,7 +177,9 @@ object Funds {
     fun info(data: FundData, code: String): Map<String, Any?> {
         val f = data.funds[code] ?: return linkedMapOf("ok" to false, "error" to "Fund not found")
         val sc = scores(data)
-        val peers = data.funds.values.filter { it.sub == f.sub && sc[it.code] != null }.sortedWith(compareByDescending<Fund> { sc[it.code] }.thenBy { it.code })
+        val long = f.age >= MIN_AGE_LONG
+        val peers = data.funds.values.filter { it.sub == f.sub && sc[it.code] != null && (!long || it.age >= MIN_AGE_LONG) }
+            .sortedWith(compareByDescending<Fund> { sc[it.code] }.thenByDescending { it.rollBeat }.thenBy { it.code })
         val rank = peers.indexOfFirst { it.code == code } + 1
         val m = LinkedHashMap(fundMap(f, sc[code], rank, peers.size))
         m["ok"] = true

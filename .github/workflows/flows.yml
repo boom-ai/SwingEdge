@@ -22,6 +22,8 @@ jobs:
         run: python3 tools/flows.py /tmp/bhav data/flows.csv
       - name: Bulk and block deals
         run: python3 tools/deals.py data/deals.csv || true
+      - name: Index constituents
+        run: python3 tools/indices.py data/indices.csv || true
       - name: Industries
         run: timeout 1800 python3 -u tools/industries.py data/symbols.csv data/industries.csv 900 || true
       - name: Shareholding (promoter / FII / MF)

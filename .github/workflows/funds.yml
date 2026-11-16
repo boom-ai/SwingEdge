@@ -1,0 +1,28 @@
+name: mutual fund data
+on:
+  schedule:
+    - cron: "20 16 * * *"   # 21:50 IST, after AMFI publishes the day's NAVs
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: { group: funds, cancel-in-progress: false }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/fundcache
+          key: funds-${{ github.run_id }}
+          restore-keys: funds-
+      - name: Funds, NAV history metrics, holdings
+        run: python3 -u tools/funds.py /tmp/fundcache data
+      - name: Commit if changed
+        run: |
+          git config user.name "swingedge-bot"; git config user.email "actions@users.noreply.github.com"
+          git add data/funds.csv data/fund_holdings.csv data/fund_stocks.csv
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -qm "Mutual fund data $(date -u +%F)"
+          for i in 1 2 3; do git pull -q --rebase origin main && git push -q origin main && break; sleep 5; done

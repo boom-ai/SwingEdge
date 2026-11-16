@@ -1156,3 +1156,12 @@ svg.chart .xd { fill: var(--text); stroke: var(--bg); stroke-width: 1.5; }
 .lnk { background: none; border: 0; padding: 0; color: var(--text); font: 600 13.5px var(--sans, inherit); text-decoration: underline; text-decoration-color: var(--line-2); }
 .wk { padding: 14px 16px; } .wkn { font: 700 26px var(--cond); }
 .wkn.up { color: var(--green); } .wkn.down { color: var(--red); }
+.job { padding: 11px 14px; }
+.vb { font: 700 11.5px/22px var(--cond); padding: 0 8px; border-radius: 6px; letter-spacing: .3px; flex: none; }
+.vb.down { background: rgba(255, 111, 111, .16); color: var(--red); }
+.vb.warn { background: rgba(255, 196, 77, .16); color: var(--amber, #ffc44d); }
+.vb.neutral { background: var(--raised); color: var(--text-2); }
+.jt { margin-top: 5px; font-size: 13.5px; line-height: 1.4; color: var(--text-2); text-align: left; }
+.rules { padding: 12px 16px; font-size: 13.5px; }
+.rules ol { margin: 6px 0 0; padding-left: 18px; color: var(--text-2); }
+.rules li + li { margin-top: 4px; }

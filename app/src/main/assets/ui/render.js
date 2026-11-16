@@ -303,7 +303,7 @@
     }
     return h;
   }
-  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['bot', 'Bot'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
+  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
   function tabbar(S, ui) {
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
@@ -552,7 +552,7 @@
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
     var h = banner(ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs);
-    h += '<div class="sec"><h2>Act now</h2>' + (items.length ? '<span class="cnt">' + items.length + '</span>' : '') + '</div>';
+    if (ui.fullCards === true || !items.length) h += '<div class="sec"><h2>Act now</h2>' + (items.length ? '<span class="cnt">' + items.length + '</span>' : '') + '</div>';
     if (!items.length) {
       h += '<div class="empty"><div class="ei">' + ic(bs.icon) + '</div><h3>' + esc(bs.title) + '</h3><p>' + esc(bs.text) + '</p>' +
         (bs.link ? '<div class="btns">' + btn('strategies', null, bs.link, 'sm') + '</div>' : '') + '</div>';
@@ -561,19 +561,23 @@
       if (ot) h += '<div class="hint hintpad">' + ic('check') + '<span class="t">' + ot + ' open trade' + (ot > 1 ? 's are' : ' is') + ' on HOLD. Nothing to do on ' + (ot > 1 ? 'them' : 'it') + '.</span></div>';
       return h;
     }
-    var hasBuy = false, hasSell = false;
-    items.forEach(function (x) {
-      var c;
-      if (x.type === 'trade') c = tradeActCard(x.it, ui);
-      else if (x.type === 'holding') c = holdingActCard(x.it, ui);
-      else if (x.type === 'target') c = targetHitCard(x.it, ui, now);
-      else c = signalCard(x.it, ui, now);
-      if (x.type === 'target') { /* no jump anchor */ }
-      else if (x.type === 'signal') { if (!hasBuy) c = c.replace('<article ', '<article id="first-buy" '); hasBuy = true; }
-      else { if (!hasSell) c = c.replace('<article ', '<article id="first-sell" '); hasSell = true; }
-      h += c;
-    });
-    if (!hasBuy) h += hintLine(bs);
+    if (ui.fullCards === true) {
+      var hasBuy = false, hasSell = false;
+      items.forEach(function (x) {
+        var c;
+        if (x.type === 'trade') c = tradeActCard(x.it, ui);
+        else if (x.type === 'holding') c = holdingActCard(x.it, ui);
+        else if (x.type === 'target') c = targetHitCard(x.it, ui, now);
+        else c = signalCard(x.it, ui, now);
+        if (x.type === 'signal') { if (!hasBuy) c = c.replace('<article ', '<article id="first-buy" '); hasBuy = true; }
+        else if (x.type !== 'target') { if (!hasSell) c = c.replace('<article ', '<article id="first-sell" '); hasSell = true; }
+        h += c;
+      });
+      if (!hasBuy) h += hintLine(bs);
+    } else {
+      h += simpleToday(S, ui, items, bs);
+    }
+    h += '<div class="btns hintpad">' + btn('fullcards', null, ui.fullCards === true ? 'Simple view' : 'Detailed cards', 'sm ghost', { icon: 'layers' }) + '</div>';
     return h + ideasBlock(S, 'today') + watchList(S);
   }
 
@@ -659,7 +663,7 @@
       return ra - rb || a.i - b.i;
     });
     var max = N(O(S.settings).maxOpenTrades);
-    var h = targetsSection(S, ui) + '<div class="sec"><h2>Open trades</h2><span class="cnt">' + open.length + (max !== null && max > 0 ? ' of ' + cnt(max) + ' max' : '') + '</span></div>';
+    var h = weekBlock(S, N(O(S.settings).capital) || 0) + targetsSection(S, ui) + '<div class="sec"><h2>Open trades</h2><span class="cnt">' + open.length + (max !== null && max > 0 ? ' of ' + cnt(max) + ' max' : '') + '</span></div>';
     if (!open.length) {
       h += '<div class="empty"><div class="ei">' + ic('trades') + '</div><h3>No open trades</h3>' +
         '<p>When you tap “I bought it” on a buy idea, the trade appears here with its stop-loss, targets and a daily call to hold, book half or exit.</p></div>';
@@ -1151,15 +1155,56 @@
     if (ui.tab === 'alerts') return alerts(S, ui);
     if (ui.tab === 'setups') return setups(S, ui);
     if (ui.tab === 'money') return money(S, ui);
-    if (ui.tab === 'bot') return bot(S, ui);
+    if (ui.tab === 'bot') return today(S, ui);
     return today(S, ui);
   }
 
 
 
+
+  /* ---------- Today, simple: one line per job ---------- */
+  function doLine(x) {
+    var t = O(x.it), q = N(t.qty) || 0, half = Math.floor(q / 2);
+    if (x.type === 'trade') {
+      if (t.action === 'BOOK_HALF') return { v: 'SELL ' + half, c: 'warn', s: 'Sell ' + half + ' of ' + q + ' shares (target 1 reached). Keep the other ' + (q - half) + ' and move the stop-loss to ' + pq(t.entry) + '.' };
+      if (t.action === 'TIME_EXIT') return { v: 'SELL ALL', c: 'down', s: 'Sell all ' + q + ' shares before 3:20 pm — the ' + (N(t.maxDays) || 6) + '-day holding time is over.' };
+      return { v: 'SELL ALL', c: 'down', s: 'Sell all ' + q + ' shares now at market. ' + T(t.actionNote).replace(/\s*Sell at market now\.?/i, '') };
+    }
+    if (x.type === 'holding') {
+      if (t.verdict === 'TRIM') return { v: 'SELL ' + half, c: 'warn', s: 'From your portfolio: sell ' + half + ' of ' + q + ' shares. ' + T(t.headline) };
+      return { v: 'SELL ALL', c: 'down', s: 'From your portfolio: sell all ' + q + ' shares. ' + T(t.headline) };
+    }
+    if (x.type === 'target') return { v: 'CHECK', c: 'neutral', s: 'Your own ' + (/STOP/.test(T(t.status)) ? 'stop' : 'target') + ' was reached. Open it and decide: sell, or move the level.' };
+    return null;
+  }
+  function simpleToday(S, ui, items, bs) {
+    var h = '', jobs = [];
+    items.forEach(function (x) { if (x.type !== 'signal') { var d = doLine(x); if (d) jobs.push({ x: x, d: d }); } });
+    h += '<div class="sec" id="first-sell"><h2>Sell / act</h2><span class="cnt">' + jobs.length + '</span></div>';
+    h += jobs.length ? '<div class="card mv">' + jobs.map(function (j) {
+      var t = O(j.x.it), pnl = N(t.pnlRs);
+      return '<button type="button" class="srow job" data-c="stock" data-id="' + esc(T(t.sym)) + '" data-name="' + esc(T(t.name)) + '">' +
+        '<div class="fr1"><span class="vb ' + j.d.c + '">' + esc(j.d.v) + '</span><b>' + tx(t.sym) + '</b><span class="sp"></span><span class="num">' + pq(t.ltp || t.price) + '</span>' +
+        (pnl !== null && j.x.type !== 'target' ? '<span class="num ' + tone(pnl) + '">' + rsS(pnl) + '</span>' : '') + '</div>' +
+        '<div class="jt">' + esc(j.d.s.trim()) + '</div></button>';
+    }).join('') + '</div>' : '<div class="hint hintpad">' + ic('check') + '<span class="t">Nothing to sell today. Keep your stop-loss orders in place.</span></div>';
+    var buys = newSignals(S);
+    h += '<div class="sec" id="first-buy"><h2>Buy</h2><span class="cnt">' + buys.length + '</span></div>';
+    if (buys.length) {
+      h += tbl(['Stock', 'Buy up to', 'Qty', 'Amount', 'Stop', 'Sell at', 'Sell by'], buys.map(function (g) {
+        return '<tr>' + cell(g.sym, g.name) + '<td>' + pq(g.entryMax || g.entry) + '</td><td>' + (N(g.qty) || 0) + '</td><td>' + rsB(g.investRs) + '</td><td class="down">' + pq(g.sl) + '</td><td class="up">' + pq(g.t2 || g.t1) + '</td><td>' + dShort(addDays(g.createdAt, N(g.holdDays) || 6)) + '</td></tr>';
+      }));
+      h += '<div class="card rules"><b>How to do it</b><ol>' +
+        '<li>Buy at the next open, only if the price is at or below <b>Buy up to</b>. Otherwise skip it.</li>' +
+        '<li>Right after buying, place a stop-loss order at <b>Stop</b>.</li>' +
+        '<li>Sell everything at <b>Sell at</b>, or on the <b>Sell by</b> date, whichever comes first.</li>' +
+        '<li>Tap the stock → <b>I bought it</b>, so the app tracks it and tells you when to sell.</li></ol></div>';
+    } else h += hintLine(bs);
+    return h;
+  }
   /* ---------- Bot: plain tables ---------- */
   function pq(v) { var n = N(v); if (n === null || n <= 0) return DASH; return '₹' + (n >= 100 ? grp(String(Math.round(n))) : n.toFixed(1)); }
-  function rs(v) { var n = N(v); return n === null ? DASH : '₹' + grp(String(Math.round(n))); }
+  function rsB(v) { var n = N(v); return n === null ? DASH : '₹' + grp(String(Math.round(n))); }
   function rsS(v) { var n = N(v); if (n === null) return DASH; return (n >= 0 ? '+₹' : '−₹') + grp(String(Math.abs(Math.round(n)))); }
   function dShort(t) { var n = ts(t); if (n === null) return DASH; var d = ist(n); return d.getUTCDate() + ' ' + MON[d.getUTCMonth()]; }
   function addDays(t, k) { var n = ts(t); if (n === null) return null; var d = new Date(n), c = 0; while (c < k) { d = new Date(d.getTime() + 86400000); var w = ist(d.getTime()).getUTCDay(); if (w > 0 && w < 6) c++; } return d.getTime(); }
@@ -1173,11 +1218,11 @@
     var sells = opens.filter(function (t) { return t.action === 'EXIT' || t.action === 'TIME_EXIT' || t.action === 'BOOK_HALF'; });
     var hs = A(S.holdings).filter(function (x) { return (x.verdict === 'SELL' || x.verdict === 'TRIM') && x.dataOk !== false; });
     var invested = opens.reduce(function (a, t) { return a + (N(t.entry) || 0) * (N(t.qty) || 0); }, 0);
-    h += '<div class="card setuphd"><h2>Bot · what to do today</h2><div class="asof">Capital ' + rs(cap) + ' · in trades ' + rs(invested) + ' · free ' + rs(Math.max(0, cap - invested)) + '</div></div>';
+    h += '<div class="card setuphd"><h2>Bot · what to do today</h2><div class="asof">Capital ' + rsB(cap) + ' · in trades ' + rsB(invested) + ' · free ' + rsB(Math.max(0, cap - invested)) + '</div></div>';
     // 1 BUY
     h += '<div class="sec"><h2>1 · Buy</h2><span class="cnt">' + buys.length + '</span></div>';
     h += buys.length ? tbl(['Stock', 'Buy up to', 'Qty', 'Amount', 'Stop', 'Target', 'Sell by'], buys.map(function (g) {
-      return '<tr>' + cell(g.sym, g.name) + '<td>' + pq(g.entryMax || g.entry) + '</td><td>' + (N(g.qty) || 0) + '</td><td>' + rs(g.investRs) + '</td><td class="down">' + pq(g.sl) + '</td><td class="up">' + pq(g.t2 || g.t1) + '</td><td>' + dShort(addDays(g.createdAt, N(g.holdDays) || 6)) + '</td></tr>';
+      return '<tr>' + cell(g.sym, g.name) + '<td>' + pq(g.entryMax || g.entry) + '</td><td>' + (N(g.qty) || 0) + '</td><td>' + rsB(g.investRs) + '</td><td class="down">' + pq(g.sl) + '</td><td class="up">' + pq(g.t2 || g.t1) + '</td><td>' + dShort(addDays(g.createdAt, N(g.holdDays) || 6)) + '</td></tr>';
     })) + '<div class="hint hintpad">' + ic('info') + '<span class="t">Buy at the next open only if the price is at or below “Buy up to”. Place the stop-loss order right after buying. Tap a stock, then “I bought it” so the bot tracks it.</span></div>'
       : '<div class="hint hintpad"><span class="t">No buy today. Nothing passed the rules — no trade is better than a bad trade.</span></div>';
     // 2 SELL
@@ -1199,7 +1244,15 @@
     var now = Date.now(), wk = ist(now), dow = (wk.getUTCDay() + 6) % 7, start = now - dow * 86400000 - ((wk.getUTCHours() * 60 + wk.getUTCMinutes()) * 60000);
     var closed = A(S.trades).filter(function (t) { return t.status !== 'OPEN' && (ts(t.closedAt) || 0) >= start; });
     var tot = closed.reduce(function (a, t) { return a + (N(t.pnlRs) || 0); }, 0), wins = closed.filter(function (t) { return (N(t.pnlRs) || 0) > 0; }).length;
-    h += '<div class="sec"><h2>4 · This week</h2></div>';
+    h += weekBlock(S, cap);
+    return h;
+  }
+  function weekBlock(S, cap) {
+    var h = '';
+    var now = Date.now(), wk = ist(now), dow = (wk.getUTCDay() + 6) % 7, start = now - dow * 86400000 - ((wk.getUTCHours() * 60 + wk.getUTCMinutes()) * 60000);
+    var closed = A(S.trades).filter(function (t) { return t.status !== 'OPEN' && (ts(t.closedAt) || 0) >= start; });
+    var tot = closed.reduce(function (a, t) { return a + (N(t.pnlRs) || 0); }, 0), wins = closed.filter(function (t) { return (N(t.pnlRs) || 0) > 0; }).length;
+    h += '<div class="sec"><h2>This week</h2></div>';
     h += '<div class="card bt wk"><div class="wkn ' + tone(tot) + '">' + rsS(tot) + '</div><div class="mut">' + closed.length + ' trades closed · ' + wins + ' won · ' + (closed.length - wins) + ' lost' + (cap > 0 ? ' · ' + (tot >= 0 ? '+' : '') + (100 * tot / cap).toFixed(2) + '% of capital' : '') + '</div></div>';
     if (closed.length) h += tbl(['Stock', 'Bought', 'Sold', 'P&L', 'Days'], closed.map(function (t) {
       var d = Math.max(1, Math.round(((ts(t.closedAt) || 0) - (ts(t.openedAt) || 0)) / 86400000));

@@ -1204,10 +1204,10 @@
   function optToday(S) {
     var op = A(S.optOpen), rec = O(S.optRecord), h = '';
     if (!op.length) return '';
-    h += '<div class="sec"><h2>Options</h2><span class="cnt">' + op.length + '</span></div>';
+    h += '<div class="sec"><h2>Options · paper only</h2><span class="cnt">' + op.length + '</span></div><div class="hint hintpad">' + ic('warn') + '<span class="t">This rule lost money in 2014–2026 tests. Don’t trade it; it’s tracked only to watch.</span></div>';
     h += tbl(['Option', 'Do', 'Lots', 'Limit', 'SL', 'Target', 'Index SL'], op.map(function (t) {
       var fresh = Date.now() - (ts(t.openedAt) || 0) < 25 * 60000, idx = T(t.idx) === 'BANKNIFTY' ? 'BNF' : 'NIFTY';
-      return '<tr><td><b>' + idx + ' ' + (N(t.strike) || 0) + ' ' + esc(T(t.side)) + '</b></td><td class="' + (fresh ? 'up' : 'gray') + '"><b>' + (fresh ? 'BUY' : 'HOLD') + '</b></td><td>' + (N(t.lots) || 1) + '</td><td>₹' + (N(t.limit) || 0).toFixed(1) +
+      return '<tr><td><b>' + idx + ' ' + (N(t.strike) || 0) + ' ' + esc(T(t.side)) + '</b></td><td class="gray"><b>PAPER</b></td><td>' + (N(t.lots) || 1) + '</td><td>₹' + (N(t.limit) || 0).toFixed(1) +
         '</td><td class="down">₹' + (N(t.stop) || 0).toFixed(1) + '</td><td class="up">₹' + (N(t.target) || 0).toFixed(1) + '</td><td class="down">' + (N(t.spotStop) > 0 ? grp(String(Math.round(N(t.spotStop)))) : DASH) + '</td></tr>';
     }));
     h += '<div class="hint hintpad"><span class="t">Exit all by 3:15 pm. Record so far: ' + (N(rec.trades) || 0) + ' trades, ' + rsS(rec.netRs) + ' per lot' + (rec.proven === true ? '' : ' (not proven yet)') + '.</span></div>';

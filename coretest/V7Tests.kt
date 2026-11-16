@@ -144,7 +144,7 @@ object V10Tests {
         Options.step(b3, ms(mon, 10 * 60), spots(prevHigh + 50), mapOf("^NSEI" to d), 0.0)
         T.eq(b3.size, 0, "no VIX → no paper trade (never guesses volatility)")
         val st = Options.stats(book + b2)
-        T.check(st["trades"] == 2 && st["proven"] == false && (st["verdict"] as String).startsWith("Paper only"), "under 40 trades: paper only")
+        T.check(st["trades"] == 2 && st["proven"] == false && (st["verdict"] as String).startsWith("Paper only"), "paper only")
         T.check(Options.view(book, emptyMap(), 14.0)["ok"] == true, "view")
         val back = OptTrade.from(Json.parseObject(Json.stringify(t.toMap()))!!)
         T.check(back.id == t.id && back.pnlRs == t.pnlRs && back.status == "CLOSED", "saves and loads")

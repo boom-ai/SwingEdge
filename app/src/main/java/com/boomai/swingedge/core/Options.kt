@@ -228,7 +228,7 @@ object Options {
         return linkedMapOf("trades" to c.size, "wins" to c.count { it.pnlRs > 0 }, "netRs" to r2(pnl.sum()), "avgRs" to r2(mean),
             "worstRs" to (pnl.minOrNull() ?: 0.0), "t" to r2(t), "proven" to proven,
             "verdict" to when {
-                c.size < 40 -> "Paper only. ${c.size} of 40 trades needed before judging."
+                c.size < 40 -> "Paper only. This rule LOST money in the 2014–2026 backtest (−₹1,331 per lot per trade since 2022). Don't trade it."
                 proven -> "Paper record positive and statistically solid over ${c.size} trades. Still estimated prices — start with 1 lot."
                 else -> "Paper record over ${c.size} trades is not good enough. Don't trade this with real money."
             })

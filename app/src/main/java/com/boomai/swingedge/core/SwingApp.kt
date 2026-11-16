@@ -1900,12 +1900,8 @@ class SwingApp(private val p: Platform) {
             val iq = got[Params.INDEX_SYMBOL] ?: return "no data"
             val ev = optionsStep(p.now(), iq)
             // the phone alert goes out at once; the in-app feed entry is written under the state lock (or queued)
-            for ((k, e) in ev.withIndex()) {
-                val ch = if (e.buy) "buy" else "sell"
-                val allowed = if (e.buy) st.settings.notifyBuy else st.settings.notifySell
-                if (allowed) try { p.notify(ch, optNid(e, k), e.title, e.body) } catch (t: Throwable) {}
-                optPending.add(e)
-            }
+            // REPORT9: the rule lost money in the 2014–2026 backtest, so it is tracked on paper only: no phone alerts
+            for (e in ev) optPending.add(e)
             if (optPending.isNotEmpty() && lock.tryLock(5, java.util.concurrent.TimeUnit.SECONDS)) {
                 try { flushOptPending(); save() } finally { lock.unlock() }
             }
@@ -1917,13 +1913,13 @@ class SwingApp(private val p: Platform) {
     private fun optNid(e: OptEvent, k: Int) = 7100 + (e.t.id.hashCode() and 0xff) + k
     /** caller holds [lock] */
     private fun flushOptPending() {
-        while (true) { val e = optPending.poll() ?: break; feed(if (e.buy) "buy" else "sell", e.title, e.body) }
+        while (true) { val e = optPending.poll() ?: break; feed("info", "Paper option: " + e.title, e.body) }
     }
 
     /** From the stock scan (holds [lock]): run the options step and post alerts normally. */
     private fun optionsTick(now: Long, iq: Intraday) {
         flushOptPending()
-        for ((k, e) in optionsStep(now, iq).withIndex()) post(if (e.buy) "buy" else "sell", optNid(e, k), e.title, e.body)
+        for (e in optionsStep(now, iq)) feed("info", "Paper option: " + e.title, e.body)
     }
 
     /** Fetch Bank Nifty + VIX, step the book under [optLock], save it. Returns the BUY/SELL events. Never throws. */

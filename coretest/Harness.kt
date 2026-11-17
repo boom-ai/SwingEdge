@@ -28,7 +28,7 @@ object T {
             body()
         } catch (t: Throwable) {
             fail++
-            val line = "[$name] threw $t at " + t.stackTrace.take(4).joinToString(" < ")
+            val line = "[$name] threw $t at " + t.stackTrace.filter { !it.className.startsWith("java") }.take(4).joinToString(" < ")
             failures.add(line)
             println("  FAIL $line")
         }
@@ -54,7 +54,7 @@ fun main(args: Array<String>) {
         Sample.run()
         return
     }
-    val all: List<Pair<String, () -> Unit>> = UnitTests.all() + SimTests.all() + V2Tests.all() + V3Tests.all() + V4Tests.all() + V5Tests.all() + V6Tests.all() + V7Tests.all() + V8Tests.all() + V9Tests.all() + V10Tests.all() + V11Tests.all() + V12Tests.all()
+    val all: List<Pair<String, () -> Unit>> = UnitTests.all() + SimTests.all() + V2Tests.all() + V3Tests.all() + V4Tests.all() + V5Tests.all() + V6Tests.all() + V7Tests.all() + V8Tests.all() + V9Tests.all() + V10Tests.all() + V11Tests.all() + V12Tests.all() + V13Tests.all()
     for ((name, body) in all) if (only == null || name.contains(only, true)) T.section(name, body)
     println()
     println("RESULT: ${T.pass} checks passed, ${T.fail} failed")

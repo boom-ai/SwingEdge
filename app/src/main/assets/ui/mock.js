@@ -679,10 +679,11 @@
       r.spark = r.spark.map(function (x) { return r2(x * f); }); r.dayChgPct = m.info.dayChgPct;
     });
     s.myWatch = defaultWatch(); s.track = trackData();
+    s.wlists = [{ id: 'w1', name: 'My watchlist', syms: ['DIXON', 'SIEMENS', 'NEWLISTCO'] }, { id: 'w2', name: 'Breakouts', syms: ['BHARTIARTL'] }];
     s.ideas = ideasList(); s.targets = defaultTargets();
     s.optOpen = [{ idx: 'NIFTY', side: 'CE', strike: 24850, entry: 118.6, limit: 119.8, stop: 83.0, target: 177.9, last: 121.0, lots: 1, spotStop: 24735, spotTgt: 25010, openedAt: Date.now() - 5 * 60000, lot: 65 }];
     s.optRecord = { trades: 12, wins: 5, netRs: 3925, proven: false };
-    if (scenario === 'empty') { s.watch = []; s.myWatch = []; s.ideas = []; s.targets = []; s.track = emptyTrack(); }
+    if (scenario === 'empty') { s.watch = []; s.myWatch = []; s.wlists = []; s.ideas = []; s.targets = []; s.track = emptyTrack(); }
     if (scenario === 'empty') {
       s.signals = []; s.trades = []; s.holdings = []; s.feed = [];
       s.portfolio = portfolioOf([]);
@@ -792,6 +793,12 @@
     if (state.feed.length > 100) state.feed.length = 100;
   }
   function notify() { try { if (typeof window.onStateChanged === 'function') window.onStateChanged(); } catch (e) { /* ignore */ } }
+  function wlMut(name, a, fn) {
+    var sym = String(a.sym || '').toUpperCase(); if (!Array.isArray(state.wlists)) state.wlists = [];
+    var w = state.wlists.filter(function (l) { return l.id === a.id; })[0] || state.wlists[0];
+    if (!w) return finish(name, { ok: false, error: 'Make a watchlist first' });
+    var r = fn(w, sym); r.ok = true; r.sym = sym; r.id = w.id; finish(name, r);
+  }
   function finish(name, res, delay) {
     setTimeout(function () {
       try { if (typeof window.onActionResult === 'function') window.onActionResult(name, JSON.stringify(res)); } catch (e) { /* ignore */ }
@@ -981,6 +988,14 @@
           stats: { ltp: i.ltp, ret5: i.ret.d5, ret21: i.ret.d21, ret63: i.ret.d63, ret126: i.ret.d126, sma50: i.ema.e50, sma200: i.ema.e200, rsi14: i.rsi14, high52: i.high52, low52: i.low52 } }, 0);
       }, 300);
     },
+    news: function (a) { var sym = String(a.sym || '').toUpperCase(); setTimeout(function () { finish('news', { ok: true, sym: sym, items: [
+      { title: sym + ' shares rise after quarterly results beat estimates', link: 'https://example.com/a', source: 'Economic Times', ts: Date.now() - 3 * 3600e3 },
+      { title: 'Brokerage raises target price on ' + sym, link: 'https://example.com/b', source: 'Moneycontrol', ts: Date.now() - 26 * 3600e3 }] }, 0); }, 250); },
+    wlAdd: function (a) { wlMut('wlAdd', a, function (w, sym) { if (w.syms.indexOf(sym) < 0) w.syms.push(sym); if (!(state.myWatch || []).some(function (x) { return x.sym === sym; })) state.myWatch.push(watchRow(sym)); return { list: w.name }; }); },
+    wlRemove: function (a) { wlMut('wlRemove', a, function (w, sym) { w.syms = w.syms.filter(function (y) { return y !== sym; }); return {}; }); },
+    wlCreate: function (a) { var nm = String(a.name || '').trim(); if (!nm) return finish('wlCreate', { ok: false, error: 'Give the watchlist a name' }); var id = 'w' + (state.wlists.length + 1) + Date.now() % 1000, sym = String(a.sym || '').toUpperCase(); state.wlists.push({ id: id, name: nm, syms: sym ? [sym] : [] }); if (sym && !(state.myWatch || []).some(function (x) { return x.sym === sym; })) state.myWatch.push(watchRow(sym)); finish('wlCreate', { ok: true, id: id, name: nm }); },
+    wlRename: function (a) { var w = state.wlists.filter(function (l) { return l.id === a.id; })[0]; if (!w) return finish('wlRename', { ok: false, error: 'List not found' }); w.name = String(a.name || '').trim(); finish('wlRename', { ok: true }); },
+    wlDelete: function (a) { state.wlists = state.wlists.filter(function (l) { return l.id !== a.id; }); finish('wlDelete', { ok: true }); },
     addWatch: function (a) {
       var sym = String(a.sym || '').toUpperCase();
       if (!validSym(sym)) return finish('addWatch', { ok: false, error: sym + ' is not an NSE symbol I can find' });

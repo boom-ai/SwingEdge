@@ -261,8 +261,10 @@ class AppState {
     var seq = 0L
     var noLiveWarnDay = 0
     var offlineWarnDay = 0
-    /** Personal watchlist (NSE symbols, in the order added). */
+    /** Personal watchlist (NSE symbols, in the order added) = the union of all named lists below. */
     val watch = ArrayList<String>()
+    /** Named watchlists, user-ordered. */
+    val wlists = ArrayList<WList>()
     /** The user's price targets (SPEC3 §3), one per symbol, in the order set. */
     val targets = ArrayList<UserTarget>()
 
@@ -278,6 +280,7 @@ class AppState {
         "regime" to linkedMapOf("label" to regimeLabel, "niftyLtp" to niftyLtp, "niftyChgPct" to niftyChgPct, "note" to regimeNote),
         "seq" to seq, "noLiveWarnDay" to noLiveWarnDay, "offlineWarnDay" to offlineWarnDay,
         "watchlist" to watch.toList(),
+        "wlists" to wlists.map { it.toMap() },
         "targets" to targets.map { it.persist() }
     )
 
@@ -286,8 +289,8 @@ class AppState {
         const val MAX_FEED = 100
         const val MAX_SIGNALS = 80
         const val MAX_CLOSED = 400
-        const val MAX_WATCH = 50
-        private val WATCH_SYM = Regex("^[A-Z0-9&][A-Z0-9&\\-]*$")
+        const val MAX_WATCH = 300
+        val WATCH_SYM = Regex("^[A-Z0-9&][A-Z0-9&\\-]*$")
 
         /** Builds state from file text; any missing/corrupt part falls back to defaults. Never throws. */
         fun load(text: String?): AppState {
@@ -319,6 +322,11 @@ class AppState {
                     if (sym.isEmpty() || sym.length > 25 || !WATCH_SYM.matches(sym) || st.watch.contains(sym) || st.watch.size >= MAX_WATCH) continue
                     st.watch.add(sym)
                 }
+                try {
+                    for (x in m.list("wlists")) (x as? Map<*, *>)?.let { @Suppress("UNCHECKED_CAST") WList.from(it as Map<String, Any?>)?.let { w -> if (st.wlists.size < WList.MAX_LISTS) st.wlists.add(w) } }
+                } catch (t: Throwable) {}
+                if (st.wlists.isEmpty() && st.watch.isNotEmpty()) st.wlists.add(WList("w1", "My watchlist", ArrayList(st.watch)))
+                st.syncWatch()
                 // added in v3: older files have no targets; junk rows and duplicates are dropped
                 for (x in m.list("targets")) try {
                     UserTarget.from(x.asObj())?.let { t -> if (st.targets.none { it.sym == t.sym } && st.targets.size < UserTarget.MAX) st.targets.add(t) }
@@ -329,4 +337,29 @@ class AppState {
             return st
         }
     }
+}
+
+
+/** A named watchlist. */
+class WList(var id: String, var name: String, val syms: ArrayList<String> = ArrayList()) {
+    fun toMap(): Map<String, Any?> = linkedMapOf("id" to id, "name" to name, "syms" to syms.toList())
+    companion object {
+        const val MAX_LISTS = 12
+        const val MAX_PER_LIST = 50
+        const val MAX_NAME = 30
+        fun from(m: Map<String, Any?>): WList? {
+            val id = m.str("id").take(12); val name = m.str("name").trim().take(MAX_NAME)
+            if (id.isEmpty() || name.isEmpty()) return null
+            val w = WList(id, name)
+            for (x in m.strList("syms")) { val s = x.trim().uppercase(); if (s.isNotEmpty() && s.length <= 25 && AppState.WATCH_SYM.matches(s) && s !in w.syms && w.syms.size < MAX_PER_LIST) w.syms.add(s) }
+            return w
+        }
+    }
+}
+
+/** Keeps [AppState.watch] equal to the union of the named lists (order: list order, then stock order). */
+fun AppState.syncWatch() {
+    val u = LinkedHashSet<String>()
+    for (w in wlists) u.addAll(w.syms)
+    watch.clear(); watch.addAll(u.take(AppState.MAX_WATCH))
 }

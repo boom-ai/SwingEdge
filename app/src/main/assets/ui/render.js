@@ -308,8 +308,23 @@
   var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['funds', 'Funds'], ['trades', 'Trades'], ['portfolio', 'Portfolio']];
   var feedSeen = 0;
   try { feedSeen = +localStorage.getItem('se.feedSeen') || 0; } catch (e) {}
-  function unreadN(S) { var n = 0; A(S.feed).forEach(function (x) { var t = ts(x.ts); if (t !== null && t > feedSeen && /buy|sell|stop|target|exit/i.test(T(x.kind) + ' ' + T(x.title))) n++; }); return n; }
-  function markFeedSeen() { feedSeen = Date.now(); try { localStorage.setItem('se.feedSeen', String(feedSeen)); } catch (e) {} }
+  var feedRead = {};
+  try { JSON.parse(localStorage.getItem('se.feedRead') || '[]').forEach(function (k) { feedRead[k] = 1; }); } catch (e) {}
+  function fkey(x) { return String(ts(x.ts) || 0) + '|' + T(x.title).slice(0, 40); }
+  function isRead(x) { var t = ts(x.ts); return !!feedRead[fkey(x)] || (t !== null && t <= feedSeen); }
+  function unreadN(S) { var n = 0; A(S.feed).forEach(function (x) { if (!isRead(x)) n++; }); return n; }
+  function saveRead() { try { localStorage.setItem('se.feedRead', JSON.stringify(Object.keys(feedRead).slice(-400))); } catch (e) {} }
+  function markRead(k) { if (feedRead[k]) return false; feedRead[k] = 1; saveRead(); return true; }
+  function markAllRead(S) { A(S.feed).forEach(function (x) { feedRead[fkey(x)] = 1; }); feedSeen = Date.now(); saveRead(); try { localStorage.setItem('se.feedSeen', String(feedSeen)); } catch (e) {} }
+  var NOTSYM = { BUY: 1, SELL: 1, EXIT: 1, STOP: 1, HOLD: 1, TRIM: 1, BOOK: 1, NSE: 1, BSE: 1, CE: 1, PE: 1, ATR: 1, EMA: 1, SMA: 1, NAV: 1, IPO: 1, FII: 1, DII: 1, MF: 1, AM: 1, PM: 1, OK: 1, NEW: 1, ALL: 1, HALF: 1, WAIT: 1, NIFTY: 1, BANKNIFTY: 1, SL: 1, PNL: 1, RS: 1, INR: 1 };
+  function alertSym(S, x) {
+    var known = {};
+    ['holdings', 'myWatch', 'watch', 'ideas', 'signals', 'trades', 'setups'].forEach(function (k) { A(S[k]).forEach(function (r) { var y = T(O(r).sym).trim().toUpperCase(); if (y) known[y] = 1; }); });
+    var toks = (T(x.title) + ' ' + T(x.body)).match(/[A-Z][A-Z0-9&\-]{1,19}/g) || [];
+    for (var i = 0; i < toks.length; i++) if (known[toks[i]]) return toks[i];
+    for (var j = 0; j < toks.length; j++) if (toks[j].length >= 3 && !NOTSYM[toks[j]] && /^(BUY|SELL|EXIT|STOP|BOOK|TRIM|HOLD)$/.test(toks[j - 1] || '')) return toks[j];
+    return '';
+  }
   function tabbar(S, ui) {
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
@@ -511,34 +526,80 @@
       '<span class="s2 g5">' + ema.map(function (e) { return '<span><i>' + e[0] + ' EMA</i><b class="num">' + emaNum(e[1]) + '</b></span>'; }).join('') + '</span></button>';
   }
 
-  /* ---------- My watchlist (top of the Setups tab) ---------- */
-  function wrow(x, edit, ui) {
+  /* ---------- Watchlists (top of the Setups tab): several named lists ---------- */
+  function wlists(S) { return A(S.wlists).filter(function (w) { return T(O(w).id).trim(); }); }
+  function wlSel(S, ui) {
+    var ls = wlists(S); if (!ls.length) return null;
+    var id = T(ui.wl); if (!id) { try { id = localStorage.getItem('se.wl') || ''; } catch (e) { id = ''; } }
+    return ls.filter(function (w) { return T(w.id) === id; })[0] || ls[0];
+  }
+  function wrow(x, edit, ui, lid) {
     var sym = T(x.sym).trim(); if (!sym) return '';
     var nm = T(x.name).trim(), ok = x.dataOk !== false;
     var sv = (Array.isArray(x.spark) ? x.spark : []).map(N), up = sv.length > 1 && sv[sv.length - 1] !== null && sv[0] !== null ? sv[sv.length - 1] >= sv[0] : true;
     var l2 = ok ? (T(x.crossText).trim() ? esc(T(x.crossText).trim()) : '<span class="mut">No 10/20 EMA reading yet</span>') : '<span class="mut">No data yet. It fills in after the next scan.</span>';
-    var main = '<button type="button" class="srow wmain" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' +
+    var main = '<button type="button" class="srow wmain" data-c="wl-chart" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '" aria-label="Chart of ' + esc(sym) + '">' +
       '<span class="s1"><span class="wn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
       (ok ? spark(x.spark, up) : '<span class="spk"></span>') +
       '<span class="sp"><span class="num">' + (ok ? px(x.ltp) : DASH) + '</span><span class="num ' + (ok ? tone(x.dayChgPct) : 'flat') + '">' + (ok ? pc(x.dayChgPct, true, true) : '') + '</span></span></span>' +
       '<span class="s2 wl2"><span class="wx clip">' + l2 + '</span>' + (ok ? stackTag(x.stack) : '') + '</span></button>';
-    var rm = edit ? '<button type="button" class="wrm" data-c="watch-remove" data-id="' + esc(sym) + '" aria-label="Remove ' + esc(sym) + ' from watchlist"' + (pend(ui, 'removeWatch:' + sym) ? ' disabled' : '') + '>' + ic('trash') + '</button>' : '';
-    return '<div class="wrow' + (edit ? ' ed' : '') + '">' + main + rm + '</div>';
+    var side = edit ? '<button type="button" class="wrm" data-c="wl-rm" data-id="' + esc(sym) + '" data-list="' + esc(lid) + '" aria-label="Remove ' + esc(sym) + '"' + (pend(ui, 'wlRemove:' + sym) ? ' disabled' : '') + '>' + ic('trash') + '</button>'
+      : '<button type="button" class="wside" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '" aria-label="Details, targets and news for ' + esc(sym) + '">' + ic('info') + '<i>Info</i></button>';
+    return '<div class="wrow' + (edit ? ' ed' : '') + '">' + main + side + '</div>';
   }
   function myWatchSection(S, ui) {
-    var rows = A(S.myWatch).filter(function (x) { return T(x.sym).trim(); }), edit = ui.watchEdit === true && rows.length > 0;
-    var h = '<div class="sec wsec"><h2>My watchlist</h2>' + (rows.length ? '<span class="cnt">' + rows.length + '</span>' : '') + '<span class="sp"></span>' +
-      (rows.length ? '<button type="button" class="linkbtn" data-c="watch-edit">' + (edit ? 'Done' : 'Edit') + '</button>' : '') +
-      (rows.length ? btn('search', null, 'Add stock', 'sm', { icon: 'plus' }) : '') + '</div>';
-    if (!rows.length) {
-      return h + '<div class="empty"><div class="ei">' + ic('star') + '</div><h3>Your watchlist is empty</h3>' +
-        '<p>Search any NSE stock, open it and tap “Add to watchlist”. Stocks you add get a fresh price on every scan and their 10/20 EMA status shows here.</p>' +
-        '<div class="btns">' + btn('search', null, 'Find a stock', 'sm', { icon: 'search' }) + '</div></div>';
+    var ls = wlists(S), w = wlSel(S, ui);
+    var chips = '<div class="chips wlchips">' + ls.map(function (l) {
+      return '<button type="button" class="chip' + (w && l.id === w.id ? ' on' : '') + '" data-c="wl-sel" data-id="' + esc(T(l.id)) + '">' + esc(T(l.name).trim() || 'Watchlist') + ' <span class="mut">' + arr(l.syms).length + '</span></button>';
+    }).join('') + (ls.length < 12 ? '<button type="button" class="chip" data-c="wl-new">' + ic('plus') + ' New list</button>' : '') + '</div>';
+    if (!w) {
+      return '<div class="sec wsec"><h2>Watchlists</h2></div>' + chips + '<div class="empty"><div class="ei">' + ic('star') + '</div><h3>No watchlist yet</h3>' +
+        '<p>Make a list, name it your way, then tap “+ List” on any setup or stock to add it.</p>' +
+        '<div class="btns">' + btn('wl-new', null, 'New watchlist', 'sm', { icon: 'plus' }) + btn('search', null, 'Find a stock', 'sm ghost', { icon: 'search' }) + '</div></div>';
     }
-    return h + '<div class="card mv">' + rows.map(function (x) { return wrow(x, edit, ui); }).join('') + '</div>';
+    var data = {}; A(S.myWatch).forEach(function (x) { var y = T(x.sym).trim().toUpperCase(); if (y) data[y] = x; });
+    var rows = arr(w.syms).map(function (y) { y = T(y).trim().toUpperCase(); return data[y] || { sym: y, dataOk: false }; }).filter(function (x) { return T(x.sym).trim(); });
+    var edit = ui.watchEdit === true;
+    var h = '<div class="sec wsec"><h2>' + esc(T(w.name).trim() || 'Watchlist') + '</h2>' + (rows.length ? '<span class="cnt">' + rows.length + '</span>' : '') + '<span class="sp"></span>' +
+      '<button type="button" class="linkbtn" data-c="watch-edit">' + (edit ? 'Done' : 'Edit') + '</button>' + btn('search', null, 'Add', 'sm', { icon: 'plus' }) + '</div>' + chips;
+    if (edit) h += '<div class="btns hintpad">' + btn('wl-rename', T(w.id), 'Rename', 'sm ghost', { icon: 'edit' }) + btn('wl-del', T(w.id), 'Delete list', 'sm dan', { icon: 'trash' }) + '</div>';
+    if (!rows.length) return h + '<div class="empty"><p>This list is empty. Tap “+ List” on a setup, or open any stock and tap “Watchlist”.</p></div>';
+    return h + (edit ? '' : '<div class="hint hintpad">' + ic('info') + '<span class="t">Tap a stock for its chart. Tap Info on the right for targets, news and details.</span></div>') +
+      '<div class="card mv">' + rows.map(function (x) { return wrow(x, edit, ui, T(w.id)); }).join('') + '</div>';
+  }
+  function wlPickSheet(S, ui, data) {
+    var sym = T(data.id).trim().toUpperCase(), ls = wlists(S);
+    var body = '<p class="lead">Tap a list to add or remove <b>' + esc(sym) + '</b>.</p><div class="card mv">' + (ls.length ? ls.map(function (l) {
+      var on = arr(l.syms).some(function (y) { return T(y).toUpperCase() === sym; });
+      return '<button type="button" class="wl wlp' + (on ? ' on' : '') + '" data-c="wl-toggle" data-id="' + esc(T(l.id)) + '" data-sym="' + esc(sym) + '"' + (pend(ui, 'wl:' + T(l.id)) ? ' disabled' : '') + '><b>' + esc(T(l.name).trim() || 'Watchlist') + '</b><span class="mut">' + arr(l.syms).length + ' stocks</span><span class="wck">' + (on ? ic('check') : ic('plus')) + '</span></button>';
+    }).join('') : '<div class="empty"><p>No lists yet. Make one below.</p></div>') + '</div>' +
+      field('name', 'New list name', '', { mode: 'text', ph: 'e.g. Breakouts', max: 30, enter: 'done' }) + '<div class="formerr" id="formerr" hidden></div>';
+    return shell('Add ' + sym + ' to a watchlist', body, btn('sheet-close', null, 'Done', 'ghost') + btn('submit', null, 'Create list + add', 'pri', { icon: 'plus' }));
+  }
+  function wlNameSheet(S, ui, data) {
+    var w = wlists(S).filter(function (l) { return T(l.id) === T(data.id); })[0];
+    return shell(w ? 'Rename list' : 'New watchlist', field('name', 'List name', w ? T(w.name) : '', { mode: 'text', ph: 'e.g. Long term', max: 30, enter: 'done' }) + '<div class="formerr" id="formerr" hidden></div>',
+      btn('sheet-close', null, 'Cancel', 'ghost') + btn('submit', null, w ? 'Save' : 'Create', 'pri', { icon: 'check' }));
+  }
+  function wlDelSheet(S, ui, data) {
+    var w = wlists(S).filter(function (l) { return T(l.id) === T(data.id); })[0];
+    return shell('Delete “' + esc(w ? T(w.name) : 'list') + '”?', '<p class="lead">The list and its ' + (w ? arr(w.syms).length : 0) + ' stocks are removed from this list. Your holdings and trades are not touched.</p>',
+      btn('sheet-close', null, 'Keep it', 'ghost') + btn('submit', null, 'Delete list', 'dan'));
+  }
+  function newsCard(ui) {
+    var n = O(O(ui.stock).news);
+    var h = '<section class="card sk-card" id="sk-news"><h3 class="skh">News</h3>';
+    if (n.loading) return h + '<p class="sk-p mut">Loading headlines…</p></section>';
+    if (T(n.err).trim()) return h + '<p class="sk-p mut">Could not load news: ' + esc(T(n.err)) + '</p>' + btn('news-load', null, 'Try again', 'sm ghost') + '</section>';
+    var it = A(n.items).filter(function (x) { return /^https:\/\//.test(T(x.link)); }).slice(0, 8);
+    if (!n.items) return h + btn('news-load', null, 'Load latest news', 'sm', { icon: 'refresh' }) + '</section>';
+    if (!it.length) return h + '<p class="sk-p mut">No news in the last 3 weeks.</p></section>';
+    return h + it.map(function (x) {
+      return '<a class="nwi" href="' + esc(T(x.link)) + '" rel="noopener"><b>' + esc(T(x.title).slice(0, 180)) + '</b><span class="mut">' + esc(T(x.source).slice(0, 40)) + (ts(x.ts) !== null ? ' · ' + esc(rel(x.ts, ui.now)) : '') + '</span></a>';
+    }).join('') + '<p class="sk-p mut sm">Headlines from Google News. Opens in your browser.</p></section>';
   }
   function setups(S, ui) {
-    var ws = watchItems(S), asof = '', h = '<div class="btns hintpad">' + btn('index-open', null, 'Index stocks only (Nifty 50, Bank, Midcap…)', 'sm', { icon: 'layers' }) + '</div>' + trackRow(S) + ideasBlock(S, 'setups') + myWatchSection(S, ui);
+    var ws = watchItems(S), asof = '', h = myWatchSection(S, ui) + '<div class="btns hintpad">' + btn('index-open', null, 'Index stocks only (Nifty 50, Bank, Midcap…)', 'sm', { icon: 'layers' }) + '</div>' + ideasBlock(S, 'setups') + trackRow(S);
     ws.forEach(function (x) { if (!asof) asof = barDayText(x.barDay); });
     h += '<div class="card setuphd"><h2>Fresh EMA crossovers</h2>' +
       '<div class="crit"><span>' + ic('check') + '10 EMA crossed above 20 EMA</span><span>' + ic('check') + '10 EMA above the 50, 100 and 200 EMA</span><span>' + ic('check') + 'Traded ₹25 crore+ a day</span></div>' +
@@ -786,7 +847,9 @@
   var KIND = { buy: ['buy', 'up', 'Buy'], sell: ['sell', 'down', 'Sell'], warn: ['warn', 'warn', 'Warning'], brief: ['brief', 'sun', 'Brief'], info: ['info', 'info', 'Info'] };
   function feed(S, ui) {
     var f = A(S.feed).slice(0, 100), now = ui.now;
-    var h = '<div class="sec"><h2>Alerts</h2><span class="cnt">' + f.length + '</span><span class="sp"></span>' +
+    var un = unreadN(S), fo = O(ui.feedOpen);
+    var h = '<div class="sec"><h2>Alerts</h2><span class="cnt">' + (un ? un + ' new' : f.length) + '</span><span class="sp"></span>' +
+      (un ? '<button type="button" class="linkbtn" data-c="feed-allread">Mark all read</button>' : '') +
       (f.length ? '<button type="button" class="linkbtn" data-c="clearfeed"' + (pend(ui, 'clearFeed') ? ' disabled' : '') + '>Clear all</button>' : '') + '</div>';
     if (!f.length) {
       return h + '<div class="empty"><div class="ei">' + ic('alerts') + '</div><h3>No alerts yet</h3>' +
@@ -797,9 +860,11 @@
       var lab = dayLabel(x.ts, now);
       if (lab !== cur) { if (open) h += '</div>'; h += '<div class="daylab">' + esc(lab) + '</div><div class="rows">'; open = true; cur = lab; }
       var k = KIND[x.kind] || KIND.info;
-      h += '<div class="fi ' + k[0] + '"><div class="ico"><span>' + ic(k[1]) + '</span></div><div class="tx">' +
+      var key = fkey(x), sym = alertSym(S, x), op = fo[key] === true;
+      h += '<button type="button" class="fi ' + k[0] + (isRead(x) ? '' : ' un') + (op ? ' ex' : '') + '" data-c="alert-open" data-id="' + esc(key) + '" data-sym="' + esc(sym) + '"><div class="ico"><span>' + ic(k[1]) + '</span></div><div class="tx">' +
         '<div class="tt"><b>' + tx(x.title, 'Untitled alert') + '</b><time>' + k[2] + ' · ' + hm(x.ts) + '</time></div>' +
-        (T(x.body).trim() ? '<div class="bd">' + esc(T(x.body).trim()) + '</div>' : '') + '</div></div>';
+        (T(x.body).trim() ? '<div class="bd">' + esc(T(x.body).trim()) + '</div>' : '') +
+        (op && sym ? '<div class="kd fgo">Open ' + esc(sym) + ' ›</div>' : '') + '</div></button>';
     });
     if (open) h += '</div>';
     return h;
@@ -1085,13 +1150,13 @@
     var lo = N(x.entryLow), hi = N(x.entryHigh);
     var zone = lo > 0 && hi > 0 ? (Math.round(lo) === Math.round(hi) ? emaNum(lo) : emaNum(Math.min(lo, hi)) + '–' + emaNum(Math.max(lo, hi))) : DASH;
     var rr = N(x.rr), hz = N(x.horizonDays);
-    return '<button type="button" class="srow idea" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' +
+    return '<div class="wrow irow"><button type="button" class="srow idea" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' +
       '<span class="s1"><span class="rk num">' + (i + 1) + '</span><span class="wn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
       spark(x.spark, up) + '<span class="sp"><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + (N(x.dayChgPct) === null ? '' : pc(x.dayChgPct, true, true)) + '</span></span></span>' +
       '<span class="s2 idz">' + scoreRing(x.score, k.cls, 36) + '<span class="idt"><span class="vpill sm ' + k.cls + '">' + esc(lab.slice(0, 5)) + '</span></span>' +
       '<span class="idc idw"><i>Entry zone</i><b class="num">' + zone + '</b></span><span class="idc"><i>Stop</i><b class="num">' + emaNum(x.stop) + '</b></span><span class="idc"><i>Target 1</i><b class="num">' + emaNum(x.t1) + '</b></span></span>' +
       (full && (T(x.headline).trim() || (rr !== null && rr > 0) || hz > 0) ? '<span class="s3 clip">' + ((rr !== null && rr > 0) ? 'Reward : risk 1 : ' + (rr > 99 ? '>99' : rr.toFixed(1)) : '') + (hz > 0 ? ((rr !== null && rr > 0) ? ' · ' : '') + 'about ' + cnt(hz) + ' trading days' : '') + '</span>' : '') +
-      '</button>';
+      '</button><button type="button" class="wside" data-c="wl-pick" data-id="' + esc(sym) + '" aria-label="Add ' + esc(sym) + ' to a watchlist">' + ic('plus') + '<i>List</i></button></div>';
   }
   function ideasBlock(S, where) {
     var rows = A(S.ideas).filter(function (x) { return T(x.sym).trim(); }), today = where === 'today';
@@ -1188,7 +1253,6 @@
     if (ui.tab === 'portfolio') return portfolio(S, ui);
     if (ui.tab === 'alerts') return alerts(S, ui);
     if (ui.tab === 'setups') return setups(S, ui);
-    if (ui.tab === 'alerts') markFeedSeen();
     if (ui.tab === 'money') return money(S, ui);
     if (ui.tab === 'funds') return fundsView(S, ui);
     if (ui.tab === 'bot') return today(S, ui);
@@ -1867,8 +1931,8 @@
     }
     var inW = st.info.inWatch === true, busy = pend(ui, 'addWatch:' + sym) || pend(ui, 'removeWatch:' + sym);
     var held = st.info.isHolding === true || A(O(S).holdings).some(function (h) { return T(h.sym).trim().toUpperCase() === sym.toUpperCase(); });
-    return '<div class="sk-act"><button type="button" class="btn grow wbtn' + (inW ? ' on' : '') + '" data-c="watch" aria-pressed="' + (inW ? 'true' : 'false') + '"' + (busy ? ' disabled' : '') + '>' +
-      (inW ? 'In watchlist ✓' : ic('plus') + 'Add to watchlist') + '</button>' +
+    return '<div class="sk-act"><button type="button" class="btn grow wbtn' + (inW ? ' on' : '') + '" data-c="wl-pick" data-id="' + esc(sym) + '" aria-pressed="' + (inW ? 'true' : 'false') + '"' + (busy ? ' disabled' : '') + '>' +
+      (inW ? 'In watchlist ✓' : ic('plus') + 'Watchlist') + '</button>' +
       (held ? '<div class="inhold">' + ic('check') + 'In your portfolio</div>' : btn('stock-add', sym, 'Add to holdings', 'grow', { icon: 'portfolio' })) +
       targetButton(S, ui, sym) + '</div>';
   }
@@ -2022,8 +2086,8 @@
       return skCard('10 / 20 EMA', 4) + skCard('Moving averages', 5) + skCard('Technical checklist', 5) + skCard('Momentum', 4);
     }
     var d = st.info;
-    return listingCard(d) + crossCard(d) + emaTable(d) + checksCard(d) + momentumCard(d) + statsCard(d) + moneyCard(d) + levelsCard(d) + heldCard(d) + setupsCard(d) +
-      '<section class="card sk-card" id="sk-sum"><h3 class="skh">In short</h3>' + (T(d.summary).trim() ? '<p class="sk-p">' + esc(T(d.summary).trim()) + '</p>' : '<p class="sk-p mut">No summary available.</p>') + '</section>' +
+    return listingCard(d) + '<section class="card sk-card" id="sk-sum"><h3 class="skh">In short</h3>' + (T(d.summary).trim() ? '<p class="sk-p">' + esc(T(d.summary).trim()) + '</p>' : '<p class="sk-p mut">No summary available.</p>') + '</section>' +
+      levelsCard(d) + heldCard(d) + setupsCard(d) + newsCard(ui) + crossCard(d) + emaTable(d) + checksCard(d) + momentumCard(d) + statsCard(d) + moneyCard(d) +
       '<p class="sk-foot">' + ic('info') + '<span>Data comes from the last scan or quote. It describes the chart and is not investment advice. Past patterns do not promise what happens next.</span></p>';
   }
   function stockPart(part, S, ui, data) {
@@ -2041,7 +2105,7 @@
     var sym = T(O(ui.stock).sym) || T(data.id);
     return '<div class="scrim"></div><section class="sheet full stk" role="dialog" aria-modal="true" aria-label="' + esc((sym || 'Stock') + ' stock page') + '">' +
       '<div class="sh stkh" id="st-head">' + stockHead(sym, ui) + '</div>' +
-      '<div class="sb" id="st-scroll"><div id="st-price">' + stockPrice(ui) + '</div><div id="st-act">' + stockActions(S, ui) + '</div><div id="st-verdict">' + verdictCard(S, ui) + '</div><div id="st-panel">' + (O(ui).fullCards === true ? panelCard(S, ui) : '') + '</div><div id="st-chart" class="st-chart">' + stockChartPart(ui) + '</div><div id="st-body">' + stockBody(S, ui) + '</div></div></section>';
+      '<div class="sb" id="st-scroll"><div id="st-price">' + stockPrice(ui) + '</div><div id="st-act">' + stockActions(S, ui) + '</div><div id="st-chart" class="st-chart">' + stockChartPart(ui) + '</div><div id="st-verdict">' + verdictCard(S, ui) + '</div><div id="st-panel">' + (O(ui).fullCards === true ? panelCard(S, ui) : '') + '</div><div id="st-body">' + stockBody(S, ui) + '</div></div></section>';
   }
 
   /* =====================================================================================================
@@ -2337,6 +2401,9 @@
     if (kind === 'index') return indexSheet(S, ui);
     if (kind === 'opt') return optSheet(S, ui);
     if (kind === 'fno') return fnoSheet(S, ui);
+    if (kind === 'wlpick') return wlPickSheet(S, ui, data);
+    if (kind === 'wlname') return wlNameSheet(S, ui, data);
+    if (kind === 'wldel') return wlDelSheet(S, ui, data);
     if (kind === 'resettrack') return shell('Reset the live record?', '<p class="lead">All picks recorded on this phone since the live record began will be deleted and the count starts again from zero. The replay is kept. Trades, holdings and strategies are not affected.</p>',
         btn('sheet-close', null, 'Keep it', 'ghost') + btn('submit', null, 'Reset record', 'dan'));
     if (kind === 'take') {
@@ -2422,7 +2489,8 @@
     panelOpen: function (ui, i) { var ms = mgrs(O(O(O(ui).stock).info).panel); var m = ms[i]; return m ? pnlOpen(ui, ms, m) : false; },
     stockPart: stockPart, searchBody: searchBody, view: view, sheet: sheet, deviceList: deviceList, deviceIssues: deviceIssues,
     takeCalc: takeCalc, closeCalc: closeCalc, settingsCalc: settingsCalc, isBusy: function (S) { return isBusy(O(S)); },
-    actItems: function (S) { return actItems(O(S)); }
+    actItems: function (S) { return actItems(O(S)); },
+    markRead: markRead, markAllRead: function (S) { markAllRead(O(S)); }, wlSel: function (S, ui) { return wlSel(O(S), O(ui)); }
   };
   root.SE = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

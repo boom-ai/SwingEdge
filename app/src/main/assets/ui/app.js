@@ -54,6 +54,7 @@
         }
       }
       if (sheet && sheet.kind === 'track') repaintTrack();
+      if (sheet && sheet.kind === 'wlpick' && !sheet.waiting) { var nv = elSheet.querySelector('input[name="name"]'); if (!nv || !nv.value) paintSheet(true); }
       if (renderFailed) { renderFailed = false; elErr.hidden = true; }
     } catch (e) {
       renderFailed = true;
@@ -171,6 +172,8 @@
       if (name === 'funds') { var fm = ui.funds || (ui.funds = {}); fm.loading = false; if (ok) { fm.res = res; fm.err = ''; fm.at = Date.now(); } else fm.err = err; if (ui.tab === 'funds') render(); return; }
       if (name === 'fundInfo') { ui.fundInfo = ui.fundInfo || {}; var fc = SE.T(res && res.code) || (sheet && sheet.kind === 'fund' ? SE.T(sheet.data.id) : ''); if (fc) ui.fundInfo[fc] = ok ? res : { ok: false, error: err }; if (sheet && sheet.kind === 'fund') paintSheet(true); return; }
       if (name === 'addWatch' || name === 'removeWatch') { onWatchResult(name, ok, err); return; }
+      if (name === 'news') { var ns = ui.stock; if (ns && (!res.sym || String(res.sym).toUpperCase() === ns.sym)) { ns.news = ok ? { items: SE.A(res.items) } : { err: err }; paintStock(['body']); } return; }
+      if (name === 'wlAdd' || name === 'wlRemove' || name === 'wlCreate' || name === 'wlRename' || name === 'wlDelete') { onWlResult(name, res, ok, err); return; }
       if (name === 'getChart' && chartReply(res, ok, err)) return;
       clearPending(name, true);
       if (name === 'setTarget' || name === 'clearTarget') onTargetResult(name, res, ok);
@@ -313,6 +316,14 @@
     if (!sheet || sheet.waiting) return;
     var k = sheet.kind, id = SE.T(sheet.data.id), a;
     if (k === 'search') { searchEnter(); return; }
+    if (k === 'wlname' || k === 'wlpick') {
+      var wn = val('name').trim();
+      if (!check([['name', wn.length > 0 && wn.length <= 30, 'Type a name (up to 30 letters)']])) return;
+      if (k === 'wlname' && id) { sheetBusy('wlRename'); act('wlRename', { id: id, name: wn }, 'wlRename'); }
+      else { sheetBusy('wlCreate'); act('wlCreate', k === 'wlpick' ? { name: wn, sym: id } : { name: wn }, 'wlCreate'); }
+      return;
+    }
+    if (k === 'wldel') { sheetBusy('wlDelete'); act('wlDelete', { id: id }, 'wlDelete'); return; }
     if (k === 'take') {
       var p = num('price'), q = num('qty');
       if (!check([['price', p !== null && p > 0 && p < 1e7, 'Enter the price you paid'], ['qty', q !== null && q >= 1 && Math.round(q) === q && q < 1e8, 'Whole number of shares']])) return;
@@ -688,6 +699,7 @@
     else { st.info = null; st.err = err; }
     paintStock(['head', 'price', 'act', 'verdict', 'panel', 'chart', 'body']);
     if (sheet && sheet.kind === 'chartfull') cfMeta();
+    if (ok && !ui.stock.news) loadNews();
     if (ok && typeof ui.afterInfo === 'function') { var fn = ui.afterInfo; ui.afterInfo = null; try { fn(); } catch (e) { /* ignore */ } }
   }
   function retryStock() {
@@ -729,6 +741,22 @@
     if (ok) toast(name === 'addWatch' ? 'Added to your watchlist' : 'Removed from your watchlist', 'ok');
     else { if (rec && rec.onFail) rec.onFail(); toast('Watchlist: ' + err, 'err'); }
     render(true); paintStock(['act']);
+  }
+  function loadNews() {
+    var st = ui.stock; if (!st) return;
+    st.news = { loading: true }; paintStock(['body']);
+    try { bridge().action('news', JSON.stringify({ sym: st.sym })); } catch (e) { st.news = { err: 'Could not reach the app.' }; paintStock(['body']); }
+  }
+  function onWlResult(name, res, ok, err) {
+    clearPending(name, true); Object.keys(ui.pending).forEach(function (k) { if (k.indexOf('wl:') === 0) { clearTimeout(ui.pending[k]); delete ui.pending[k]; } });
+    if (!ok) { if (sheet && sheet.waiting === name) sheetIdle(err); else toast(err, 'err'); render(true); return; }
+    var msg = { wlAdd: 'Added to ' + SE.T(res.list || 'watchlist'), wlRemove: 'Removed', wlCreate: 'List created', wlRename: 'Renamed', wlDelete: 'List deleted' }[name];
+    if (name === 'wlCreate' && res.id) { ui.wl = SE.T(res.id); try { localStorage.setItem('se.wl', ui.wl); } catch (e) {} }
+    if (name === 'wlDelete' || name === 'wlCreate') ui.watchEdit = false;
+    toast(msg, 'ok');
+    if (sheet && sheet.waiting === name && sheet.kind !== 'wlpick') closeSheet();
+    else if (sheet && sheet.kind === 'wlpick') { sheet.waiting = null; pull(); setTimeout(function () { if (sheet && sheet.kind === 'wlpick') paintSheet(true); }, 400); }
+    pull(); render(true);
   }
   function toggleWatch() {
     var st = ui.stock; if (!stockOpen() || !st.info || watchPending(st.sym)) return;
@@ -1011,6 +1039,26 @@
       case 'recent-clear': ui.recent = []; try { window.localStorage.removeItem('se_recent'); } catch (e) { /* ignore */ } paintSearchBody(); break;
       case 'watch': toggleWatch(); break;
       case 'watch-edit': ui.watchEdit = !ui.watchEdit; render(true); break;
+      case 'wl-sel': ui.wl = id; ui.watchEdit = false; try { localStorage.setItem('se.wl', id); } catch (e) {} render(true); break;
+      case 'wl-new': openSheet('wlname', {}); break;
+      case 'wl-rename': openSheet('wlname', { id: id }); break;
+      case 'wl-del': openSheet('wldel', { id: id }); break;
+      case 'wl-pick': if (id) openSheet('wlpick', { id: id }, true); break;
+      case 'wl-chart': openStock(id, el && el.getAttribute('data-name')); openChartFull(); break;
+      case 'wl-rm': act('wlRemove', { sym: id, id: el ? el.getAttribute('data-list') : '' }, 'wlRemove:' + id); break;
+      case 'wl-toggle': (function () {
+        var sym = el ? SE.T(el.getAttribute('data-sym')) : '', w = SE.A(S.wlists).filter(function (l) { return SE.T(l.id) === id; })[0]; if (!w || !sym) return;
+        var on = (Array.isArray(w.syms) ? w.syms : []).some(function (y) { return SE.T(y).toUpperCase() === sym.toUpperCase(); });
+        act(on ? 'wlRemove' : 'wlAdd', { sym: sym, id: id }, 'wl:' + id);
+      })(); break;
+      case 'alert-open': (function () {
+        var sy = el ? SE.T(el.getAttribute('data-sym')) : '';
+        SE.markRead(id); ui.feedOpen = ui.feedOpen || {};
+        if (sy) { render(true); openStock(sy); return; }
+        ui.feedOpen[id] = !ui.feedOpen[id]; render(true);
+      })(); break;
+      case 'feed-allread': SE.markAllRead(S); render(true); break;
+      case 'news-load': loadNews(); break;
       case 'watch-remove': watchCall('removeWatch', id, null); break;
       case 'stock-add': openSheet('add', { sym: id }); break;
       case 'range': {

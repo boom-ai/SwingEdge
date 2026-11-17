@@ -26,6 +26,8 @@ const STOCKS = ['TATAMOTORS', 'POLYCAB', 'ILLIQTEXTILE', 'NEWSYM', 'M&M', 'YESBA
 }));
 const NEWL = mockReply('newListings', { days: 365 }); const BROKEN_INFO = mockReply('stockInfo', { sym: 'RELIANCE' }, 'broken'); const BROKEN_NEW = mockReply('stockInfo', { sym: 'NEWIPO' }, 'broken');
 const FAILED = mockReply('stockInfo', { sym: 'ZZTEST' });
+const FUNDS = mockReply('funds', {}); const FUNDS_BROKEN = mockReply('funds', {}, 'broken'); const FINFO = mockReply('fundInfo', { code: '100000' }); const FBAD = mockReply('fundInfo', { code: 'x' });
+const MONEY = mockReply('moneyFlow', {}); const MONEY_BROKEN = mockReply('moneyFlow', {}, 'broken'); const SECTOR = mockReply('flowSector', { name: 'Capital Goods' }); const SECTOR_BAD = mockReply('flowSector', { name: 'Nope' });
 const SEARCHES = [mockReply('search', { q: 'tata' }), mockReply('search', { q: 'zzqx' }), mockReply('search', { q: 'tata mot' }), mockReply('search', { q: 'kraft' })];
 const LISTS = [SEARCHES[0].list, mockReply('search', { q: '' }, 'broken').list, { count: 3000, updatedAt: Date.now() - 5 * 864e5, source: 'saved', stale: true, newCount: 2 }, { count: 0, updatedAt: 0, source: 'bundled', stale: false, newCount: 0 }];
 let seed = Number(process.env.SEED || 12345);
@@ -51,7 +53,7 @@ function mutate(v, depth) {
 }
 const N = Number(process.argv[2] || 4000);
 const bases = ['', 'empty', 'paused', 'closed', 'broken'].map(mockState);
-const TABS = ['today', 'setups', 'trades', 'portfolio', 'alerts', undefined, 'zzz'];
+const TABS = ['today', 'setups', 'money', 'funds', 'trades', 'portfolio', 'alerts', undefined, 'zzz'];
 const SHEETS = ['take', 'close', 'add', 'paste', 'remove', 'sold', 'clearfeed', 'track', 'resettrack', 'settings', 'chartfull', 'target', 'nope'];
 let fails = 0, renders = 0;
 function check(what, html, info) {
@@ -98,6 +100,22 @@ function run(S, ui, tag) {
     check('sheet:search', SE.sheet('search', S, u2, {}), tag);
     check('searchBody', SE.searchBody(S, u2), tag);
     u2.tab = 'setups'; check('view:setups+watch', SE.view(S, u2), tag);
+    const mu = Object.assign({}, u2, { tab: 'money', money: pick([null, {}, { res: MONEY, seg: pick(['together', 'promoters', 'fii', 'mf', JUNK()]) }, { res: mutate(MONEY, 0), seg: JUNK() }, { res: MONEY_BROKEN }, { err: pick(['x', JUNK()]) }, { loading: true }, JUNK()]),
+      sectors: pick([{}, { 'Capital Goods': SECTOR }, { 'Capital Goods': mutate(SECTOR, 0) }, { 'Capital Goods': SECTOR_BAD }, JUNK()]) });
+    check('view:money', SE.view(S, mu), tag);
+    const fu = Object.assign({}, u2, { tab: 'funds', funds: pick([null, {}, { res: FUNDS }, { res: mutate(FUNDS, 0) }, { res: FUNDS_BROKEN }, { err: JUNK() }, JUNK()]), fundInfo: pick([{}, { '100000': FINFO }, { '100000': mutate(FINFO, 0) }, { '100000': FBAD }, JUNK()]) });
+    check('view:funds', SE.view(S, fu), tag);
+    const IXR = mockReply('indexView', { index: 'Nifty Bank' });
+    const iu = Object.assign({}, u2, { index: pick([{}, { res: IXR }, { res: mutate(IXR, 0), loading: pick([true, false]) }, { err: JUNK() }, JUNK()]) });
+    check('sheet:index', SE.sheet('index', S, iu, {}), tag);
+    const OPR = mockReply('options', {});
+    const ou = Object.assign({}, u2, { opt: pick([{}, { res: OPR, calc: { prem: pick([120, 0, -5, 1e9, JUNK()]), cap: pick([1e5, 0, JUNK()]), risk: pick([2, 50, JUNK()]), idx: pick(['NIFTY', 'BANKNIFTY', JUNK()]) } }, { res: mutate(OPR, 0) }, JUNK()]) });
+    check('sheet:opt', SE.sheet('opt', S, ou, {}), tag);
+    const FR = mockReply('fno', { sym: 'NIFTY' }); const FRB = mockReply('fno', { sym: 'NIFTY' }, 'broken');
+    const fu2 = Object.assign({}, u2, { fno: pick([{}, { res: FR }, { res: mutate(FR, 0), form: pick([null, { side: 'CE', strike: 25450, buy: pick([true, false]), type: pick(['LIMIT', 'MARKET', JUNK()]) }, JUNK()]) }, { res: FRB }, JUNK()]) });
+    check('sheet:fno', SE.sheet('fno', S, fu2, {}), tag);
+    check('sheet:fund', SE.sheet('fund', S, fu, { id: pick(['100000', JUNK(), EVIL]) }), tag);
+    check('sheet:sector', SE.sheet('sector', S, mu, { id: pick(['Capital Goods', JUNK(), EVIL]) }), tag);
     // v3: verdict card, target sheet, full-screen chart chrome, targets / ideas on every tab
     check('stockPart:verdict', SE.stockPart('verdict', S, u2, { id: b.sym }), tag);
     const cfu = Object.assign({}, u2, { cf: rnd() < 0.1 ? JUNK() : { sym: pick([b.sym, JUNK()]), res: rnd() < 0.8 ? mutate(rnd() < 0.5 ? b.chart : b.chart2, 0) : pick([null, JUNK()]), err: pick(['', 'boom', JUNK()]), loading: pick([true, false, JUNK()]), have500: pick([true, false, JUNK()]) },
@@ -126,10 +144,11 @@ bases.forEach((b, i) => run(b.state, { tab: 'today', expanded: {}, pending: {}, 
 // unmutated new screens must render completely, with the real numbers in them
 {
   const b = bases[0], t = STOCKS[0], u = { tab: 'setups', pending: {}, device: b.device, now: Date.now(), emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, stock: { sym: t.sym, info: t.info, chart: t.chart, want: 260, range: 260 }, recent: [{ sym: 'ITC', name: 'ITC Ltd' }], search: { q: 'tata', sent: 'tata', shown: 'tata', results: SEARCHES[0].results } };
+  u.fullCards = true;
   const must = (what, html, re) => { renders++; if (!re.test(html)) { fails++; console.log('FAIL', what, 'missing', re); } };
   const html = SE.sheet('stock', b.state, u, { id: t.sym });
   must('stock page', html, /Tata Motors Ltd/); must('stock page', html, /10 \/ 20 EMA/); must('stock page', html, /Technical checklist/); must('stock page', html, /Setups it matches/); must('stock page', html, /aria-label="Price chart with volume"/);
-  must('stock page', html, /Add to watchlist/); must('stock page', html, /In your portfolio/);
+  must('stock page', html, /Watchlist/); must('stock page', html, /In your portfolio/);
   const hb = SE.sheet('stock', b.state, u, { id: 'RELIANCE' }); const ri = mockReply('stockInfo', { sym: 'RELIANCE' });
   const u3 = Object.assign({}, u, { stock: { sym: 'RELIANCE', info: ri, chart: t.chart, want: 260, range: 260 } });
   const vb = SE.stockPart('verdict', b.state, u3, { id: 'RELIANCE' });
@@ -138,7 +157,7 @@ bases.forEach((b, i) => run(b.state, { tab: 'today', expanded: {}, pending: {}, 
   must('verdict WAIT', SE.stockPart('verdict', b.state, Object.assign({}, u, { stock: { sym: 'TATAMOTORS', info: mockReply('stockInfo', { sym: 'TATAMOTORS' }) } }), { id: 'TATAMOTORS' }), /WAIT/);
   { const ni = JSON.parse(JSON.stringify(ri)); delete ni.call; const nv = SE.stockPart('verdict', b.state, Object.assign({}, u, { stock: { sym: 'RELIANCE', info: ni } }), { id: 'RELIANCE' }); renders++; if (/BUY|WAIT|AVOID/.test(nv)) { fails++; console.log('FAIL verdict shown without call'); } }
   must('trades targets', SE.view(b.state, Object.assign({}, u, { tab: 'trades' })), /My targets/); must('trades targets hit', SE.view(b.state, Object.assign({}, u, { tab: 'trades' })), /TARGET HIT|STOP HIT|Target reached|Stop reached/);
-  must('today ideas', SE.view(b.state, Object.assign({}, u, { tab: 'today' })), /Best setups now/); must('setups ideas', SE.view(b.state, Object.assign({}, u, { tab: 'setups' })), /Best setups now/);
+  must('today ideas', SE.view(b.state, Object.assign({}, u, { tab: 'today', fullCards: true })), /Best setups now/); must('setups ideas', SE.view(b.state, Object.assign({}, u, { tab: 'setups' })), /Best setups now/);
   must('target sheet', SE.sheet('target', b.state, u3, { id: 'RELIANCE' }), /(Save|Update) target/);
   must('chartfull sheet', SE.sheet('chartfull', b.state, u3, { id: 'RELIANCE' }), /cf-canvas/);
   must('search', SE.sheet('search', b.state, u, {}), /TATAMOTORS/); must('watchlist', SE.view(b.state, u), /My watchlist/);

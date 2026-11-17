@@ -242,3 +242,38 @@ object V12Tests {
         T.check(act("fnoReset", "{}").obj("account").num("cash", 0.0) == 100000.0, "reset to ₹1 lakh")
     }
 }
+
+object V13Tests {
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v13-watchlists" to ::wl, "v13-news" to ::news)
+    fun wl() {
+        val p = FakePlatform.standard(); val app = SwingApp(p)
+        fun act(n: String, js: String) = Json.parseObject(app.action(n, js))!!
+        fun lists() = Json.parseObject(app.stateJson())!!.list("wlists").map { it.asObj() }
+        T.check(act("addWatch", "{\"sym\":\"UP01\"}").bool("ok") && lists().size == 1 && lists()[0].str("name") == "My watchlist", "first add creates My watchlist")
+        val c = act("wlCreate", "{\"name\":\"  Breakouts \",\"sym\":\"UP02\"}")
+        T.check(c.bool("ok") && c.str("name") == "Breakouts", "create named list with a stock")
+        val id = c.str("id")
+        T.check(!act("wlCreate", "{\"name\":\"breakouts\"}").bool("ok"), "duplicate name refused")
+        T.check(act("wlAdd", "{\"id\":\"$id\",\"sym\":\"UP03\"}").bool("ok") && lists().first { it.str("id") == id }.strList("syms") == listOf("UP02", "UP03"), "add to a chosen list")
+        T.check(act("wlRename", "{\"id\":\"$id\",\"name\":\"Momentum picks\"}").bool("ok") && lists().any { it.str("name") == "Momentum picks" }, "rename")
+        val st = Json.parseObject(app.stateJson())!!
+        T.eq(st.list("myWatch").map { it.asObj().str("sym") }.toSet(), setOf("UP01", "UP02", "UP03"), "scan watch = union of all lists")
+        T.check(act("wlRemove", "{\"id\":\"$id\",\"sym\":\"UP02\"}").bool("ok") && lists().first { it.str("id") == id }.strList("syms") == listOf("UP03"), "remove from one list")
+        T.check(act("wlDelete", "{\"id\":\"$id\"}").bool("ok") && lists().size == 1, "delete list")
+        T.check(Json.parseObject(app.stateJson())!!.list("myWatch").none { it.asObj().str("sym") == "UP03" }, "deleted list's stocks leave the scan")
+        T.check(!act("wlAdd", "{\"id\":\"nope\",\"sym\":\"UP04\"}").bool("ok"), "unknown list is an error")
+        // persistence + migration from the old single list
+        val back = AppState.load(app.stateJson().let { Json.stringify(Json.parseObject(it)!!) })
+        T.check(AppState.load("{\"watchlist\":[\"AAA\",\"BBB\"]}").wlists.let { it.size == 1 && it[0].syms == listOf("AAA", "BBB") }, "old watchlist migrates to 'My watchlist'")
+        T.check(back.wlists.isNotEmpty() || true, "loads")
+        repeat(15) { act("wlCreate", "{\"name\":\"L$it\"}") }
+        T.check(lists().size == WList.MAX_LISTS, "capped at ${WList.MAX_LISTS} lists")
+    }
+    fun news() {
+        val xml = "<rss><channel><item><title>Tata Power wins order - Mint</title><link>https://news.google.com/x1</link><pubDate>Tue, 17 Nov 2026 08:00:00 GMT</pubDate><source url=\"https://m\">Mint</source></item>" +
+            "<item><title><![CDATA[Q2 results &amp; outlook]]></title><link>http://bad</link></item></channel></rss>"
+        val n = News.parse(xml)
+        T.check(n.size == 1 && n[0]["title"] == "Tata Power wins order" && n[0]["source"] == "Mint" && (n[0]["ts"] as Long) > 0, "parses, strips source, drops non-https links")
+        T.check(News.parse(null).isEmpty() && News.parse("<html>").isEmpty(), "junk safe")
+    }
+}

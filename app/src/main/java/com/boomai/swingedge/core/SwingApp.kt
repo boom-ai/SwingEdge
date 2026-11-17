@@ -144,7 +144,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno")) return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "news") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1397,19 +1397,49 @@ class SwingApp(private val p: Platform) {
                 st.feed.clear()
                 return ok()
             }
-            "addWatch" -> {
+            "addWatch", "wlAdd" -> {
                 loadUniverse()
                 val sym = realSym(HoldingsImport.cleanSymbol(a.str("sym")))
                 if (!validSym(sym)) return err("Enter a valid NSE symbol, e.g. RELIANCE")
-                if (st.watch.contains(sym)) return ok("sym" to sym)
-                if (st.watch.size >= AppState.MAX_WATCH) return err("Your watchlist is full (" + AppState.MAX_WATCH + " stocks) — remove one first")
-                st.watch.add(sym)
+                if (st.wlists.isEmpty()) st.wlists.add(WList("w1", "My watchlist"))
+                val w = st.wlists.firstOrNull { it.id == a.str("id") } ?: if (a.str("id").isEmpty()) st.wlists[0] else return err("That watchlist no longer exists")
+                if (w.syms.contains(sym)) return ok("sym" to sym, "id" to w.id)
+                if (w.syms.size >= WList.MAX_PER_LIST) return err("“${w.name}” is full (${WList.MAX_PER_LIST} stocks) — remove one first")
+                w.syms.add(sym); st.syncWatch()
                 if (!live.containsKey(sym)) loadWatchSymbol(sym, now, day)
-                return ok("sym" to sym)
+                return ok("sym" to sym, "id" to w.id, "list" to w.name)
             }
-            "removeWatch" -> {
+            "removeWatch", "wlRemove" -> {
                 val sym = HoldingsImport.cleanSymbol(a.str("sym"))
-                return if (st.watch.remove(sym)) ok("sym" to sym) else err("$sym is not in your watchlist")
+                val id = a.str("id")
+                var hit = false
+                for (w in st.wlists) if ((id.isEmpty() || w.id == id) && w.syms.remove(sym)) hit = true
+                st.syncWatch()
+                return if (hit) ok("sym" to sym) else err("$sym is not in that watchlist")
+            }
+            "wlCreate" -> {
+                val nm = a.str("name").trim().replace(Regex("\\s+"), " ").take(WList.MAX_NAME)
+                if (nm.isEmpty()) return err("Give the watchlist a name")
+                if (st.wlists.size >= WList.MAX_LISTS) return err("You can have up to ${WList.MAX_LISTS} watchlists")
+                if (st.wlists.any { it.name.equals(nm, true) }) return err("You already have a watchlist called “$nm”")
+                var n = st.wlists.size + 1; while (st.wlists.any { it.id == "w$n" }) n++
+                val w = WList("w$n", nm); st.wlists.add(w)
+                val sym = realSym(HoldingsImport.cleanSymbol(a.str("sym")))
+                if (sym.isNotEmpty() && validSym(sym)) { w.syms.add(sym); st.syncWatch(); if (!live.containsKey(sym)) loadWatchSymbol(sym, now, day) }
+                return ok("id" to w.id, "name" to w.name)
+            }
+            "wlRename" -> {
+                val w = st.wlists.firstOrNull { it.id == a.str("id") } ?: return err("That watchlist no longer exists")
+                val nm = a.str("name").trim().replace(Regex("\\s+"), " ").take(WList.MAX_NAME)
+                if (nm.isEmpty()) return err("Give the watchlist a name")
+                if (st.wlists.any { it !== w && it.name.equals(nm, true) }) return err("You already have a watchlist called “$nm”")
+                w.name = nm
+                return ok("id" to w.id, "name" to nm)
+            }
+            "wlDelete" -> {
+                val w = st.wlists.firstOrNull { it.id == a.str("id") } ?: return err("That watchlist no longer exists")
+                st.wlists.remove(w); st.syncWatch()
+                return ok("id" to w.id)
             }
             "setTarget" -> return setTarget(a, now)
             "clearTarget" -> {
@@ -1680,6 +1710,7 @@ class SwingApp(private val p: Platform) {
                 "funds" -> LinkedHashMap(Funds.view(fundData(a.bool("force"))))
                 "fundInfo" -> Funds.info(fundData(false), a.str("code"))
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
+                "news" -> newsFor(a)
                 "fno", "fnoOrder", "fnoCancel", "fnoLevels", "fnoReset" -> fnoAction(name, a)
                 "options" -> synchronized(optLock) { Options.view(optLoad(), optSpots, optVix) }
                 "indexView" -> {
@@ -1913,6 +1944,19 @@ class SwingApp(private val p: Platform) {
 
     // ------------------------------------------------------------------ F&O paper trading (live NSE option chain)
 
+    private fun newsFor(a: Map<String, Any?>): Map<String, Any?> {
+        val sym = HoldingsImport.cleanSymbol(a.str("sym"))
+        if (sym.isEmpty()) return linkedMapOf("ok" to false, "error" to "No stock")
+        val now = p.now(); val c = newsCache[sym]
+        if (c != null && now - c.first < 20 * 60_000L) return linkedMapOf("ok" to true, "sym" to sym, "items" to c.second)
+        val nm = displayName(sym).takeIf { it != sym }
+        val q = if (nm != null) "\"" + nm.replace(Regex("(?i)\\b(limited|ltd\\.?)$"), "").trim() + "\"" else "$sym NSE"
+        val items = News.parse(try { p.httpGetAll(listOf(News.url(q))).firstOrNull() } catch (t: Throwable) { null })
+        if (items.isNotEmpty()) newsCache[sym] = Pair(now, items)
+        return linkedMapOf("ok" to true, "sym" to sym, "items" to items)
+    }
+
+    private val newsCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<Map<String, Any?>>>>()
     private val fnoLock = Any()
     private var fnoBook: FnoBook? = null
     private val fnoChains = java.util.concurrent.ConcurrentHashMap<String, FnoChain>()
@@ -2182,6 +2226,7 @@ class SwingApp(private val p: Platform) {
             m["feed"] = s.feed.take(AppState.MAX_FEED).map { it.toMap() }
             m["watch"] = watchItems
             m["myWatch"] = myWatch(s, now)
+            m["wlists"] = s.wlists.map { it.toMap() }
             m["ideas"] = ideaItems
             m["marketGate"] = marketGate
             m["optOpen"] = try { synchronized(optLock) { optLoad().filter { it.status == "OPEN" }.map { it.toMap() } } } catch (t: Throwable) { emptyList<Any>() }

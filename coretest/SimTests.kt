@@ -33,7 +33,7 @@ object SimTests {
      "feed": [{"ts":0,"kind":"buy","title":"","body":""}],
      "watch": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"ema10":0,"ema20":0,"ema50":0,"ema100":0,"ema200":0,"gapPct":0,"daysSince":0,"barDay":0,"spark":[0],"status":""}],
      "myWatch": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"spark":[0],"strength":0,"stack":"BULLISH","crossText":"","dataOk":true}],
-     "marketGate": null, "optOpen": [], "optRecord": null,
+     "marketGate": null, "optOpen": [], "optRecord": null, "wlists": [{"id": "", "name": "", "syms": [""]}],
      "ideas": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"score":0,"label":"BUY","headline":"",
                 "entryLow":0,"entryHigh":0,"stop":0,"t1":0,"t2":0,"rr":0,"horizonDays":60,"spark":[0],"barDay":0,"proven":false,"hotSector":""}],
      "targets": [{"sym":"","name":"","ltp":0,"dayChgPct":0,"target":0,"stop":0,"note":"","setAt":0,"refPrice":0,

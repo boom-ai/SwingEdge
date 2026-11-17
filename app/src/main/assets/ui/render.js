@@ -666,7 +666,7 @@
       return ra - rb || a.i - b.i;
     });
     var max = N(O(S.settings).maxOpenTrades);
-    var h = '<div class="btns hintpad">' + btn('opt-open', null, 'Options: risk calculator + paper signals', 'sm', { icon: 'flask' }) + '</div>' + weekBlock(S, N(O(S.settings).capital) || 0) + targetsSection(S, ui) + '<div class="sec"><h2>Open trades</h2><span class="cnt">' + open.length + (max !== null && max > 0 ? ' of ' + cnt(max) + ' max' : '') + '</span></div>';
+    var h = '<div class="btns hintpad">' + btn('fno-open', null, 'F&O paper trading (live prices)', 'sm', { icon: 'chart' }) + btn('opt-open', null, 'Options calculator', 'sm ghost', { icon: 'flask' }) + '</div>' + weekBlock(S, N(O(S.settings).capital) || 0) + targetsSection(S, ui) + '<div class="sec"><h2>Open trades</h2><span class="cnt">' + open.length + (max !== null && max > 0 ? ' of ' + cnt(max) + ' max' : '') + '</span></div>';
     if (!open.length) {
       h += '<div class="empty"><div class="ei">' + ic('trades') + '</div><h3>No open trades</h3>' +
         '<p>When you tap “I bought it” on a buy idea, the trade appears here with its stop-loss, targets and a daily call to hold, book half or exit.</p></div>';
@@ -1413,6 +1413,53 @@
     else if (!op.length) h += '<div class="hint hintpad"><span class="t">No paper trades yet. They start at the next scan after 9:45 am when the rule fires.</span></div>';
     texts(r.rules).forEach(function (x) { h += '<div class="hint"><span class="t">· ' + esc(x) + '</span></div>'; });
     return shell('Options', h, foot);
+  }
+
+  /* ---------- F&O paper trading (live NSE chain) ---------- */
+  function f1(v) { var n = N(v); return n === null ? DASH : n.toFixed(n >= 1000 ? 0 : 2); }
+  function fnoSheet(S, ui) {
+    var f = O(ui.fno), r = O(f.res), c = O(r.chain), acc = O(r.account), foot = btn('sheet-close', null, 'Close', '');
+    var sym = T(f.sym) || 'NIFTY';
+    var h = '<div class="ixc">' + ['NIFTY', 'BANKNIFTY'].map(function (k) { return '<button type="button" class="rchip' + (k === sym ? ' on' : '') + '" data-c="fno-sym" data-id="' + k + '"><span>' + k + '</span></button>'; }).join('') + '</div>';
+    if (!isObj(f.res)) return shell('F&O paper', h + skCard('Live chain', 6), foot);
+    var live = r.live === true;
+    h += '<div class="card fhead"><div class="fr1"><b class="big">' + esc(sym) + ' ' + f1(c.spot) + '</b><span class="sp"></span><span class="ldot ' + (live ? 'on' : 'off') + '">' + (live ? 'LIVE' : 'NO PRICE') + '</span></div>' +
+      '<div class="mut">' + (T(c.ts).trim() ? 'NSE ' + esc(T(c.ts)) : esc(T(r.error) || 'Waiting for NSE')) + (N(c.lot) ? ' · lot ' + N(c.lot) : '') + '</div>' +
+      '<div class="ixc">' + texts(c.expiries).map(function (e) { return '<button type="button" class="rchip' + (e === T(c.expiry) ? ' on' : '') + '" data-c="fno-exp" data-id="' + esc(e) + '"><span>' + esc(e) + '</span></button>'; }).join('') + '</div></div>';
+    if (T(r.error).trim() && live) h += '<div class="hint hintpad">' + ic('warn') + '<span class="t">' + esc(r.error) + '</span></div>';
+    h += '<div class="sg">' + tile('Paper cash', rsB(acc.cash), '') + tile('Account value', rsB(acc.value), '') + tile('Total P&L', rsS(acc.total), 'realised ' + rsS(acc.realized), N(acc.total) > 0 ? 'up' : N(acc.total) < 0 ? 'down' : '') + '</div>';
+    var res = O(r.result);
+    if (r.result && res.ok === false) h += '<div class="card warnbox">' + esc(T(res.error)) + '</div>';
+    // order form
+    var fm = O(f.form);
+    if (T(fm.side)) {
+      h += '<div class="card ofrm"><b>' + (fm.buy === false ? 'SELL ' : 'BUY ') + esc(sym) + ' ' + (N(fm.strike) || 0) + ' ' + esc(T(fm.side)) + '</b> <span class="mut">' + esc(T(c.expiry)) + '</span>' +
+        '<div class="ixc">' + ['MARKET', 'LIMIT'].map(function (k) { return '<button type="button" class="rchip' + ((T(fm.type) || 'MARKET') === k ? ' on' : '') + '" data-c="fno-type" data-id="' + k + '"><span>' + k + '</span></button>'; }).join('') + '</div>' +
+        field('flots', 'Lots', String(N(fm.lots) || 1), {}) + ((T(fm.type) === 'LIMIT') ? field('flimit', 'Limit price', N(fm.limit) ? String(fm.limit) : '', { pre: '₹' }) : '') +
+        (fm.buy === false ? '' : field('fsl', 'Stop-loss (premium)', N(fm.sl) ? String(fm.sl) : '', { pre: '₹', ph: 'optional' }) + field('ftgt', 'Target (premium)', N(fm.tgt) ? String(fm.tgt) : '', { pre: '₹', ph: 'optional' })) +
+        '<div class="btns">' + btn('fno-place', null, (fm.buy === false ? 'Sell' : 'Buy') + ' (paper)', fm.buy === false ? 'danger' : '', {}) + btn('fno-cancelform', null, 'Cancel', 'ghost', {}) + '</div></div>';
+    }
+    // positions
+    var ps = A(r.positions);
+    if (ps.length) h += '<h3 class="skh">Positions</h3>' + tbl(['Contract', 'Qty', 'Avg', 'Bid', 'P&L', 'SL', 'Tgt', ''], ps.map(function (x) {
+      return '<tr><td><b>' + esc(T(x.sym).replace('BANKNIFTY', 'BNF')) + ' ' + (N(x.strike) || 0) + ' ' + esc(T(x.side)) + '</b></td><td>' + (N(x.qty) || 0) + '</td><td>' + f1(x.avg) + '</td><td>' + f1(x.bid) + '</td><td class="' + tone(x.pnl) + '">' + rsS(x.pnl) +
+        '</td><td class="down">' + (N(x.sl) > 0 ? f1(x.sl) : DASH) + '</td><td class="up">' + (N(x.tgt) > 0 ? f1(x.tgt) : DASH) + '</td><td><button type="button" class="lnk dn" data-c="fno-exit" data-id="' + esc(T(x.id)) + '">Exit</button></td></tr>'; }));
+    var open = A(r.orders).filter(function (o) { return T(o.status) === 'OPEN'; });
+    if (open.length) h += '<h3 class="skh">Open orders</h3>' + tbl(['Order', 'Lots', 'Limit', ''], open.map(function (o) {
+      return '<tr><td>' + (o.buy ? 'BUY ' : 'SELL ') + esc(T(o.sym).replace('BANKNIFTY', 'BNF')) + ' ' + (N(o.strike) || 0) + ' ' + esc(T(o.side)) + '</td><td>' + (N(o.lots) || 0) + '</td><td>' + f1(o.limit) + '</td><td><button type="button" class="lnk dn" data-c="fno-cancel" data-id="' + esc(T(o.id)) + '">Cancel</button></td></tr>'; }));
+    // chain: tap a bid/ask to trade
+    var rows = A(c.rows);
+    if (rows.length) h += '<h3 class="skh">Option chain · tap a price to buy</h3><div class="card bt"><table class="btt chain"><tr><th>CE bid</th><th>CE ask</th><th class="k">Strike</th><th>PE bid</th><th>PE ask</th></tr>' + rows.map(function (x) {
+      var ce = O(x.ce), pe = O(x.pe), k = N(x.k) || 0, atm = k === N(c.atm);
+      var cellf = function (q, side, v) { return '<td><button type="button" class="qb" data-c="fno-pick" data-id="' + side + ':' + k + '">' + f1(v) + '</button></td>'; };
+      return '<tr class="' + (atm ? 'atm' : '') + '">' + cellf(ce, 'CE', ce.bid) + cellf(ce, 'CE', ce.ask) + '<td class="k"><b>' + k + '</b></td>' + cellf(pe, 'PE', pe.bid) + cellf(pe, 'PE', pe.ask) + '</tr>';
+    }).join('') + '</table></div>';
+    var done = A(r.orders).filter(function (o) { return T(o.status) !== 'OPEN'; }).slice(0, 15);
+    if (done.length) h += '<h3 class="skh">Order history</h3>' + tbl(['Time', 'Order', 'Price', 'P&L'], done.map(function (o) {
+      return '<tr><td>' + dShort(o.at) + '</td><td>' + esc(T(o.status) === 'FILLED' ? (o.buy ? 'BUY ' : 'SELL ') : T(o.status) + ' ') + (N(o.lots) || 0) + '× ' + (N(o.strike) || 0) + ' ' + esc(T(o.side)) + (T(o.note) ? ' · ' + esc(T(o.note)) : '') + '</td><td>' + f1(o.fillPx) + '</td><td class="' + tone(o.pnl) + '">' + (o.buy ? DASH : rsS(o.pnl)) + '</td></tr>'; }));
+    h += '<div class="hint hintpad"><span class="t">Paper money. Prices from NSE’s live option chain, refreshed every 3 s while this screen is open, and every 10 s in the background while you hold positions (stops and targets keep working). Buys fill at the ask, sells at the bid, with full charges.</span></div>' +
+      '<div class="btns hintpad">' + btn('fno-reset', null, 'Reset to ₹1,00,000', 'sm ghost', {}) + '</div>';
+    return shell('F&O paper', h, foot);
   }
   /* ---------- Money flow ---------- */
   function crSigned(v) {
@@ -2266,6 +2313,7 @@
     if (kind === 'fund') return fundSheet(S, ui, data);
     if (kind === 'index') return indexSheet(S, ui);
     if (kind === 'opt') return optSheet(S, ui);
+    if (kind === 'fno') return fnoSheet(S, ui);
     if (kind === 'resettrack') return shell('Reset the live record?', '<p class="lead">All picks recorded on this phone since the live record began will be deleted and the count starts again from zero. The replay is kept. Trades, holdings and strategies are not affected.</p>',
         btn('sheet-close', null, 'Keep it', 'ghost') + btn('submit', null, 'Reset record', 'dan'));
     if (kind === 'take') {

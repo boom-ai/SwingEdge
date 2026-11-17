@@ -25,6 +25,7 @@ class OptionWatchService : Service() {
     private var thread: HandlerThread? = null
     private var handler: Handler? = null
     private var wake: PowerManager.WakeLock? = null
+    private var lastOpt = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -52,8 +53,11 @@ class OptionWatchService : Service() {
         override fun run() {
             val now = System.currentTimeMillis()
             if (!inWindow(now)) { stopSelf(); return }
-            try { (application as App).swing.optionsQuick() } catch (t: Throwable) { Log.w(App.TAG, "options check", t) }
-            handler?.postDelayed(this, PERIOD_MS)
+            val app = application as App
+            val fast = try { app.swing.fnoActive() } catch (t: Throwable) { false }
+            try { app.swing.fnoBackground() } catch (t: Throwable) { Log.w(App.TAG, "fno check", t) }
+            if (now - lastOpt >= PERIOD_MS - 1000) { lastOpt = now; try { app.swing.optionsQuick() } catch (t: Throwable) { Log.w(App.TAG, "options check", t) } }
+            handler?.postDelayed(this, if (fast) FAST_MS else PERIOD_MS)
         }
     }
 
@@ -64,7 +68,7 @@ class OptionWatchService : Service() {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CH) else @Suppress("DEPRECATION") Notification.Builder(this)
         val n = b.setSmallIcon(android.R.drawable.ic_menu_recent_history).setContentTitle("Options live watch")
-            .setContentText("Checking Nifty & Bank Nifty every minute until 3:20 pm").setContentIntent(open).setOngoing(true).build()
+            .setContentText("Live watch: options paper trades and alerts until 3:20 pm").setContentIntent(open).setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(NID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else startForeground(NID, n)
     }
 
@@ -81,6 +85,8 @@ class OptionWatchService : Service() {
         const val CH = "options_watch"
         const val NID = 7700
         const val PERIOD_MS = 60_000L
+        /** paper F&O positions / orders open: check stops and targets every 10 s */
+        const val FAST_MS = 10_000L
         const val START_MIN = 9 * 60 + 40
         const val END_MIN = 15 * 60 + 20
 

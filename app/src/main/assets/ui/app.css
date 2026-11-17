@@ -1181,3 +1181,13 @@ svg.chart .xd { fill: var(--text); stroke: var(--bg); stroke-width: 1.5; }
 .ixc .rchip { flex: none; }
 .btt td.gray { color: var(--muted); }
 .warnbox { padding: 12px 14px; font-size: 13.5px; border-color: rgba(255, 196, 77, .35); background: rgba(255, 196, 77, .07); }
+/* F&O paper */
+.fhead { padding: 12px 14px; } .fhead .big { font: 700 20px var(--cond); }
+.ldot { font: 700 11px/20px var(--cond); padding: 0 8px; border-radius: 10px; }
+.ldot.on { background: rgba(63, 214, 143, .16); color: var(--green); } .ldot.off { background: rgba(255, 111, 111, .16); color: var(--red); }
+.chain td { padding: 0 !important; } .chain th { text-align: center; }
+.chain .k { text-align: center !important; color: var(--text); } .chain tr.atm td { background: rgba(255, 255, 255, .04); }
+.qb { width: 100%; padding: 9px 6px; background: none; border: 0; color: var(--text); font: 500 13px var(--sans, inherit); font-variant-numeric: tabular-nums; text-align: center; }
+.qb:active { background: var(--raised); }
+.ofrm { padding: 12px 14px; border-color: var(--line-2); }
+.lnk.dn { color: var(--red); text-decoration-color: rgba(255, 111, 111, .4); }

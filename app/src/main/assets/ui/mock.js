@@ -184,6 +184,22 @@
 
 
 
+  /* ---------- F&O paper (mock) ---------- */
+  var FNO = { cash: 93420.5, pos: [{ id: 'PO1', sym: 'NIFTY', expiry: '23-Nov-2026', strike: 25450, side: 'CE', lots: 1, lot: 65, qty: 65, avg: 101, sl: 80, tgt: 140, bid: 112.4, last: 112.6, pnl: 741 }],
+    orders: [{ id: 'O1', sym: 'NIFTY', strike: 25450, side: 'CE', buy: true, lots: 1, status: 'FILLED', type: 'MARKET', fillPx: 101, at: Date.now() - 3600000, pnl: 0 },
+      { id: 'O2', sym: 'NIFTY', strike: 25300, side: 'PE', buy: true, lots: 1, status: 'OPEN', type: 'LIMIT', limit: 60, at: Date.now() - 600000 }] };
+  function mockFno(name, a) {
+    setTimeout(function () {
+      var sym = String(a.sym || 'NIFTY'), spot = sym === 'BANKNIFTY' ? 56120.4 : 25455.3, step = sym === 'BANKNIFTY' ? 100 : 50, atm = Math.round(spot / step) * step, rows = [];
+      for (var k = atm - 6 * step; k <= atm + 6 * step; k += step) { var d = (spot - k), ce = Math.max(1, d) + 80, pe = Math.max(1, -d) + 75; rows.push({ k: k, ce: { ltp: ce, bid: ce - 0.4, ask: ce + 0.3, iv: 12 }, pe: { ltp: pe, bid: pe - 0.3, ask: pe + 0.4, iv: 13 } }); }
+      if (name === 'fnoReset') { FNO.cash = 100000; FNO.pos = []; FNO.orders = []; }
+      var res = { ok: true };
+      if (name === 'fnoOrder' && scenario !== 'broken') res = { ok: false, error: 'Mock: orders are simulated in the app only' };
+      finish(name, scenario === 'broken' ? { ok: true, chain: { rows: [null, { k: 'x', ce: 'y' }], expiries: 'z', spot: 'NaN' }, account: null, positions: [{}, null], orders: 'x', live: 'yes' } :
+        { ok: true, live: true, error: '', result: res, chain: { sym: sym, expiry: a.expiry || '23-Nov-2026', spot: spot, ts: '17-Nov-2026 13:05:12', atm: atm, lot: sym === 'BANKNIFTY' ? 30 : 65, expiries: ['23-Nov-2026', '01-Dec-2026', '08-Dec-2026'], rows: rows },
+          account: { cash: FNO.cash, start: 100000, value: FNO.cash + 112.4 * 65, realized: 0, unrealized: 741, total: FNO.cash + 112.4 * 65 - 100000 }, positions: FNO.pos, orders: FNO.orders }, 0);
+    }, 150);
+  }
   /* ---------- mutual funds ---------- */
   var MFD = [['Flexi Cap Fund', ['Parag Parikh Flexi Cap Fund - Direct Plan - Growth', 'HDFC Flexi Cap Fund - Direct Plan - Growth', 'Kotak Flexicap Fund - Direct Plan - Growth']],
     ['Large Cap Fund', ['ICICI Prudential Bluechip Fund - Direct Plan - Growth', 'Nippon India Large Cap Fund - Direct Plan - Growth', 'Canara Robeco Bluechip Equity Fund - Direct Plan - Growth']],
@@ -909,6 +925,7 @@
       var q = String(a.q == null ? '' : a.q);
       setTimeout(function () { finish('search', { ok: true, q: q, results: doSearch(q), list: listMeta() }, 0); }, 70);
     },
+    fno: function (a) { mockFno('fno', a); }, fnoOrder: function (a) { mockFno('fnoOrder', a); }, fnoCancel: function (a) { mockFno('fnoCancel', a); }, fnoReset: function (a) { mockFno('fnoReset', a); },
     options: function (a) { setTimeout(function () {
       var now = Date.now(), d = 86400000;
       finish('options', { ok: true, vix: 13.8, open: [{ idx: 'NIFTY', side: 'CE', strike: 24850, entry: 118.6, stop: 83.0, target: 177.9, last: 131.2, openedAt: now - 3600000, lot: 65 }],

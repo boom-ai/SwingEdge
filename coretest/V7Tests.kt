@@ -178,3 +178,67 @@ object V11Tests {
         T.check(Clenow.score(null).isNaN(), "null safe")
     }
 }
+
+object V12Tests {
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v12-fno-paper" to ::fno)
+    fun chainJson(spot: Double, ceBid: Double, ceAsk: Double): String =
+        "{\"records\":{\"timestamp\":\"17-Nov-2026 12:55:29\",\"underlyingValue\":$spot,\"expiryDates\":[\"23-Nov-2026\",\"01-Dec-2026\"],\"data\":[" +
+        listOf(25400, 25450, 25500).joinToString(",") { k ->
+            val off = (k - 25450) / 10.0
+            "{\"strikePrice\":$k,\"CE\":{\"lastPrice\":${ceAsk - off},\"buyPrice1\":${ceBid - off},\"sellPrice1\":${ceAsk - off},\"impliedVolatility\":12.1,\"openInterest\":1000,\"totalTradedVolume\":50,\"change\":1}," +
+            "\"PE\":{\"lastPrice\":${90 + off},\"buyPrice1\":${89 + off},\"sellPrice1\":${91 + off},\"impliedVolatility\":13,\"openInterest\":900,\"totalTradedVolume\":40,\"change\":-1}}"
+        } + "]}}"
+    fun fno() {
+        val p = FakePlatform.standard()
+        val day = java.time.LocalDate.of(2026, 11, 17).toEpochDay().toInt()
+        p.setTime(day, 11 * 60)
+        val H = "https://www.nseindia.com"
+        p.served[Fno.infoUrl(H, "NIFTY")] = "{\"expiryDates\":[\"17-Nov-2026\",\"23-Nov-2026\",\"01-Dec-2026\"]}"
+        val cu = Fno.chainUrl(H, "NIFTY", "17-Nov-2026")
+        p.served[cu] = chainJson(25450.0, 100.0, 101.0)
+        val app = SwingApp(p)
+        fun act(n: String, js: String) = Json.parseObject(app.action(n, js))!!
+        val v = act("fno", "{\"sym\":\"NIFTY\"}")
+        T.check(v.bool("live") && v.obj("chain").num("spot", 0.0) == 25450.0 && v.obj("chain").str("expiry") == "17-Nov-2026", "live chain loads, nearest expiry: ${v.str("error")}")
+        // market buy fills at the ask, with charges
+        val o = act("fnoOrder", "{\"sym\":\"NIFTY\",\"expiry\":\"17-Nov-2026\",\"strike\":25450,\"side\":\"CE\",\"buy\":true,\"lots\":1,\"type\":\"MARKET\",\"sl\":80,\"tgt\":140}")
+        T.check(o.obj("result").bool("ok"), "order ok: ${o.obj("result").str("error")}")
+        val pos = o.list("positions").map { it.asObj() }
+        T.check(pos.size == 1 && pos[0].num("avg", 0.0) == 101.0 && pos[0].int("qty") == 65, "bought 65 at the ask ₹101")
+        val cash1 = o.obj("account").num("cash", 0.0)
+        T.check(cash1 < 100000 - 101 * 65 && cash1 > 100000 - 101 * 65 - 40, "cash down by premium + ~₹25 charges: $cash1")
+        // naked sell refused; too many lots refused
+        T.check(!act("fnoOrder", "{\"sym\":\"NIFTY\",\"expiry\":\"17-Nov-2026\",\"strike\":25450,\"side\":\"PE\",\"buy\":false,\"lots\":1}").obj("result").bool("ok"), "no naked option selling")
+        T.check(!act("fnoOrder", "{\"sym\":\"NIFTY\",\"expiry\":\"17-Nov-2026\",\"strike\":25450,\"side\":\"CE\",\"buy\":true,\"lots\":50}").obj("result").bool("ok"), "not enough paper cash for 50 lots")
+        // limit buy below the market waits
+        val l = act("fnoOrder", "{\"sym\":\"NIFTY\",\"expiry\":\"17-Nov-2026\",\"strike\":25450,\"side\":\"PE\",\"buy\":true,\"lots\":1,\"type\":\"LIMIT\",\"limit\":85}")
+        T.check(l.obj("result").obj("order").str("status") == "OPEN", "limit ₹85 with ask ₹91: waits")
+        // price moves: PE ask drops to 84 (fills limit at 84), CE bid falls to 79 (stop 80 hit -> sold at bid 79)
+        p.nowMs += 60_000
+        p.served[cu] = chainJson(25450.0, 79.0, 80.0).replace("\"sellPrice1\":91.0", "\"sellPrice1\":84.0")
+        val after = act("fno", "{\"sym\":\"NIFTY\",\"expiry\":\"17-Nov-2026\"}")
+        val ords = after.list("orders").map { it.asObj() }
+        T.check(ords.any { it.str("side") == "PE" && it.str("status") == "FILLED" && it.num("fillPx", 0.0) == 84.0 }, "limit filled at ₹84")
+        val stop = ords.firstOrNull { it.str("note") == "Stop-loss hit" }
+        T.check(stop != null && stop.num("fillPx", 0.0) == 79.0 && stop.num("pnl", 0.0) < -(22 * 65), "stop-loss sold at the bid ₹79, loss incl. charges: ${stop?.num("pnl", 0.0)}")
+        T.check(after.list("positions").map { it.asObj() }.none { it.str("side") == "CE" }, "CE position closed")
+        // persistence
+        val app2 = SwingApp(p)
+        val back = Json.parseObject(app2.action("fno", "{\"sym\":\"NIFTY\",\"expiry\":\"17-Nov-2026\"}"))!!
+        T.check(back.list("positions").size == 1 && back.list("orders").size >= 3, "book saved and reloaded")
+        // expiry settlement after 15:30 on expiry day: PE 25450 with spot 25300 -> intrinsic 150
+        p.setTime(day, 15 * 60 + 35)
+        p.served[cu] = chainJson(25300.0, 1.0, 2.0)
+        app2.fnoBackground()
+        val ex = Json.parseObject(app2.action("fno", "{\"sym\":\"NIFTY\"}"))!!
+        T.check(ex.list("positions").isEmpty() && ex.list("orders").map { it.asObj() }.any { it.str("type") == "EXPIRY" && it.num("fillPx", 0.0) == 150.0 }, "expired PE settled at intrinsic ₹150")
+        // NSE down: clear error, no crash; stale quotes never fill
+        p.offline = true
+        val down = Json.parseObject(SwingApp(p).action("fno", "{\"sym\":\"BANKNIFTY\"}"))!!
+        T.check(down.bool("ok") && down.str("error").isNotEmpty() && !down.bool("live"), "NSE down: message, no crash")
+        val b = FnoBook(); val c = Fno.parseChain("NIFTY", "17-Nov-2026", chainJson(25450.0, 100.0, 101.0), 0L)
+        T.check(!Fno.place(b, c, mapOf("sym" to "NIFTY", "expiry" to "17-Nov-2026", "strike" to 25450, "side" to "CE", "buy" to true, "lots" to 1), 10 * 60_000L).bool("ok"), "refuses to fill on a 10-minute-old price")
+        T.check(Fno.parseChain("NIFTY", "x", "<html>", 0L) == null && Fno.parseChain("NIFTY", "x", null, 0L) == null, "junk chain ignored")
+        T.check(act("fnoReset", "{}").obj("account").num("cash", 0.0) == 100000.0, "reset to ₹1 lakh")
+    }
+}

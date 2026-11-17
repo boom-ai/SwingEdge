@@ -144,7 +144,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno")) return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1680,6 +1680,7 @@ class SwingApp(private val p: Platform) {
                 "funds" -> LinkedHashMap(Funds.view(fundData(a.bool("force"))))
                 "fundInfo" -> Funds.info(fundData(false), a.str("code"))
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
+                "fno", "fnoOrder", "fnoCancel", "fnoLevels", "fnoReset" -> fnoAction(name, a)
                 "options" -> synchronized(optLock) { Options.view(optLoad(), optSpots, optVix) }
                 "indexView" -> {
                     flowData(false)
@@ -1910,6 +1911,95 @@ class SwingApp(private val p: Platform) {
         } catch (t: Throwable) { log("optionsQuick: $t"); "error" }
     }
 
+    // ------------------------------------------------------------------ F&O paper trading (live NSE option chain)
+
+    private val fnoLock = Any()
+    private var fnoBook: FnoBook? = null
+    private val fnoChains = java.util.concurrent.ConcurrentHashMap<String, FnoChain>()
+    private val fnoExp = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<String>>>()
+
+    private fun fnoLoad(): FnoBook {
+        fnoBook?.let { return it }
+        val b = try { FnoBook.from(Json.parseObject(p.read(FNO_FILE) ?: "")) } catch (t: Throwable) { FnoBook() }
+        fnoBook = b
+        return b
+    }
+    private fun fnoSave(b: FnoBook) { try { p.write(FNO_FILE, Json.stringify(b.toMap())) } catch (t: Throwable) {} }
+
+    private fun fnoGet(urlOf: (String) -> String): String? {
+        for (h in Fno.HOSTS) { val t = try { p.httpGetAll(listOf(urlOf(h))).firstOrNull() } catch (e: Throwable) { null }; if (t != null && t.startsWith("{")) return t }
+        return null
+    }
+
+    /** Expiries for [sym] (cached 30 min), dropping today's after 15:30 and past ones. */
+    private fun fnoExpiries(sym: String): List<String> {
+        val now = p.now()
+        val c = fnoExp[sym]
+        val list = if (c != null && now - c.first < 30 * 60_000L && c.second.isNotEmpty()) c.second
+            else Fno.parseExpiries(fnoGet { Fno.infoUrl(it, sym) }).also { if (it.isNotEmpty()) fnoExp[sym] = Pair(now, it) }
+        val day = Clock.epochDay(now); val min = Clock.minuteOfDay(now)
+        return list.filter { val d = Fno.expDay(it); d > day || (d == day && min < 15 * 60 + 30) }
+    }
+
+    /** Live chain, refetched when older than [maxAgeMs]. Null when NSE does not answer. */
+    private fun fnoChain(sym: String, expiry: String, maxAgeMs: Long): FnoChain? {
+        val key = "$sym|$expiry"
+        val c = fnoChains[key]
+        val now = p.now()
+        if (c != null && now - c.fetchedAt < maxAgeMs) return c
+        val got = Fno.parseChain(sym, expiry, fnoGet { Fno.chainUrl(it, sym, expiry) }, p.now())
+        if (got != null) fnoChains[key] = got
+        return got ?: c
+    }
+
+    private fun fnoView(b: FnoBook, c: FnoChain?, err: String): Map<String, Any?> {
+        val m = LinkedHashMap<String, Any?>()
+        m["ok"] = true; m["chain"] = Fno.chainView(c); m["error"] = err
+        m["live"] = c != null && p.now() - c.fetchedAt < Fno.STALE_MS
+        m["account"] = Fno.summary(b); m["positions"] = b.pos.map { it.toMap() }
+        m["orders"] = b.orders.take(40).map { it.toMap() }
+        return m
+    }
+
+    private fun fnoNotify(ev: List<FnoEvent>) { for ((k, e) in ev.withIndex()) try { p.notify("sell", 7300 + ((e.title.hashCode() + k) and 0xff), e.title, e.body) } catch (t: Throwable) {} }
+
+    private fun fnoAction(name: String, a: Map<String, Any?>): Map<String, Any?> {
+        val sym = a.str("sym").uppercase().ifEmpty { "NIFTY" }.let { if (Fno.LOT.containsKey(it)) it else "NIFTY" }
+        if (name == "fnoReset") synchronized(fnoLock) { val b = FnoBook(); fnoBook = b; fnoSave(b); return fnoView(b, null, "") }
+        val exps = fnoExpiries(sym)
+        val expiry = a.str("expiry").takeIf { it in exps } ?: exps.firstOrNull() ?: return synchronized(fnoLock) { fnoView(fnoLoad(), null, "NSE did not answer. Check the internet and try again.") }
+        val c = fnoChain(sym, expiry, if (name == "fnoOrder") 4_000L else 2_500L)
+        synchronized(fnoLock) {
+            val b = fnoLoad()
+            val res: Map<String, Any?> = when (name) {
+                "fnoOrder" -> Fno.place(b, c, a + mapOf("sym" to sym, "expiry" to expiry), p.now())
+                "fnoCancel" -> Fno.cancel(b, a.str("id"))
+                "fnoLevels" -> Fno.setLevels(b, a.str("id"), a.num("sl", 0.0), a.num("tgt", 0.0))
+                else -> linkedMapOf("ok" to true)
+            }
+            val ev = Fno.tick(b, listOfNotNull(c) + fnoChains.values.filter { it != c }, p.now())
+            fnoNotify(ev)
+            fnoSave(b)
+            val v = LinkedHashMap(fnoView(b, c, if (c == null) "No live price from NSE right now." else ""))
+            v["result"] = res
+            return v
+        }
+    }
+
+    /** True when paper F&O positions or pending orders need fast checks. */
+    fun fnoActive(): Boolean = try { synchronized(fnoLock) { val b = fnoLoad(); b.pos.isNotEmpty() || b.orders.any { it.status == "OPEN" } } } catch (t: Throwable) { false }
+
+    /** Background check from the live watch: refresh chains for open contracts, run stops/targets/limits, alert. */
+    fun fnoBackground(): String {
+        return try {
+            val keys = synchronized(fnoLock) { val b = fnoLoad(); (b.pos.map { it.sym to it.expiry } + b.orders.filter { it.status == "OPEN" }.map { it.sym to it.expiry }).distinct() }
+            if (keys.isEmpty()) return "idle"
+            val chains = keys.mapNotNull { (s, e) -> fnoChain(s, e, 5_000L) }
+            synchronized(fnoLock) { val b = fnoLoad(); val ev = Fno.tick(b, chains, p.now()); fnoNotify(ev); fnoSave(b) }
+            "ok"
+        } catch (t: Throwable) { log("fno bg: $t"); "error" }
+    }
+
     private val optPending = java.util.concurrent.ConcurrentLinkedQueue<OptEvent>()
     private fun optNid(e: OptEvent, k: Int) = 7100 + (e.t.id.hashCode() and 0xff) + k
     /** caller holds [lock] */
@@ -2134,6 +2224,7 @@ class SwingApp(private val p: Platform) {
         const val ALT_FILE = "alt_tickers.json"
         const val HOLD_MAX_DAYS = 120
         const val OPT_FILE = "opt_paper.json"
+        const val FNO_FILE = "fno_paper.json"
         const val TRAIL_ATR = 5.0
         const val FLOW_BASE = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/"
         val FLOW_FILES = listOf("flows.csv", "industries.csv", "holders.csv", "deals.csv", "indices.csv")

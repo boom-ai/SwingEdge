@@ -36,7 +36,7 @@
     dirty = false;
     try {
       ui.now = Date.now();
-      if (ui.tab === 'today') loadIdx(false);
+      loadIdx(false);
       var h = SE.header(S, ui);
       if (h !== cache.top) { elTop.innerHTML = h; cache.top = h; }
       var t = SE.tabbar(S, ui);
@@ -91,6 +91,7 @@
     } catch (e) { ok = false; }
     if (!ok && lastJson === null) showErr('Could not read app data yet. Retrying.');
     else if (ok && !renderFailed) elErr.hidden = true;
+    applyLive();
     readDevice();
     syncStock();
     if (sheet && sheet.kind === 'chartfull') cfMeta();
@@ -173,7 +174,8 @@
       if (name === 'funds') { var fm = ui.funds || (ui.funds = {}); fm.loading = false; if (ok) { fm.res = res; fm.err = ''; fm.at = Date.now(); } else fm.err = err; if (ui.tab === 'funds') render(); return; }
       if (name === 'fundInfo') { ui.fundInfo = ui.fundInfo || {}; var fc = SE.T(res && res.code) || (sheet && sheet.kind === 'fund' ? SE.T(sheet.data.id) : ''); if (fc) ui.fundInfo[fc] = ok ? res : { ok: false, error: err }; if (sheet && sheet.kind === 'fund') paintSheet(true); return; }
       if (name === 'addWatch' || name === 'removeWatch') { onWatchResult(name, ok, err); return; }
-      if (name === 'indexQuotes') { ui.idx = ui.idx || {}; ui.idx.loading = false; if (ok) { ui.idx.items = res.items; ui.idx.catalog = res.catalog; } if (ui.tab === 'today') render(true); if (sheet && sheet.kind === 'idxpick') paintSheet(true); return; }
+      if (name === 'liveQuotes') { onLive(res, ok); return; }
+      if (name === 'indexQuotes') { ui.idx = ui.idx || {}; ui.idx.loading = false; if (ok) { ui.idx.items = res.items; ui.idx.catalog = res.catalog; } render(true); if (sheet && sheet.kind === 'idxpick') paintSheet(true); return; }
       if (name === 'news') { var ns = ui.stock; if (ns && (!res.sym || String(res.sym).toUpperCase() === ns.sym)) { ns.news = ok ? { items: SE.A(res.items) } : { err: err }; paintStock(['body']); } return; }
       if (name === 'wlAdd' || name === 'wlRemove' || name === 'wlCreate' || name === 'wlRename' || name === 'wlDelete') { onWlResult(name, res, ok, err); return; }
       if (name === 'getChart' && chartReply(res, ok, err)) return;
@@ -751,9 +753,49 @@
     CONSDUR: 'Nifty Consumer Durables', DEFENCE: 'Nifty India Defence', CPSE: 'Nifty CPSE', VIX: 'Nifty 50' };
   try { var _iv = JSON.parse(localStorage.getItem('se.idx') || 'null'); if (Array.isArray(_iv) && _iv.length) ui.idxIds = _iv.filter(function (x) { return typeof x === 'string'; }).slice(0, 12); } catch (e) {}
   function saveIdx(v) { ui.idxIds = v; try { localStorage.setItem('se.idx', JSON.stringify(v)); } catch (e) {} loadIdx(true); render(true); }
+  /* ---------- live prices: poll liveQuotes for the symbols on screen, overlay them on the last state ---------- */
+  ui.live = {};
+  var liveAt = 0, liveBusy = 0;
+  function liveSyms() {
+    var out = [], add = function (x) { var y = SE.T(x && x.sym).trim().toUpperCase(); if (y && out.indexOf(y) < 0) out.push(y); };
+    if (ui.stock && sheet) add(ui.stock);
+    var keys = ui.tab === 'portfolio' ? ['holdings'] : ui.tab === 'trades' ? ['trades', 'signals'] : ui.tab === 'setups' ? ['myWatch', 'ideas', 'watch'] : ['holdings', 'trades', 'signals', 'myWatch', 'ideas'];
+    keys.forEach(function (k) { SE.A(S[k]).forEach(add); });
+    if (ui.tab !== 'setups') SE.A(S.myWatch).slice(0, 15).forEach(add);
+    return out.slice(0, 60);
+  }
+  function liveTick() {
+    try {
+      if (document.hidden || !S) return;
+      var t = Date.now(), gap = S.marketOpen === true ? 15000 : 300000;
+      loadIdx(false);
+      if (t - liveAt < gap || (liveBusy && t - liveBusy < 20000)) return;
+      var syms = liveSyms(); if (!syms.length) return;
+      liveAt = t; liveBusy = t;
+      bridge().action('liveQuotes', JSON.stringify({ syms: syms }));
+    } catch (e) { liveBusy = 0; }
+  }
+  setInterval(liveTick, 3000);
+  function applyLive() {
+    var L = ui.live, now = Date.now(); if (!S || !L) return;
+    var put = function (x, kind) {
+      if (!x || typeof x !== 'object') return; var q = L[SE.T(x.sym).toUpperCase()]; if (!q || !(q.ltp > 0) || now - q.got > 600000) return;
+      x.ltp = q.ltp; if (typeof q.pct === 'number') x.dayChgPct = q.pct; x.live = true;
+      var qty = Number(x.qty) || 0;
+      if (kind === 'holdings' && qty > 0 && Number(x.avg) > 0) { x.valueRs = q.ltp * qty; x.pnlRs = (q.ltp - x.avg) * qty; x.pnlPct = (q.ltp / x.avg - 1) * 100; }
+      if (kind === 'trades' && qty > 0 && Number(x.entry) > 0 && x.status === 'OPEN') { x.pnlRs = (q.ltp - x.entry) * qty; x.pnlPct = (q.ltp / x.entry - 1) * 100; }
+    };
+    ['myWatch', 'ideas', 'watch', 'holdings', 'trades', 'signals'].forEach(function (k) { if (Array.isArray(S[k])) S[k].forEach(function (x) { put(x, k); }); });
+    var st = ui.stock; if (st && st.info) { var q = L[st.sym]; if (q && q.ltp > 0 && now - q.got < 600000) { st.info.ltp = q.ltp; if (typeof q.pct === 'number') st.info.dayChgPct = q.pct; if (q.ltp > 0 && typeof q.chg === 'number') st.info.prevClose = q.ltp - q.chg; st.info.live = true; st.info.asOf = q.at || now; } }
+  }
+  function onLive(res, ok) {
+    liveBusy = 0; if (!ok || !res || typeof res.quotes !== 'object') return;
+    var g = Date.now(); Object.keys(res.quotes).forEach(function (k) { var q = res.quotes[k]; if (q && q.ltp > 0) { q.got = g; ui.live[k] = q; } });
+    applyLive(); render(true); paintStock(['price']);
+  }
   var idxAt = 0;
   function loadIdx(force) {
-    var t = Date.now(), gap = S && S.marketOpen === true ? 60000 : 600000;
+    var t = Date.now(), gap = S && S.marketOpen === true ? 15000 : 600000;
     if (!force && (t - idxAt < gap || (ui.idx && ui.idx.loading && t - idxAt < 20000))) return;
     idxAt = t; ui.idx = ui.idx || {}; ui.idx.loading = true;
     try { bridge().action('indexQuotes', JSON.stringify({ ids: ui.idxIds && ui.idxIds.length ? ui.idxIds : IDX_DEF })); } catch (e) { ui.idx.loading = false; }

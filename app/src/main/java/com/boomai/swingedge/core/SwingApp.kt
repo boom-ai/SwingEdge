@@ -144,7 +144,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "news" || name == "indexQuotes") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "news" || name == "indexQuotes" || name == "liveQuotes") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1712,6 +1712,7 @@ class SwingApp(private val p: Platform) {
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
                 "news" -> newsFor(a)
                 "indexQuotes" -> indexQuotes(a)
+                "liveQuotes" -> liveQuotes(a)
                 "fno", "fnoOrder", "fnoCancel", "fnoLevels", "fnoReset" -> fnoAction(name, a)
                 "options" -> synchronized(optLock) { Options.view(optLoad(), optSpots, optVix) }
                 "indexView" -> {
@@ -1955,6 +1956,21 @@ class SwingApp(private val p: Platform) {
         val items = News.parse(try { p.httpGetAll(listOf(News.url(q))).firstOrNull() } catch (t: Throwable) { null })
         if (items.isNotEmpty()) newsCache[sym] = Pair(now, items)
         return linkedMapOf("ok" to true, "sym" to sym, "items" to items)
+    }
+
+    private val liveQ = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Triple<Double, Double, Double>>>()
+    /** Live last price for up to 60 symbols (Yahoo chart meta, cached 10 s per symbol). */
+    private fun liveQuotes(a: Map<String, Any?>): Map<String, Any?> {
+        val syms = (a["syms"] as? List<*>).orEmpty().mapNotNull { (it as? String)?.let { s -> HoldingsImport.cleanSymbol(s) } }.filter { it.isNotEmpty() && validSym(it) }.distinct().take(60)
+        val now = p.now()
+        val need = syms.filter { val c = liveQ[it]; c == null || now - c.first > 10_000L }
+        if (need.isNotEmpty()) {
+            val res = httpAll(need.map { Yahoo.url(Params.YAHOO_HOST_1, realSym(it), "1d", "1d") })
+            need.forEachIndexed { i, sym -> IndexQuotes.parseYahoo(res.getOrNull(i))?.let { liveQ[sym] = Pair(now, it) } }
+        }
+        val q = LinkedHashMap<String, Any?>()
+        for (sym in syms) liveQ[sym]?.let { (t, v) -> q[sym] = linkedMapOf("ltp" to Fno.r2(v.first), "chg" to Fno.r2(v.second), "pct" to Fno.r2(v.third), "at" to t) }
+        return linkedMapOf("ok" to true, "at" to now, "quotes" to q)
     }
 
     @Volatile private var idxCache: Pair<Long, Map<String, Triple<Double, Double, Double>>>? = null

@@ -289,6 +289,16 @@
   }
 
   /* ---------- header + tab bar ---------- */
+  /* live ticker strip under the header: your indices, then your watchlist, prices refreshed every ~15 s while the market is open */
+  function tickerStrip(S, ui) {
+    var it = A(O(ui.idx).items).filter(function (x) { return N(x.last) > 0; }), lv = O(ui.live), open = S.marketOpen === true;
+    var ws = A(S.myWatch).filter(function (x) { return T(x.sym).trim() && N(x.ltp) > 0; }).slice(0, 15);
+    if (!it.length && !ws.length) return '';
+    var cell = function (cmd, id, lab, v, pct) { return '<button type="button" class="tki" data-c="' + cmd + '" data-id="' + esc(id) + '"><b>' + esc(lab) + '</b> <span class="num">' + (v > 0 ? v.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : DASH) + '</span> <span class="num ' + tone(pct) + '">' + (pct === null ? '' : pc(pct, true)) + '</span></button>'; };
+    return '<div class="tkr"><span class="tkl' + (open ? ' on' : '') + '"><i></i>' + (open ? 'LIVE' : 'CLOSED') + '</span><div class="tks">' +
+      it.map(function (x) { return cell('idx-tile', T(x.id), T(x.label), N(x.last), N(x.pct)); }).join('') +
+      ws.map(function (x) { return cell('stock', T(x.sym), T(x.sym), N(x.ltp), N(x.dayChgPct)); }).join('') + '</div></div>';
+  }
   function header(S, ui) {
     var open = S.marketOpen === true, closed = S.marketOpen === false;
     var note = T(S.marketNote).trim() || (open ? 'Market open' : closed ? 'Market closed' : 'Market status unknown');
@@ -303,7 +313,7 @@
       var p = N(S.busy.pct);
       h += '<div class="busyline' + (p === null ? ' indet' : '') + '"><i' + (p === null ? '' : ' style="width:' + Math.max(0, Math.min(100, p)) + '%"') + '></i></div>';
     }
-    return h;
+    return h + tickerStrip(S, ui);
   }
   var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['funds', 'Funds'], ['trades', 'Trades'], ['portfolio', 'Portfolio']];
   var feedSeen = 0;
@@ -1189,7 +1199,7 @@
     return '<div class="wrow irow"><button type="button" class="srow idea" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' +
       '<span class="s1"><span class="rk num">' + (i + 1) + '</span><span class="wn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
       spark(x.spark, up) + '<span class="sp"><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + (N(x.dayChgPct) === null ? '' : pc(x.dayChgPct, true, true)) + '</span></span></span>' +
-      '<span class="s2 idz"><span class="idt"><span class="vpill sm ' + k.cls + '">' + esc(lab.slice(0, 5)) + '</span>' + (N(x.score) !== null ? '<span class="isc num">Score ' + Math.round(N(x.score)) + '</span>' : '') + '</span>' +
+      '<span class="s2 idz"><span class="idt">' + scoreRing(x.score, k.cls, 40) + '<span class="vpill sm ' + k.cls + '">' + esc(lab.slice(0, 5)) + '</span></span>' +
       '<span class="idc idw"><i>Entry zone</i><b class="num">' + zone + '</b></span><span class="idc"><i>Stop</i><b class="num">' + emaNum(x.stop) + '</b></span><span class="idc"><i>Target 1</i><b class="num">' + emaNum(x.t1) + '</b></span></span>' +
       (full && (T(x.headline).trim() || (rr !== null && rr > 0) || hz > 0) ? '<span class="s3 clip">' + ((rr !== null && rr > 0) ? 'Reward : risk 1 : ' + (rr > 99 ? '>99' : rr.toFixed(1)) : '') + (hz > 0 ? ((rr !== null && rr > 0) ? ' · ' : '') + 'about ' + cnt(hz) + ' trading days' : '') + '</span>' : '') +
       '</button><button type="button" class="wside" data-c="wl-pick" data-id="' + esc(sym) + '" aria-label="Add ' + esc(sym) + ' to a watchlist">' + ic('plus') + '<i>List</i></button></div>';
@@ -1807,9 +1817,10 @@
     var span2 = mx - mn;
     emaKeys.forEach(function (k) { var a = nums(res['ema' + k]), lastv = a.length ? a[Math.min(a.length, n) - 1] : 0; if (lastv > 0 && lastv > mn - span2 * 0.25 && lastv < mx + span2 * 0.25) { if (lastv < mn) mn = lastv; if (lastv > mx) mx = lastv; } });
     var pad = (mx - mn) * 0.06; mn -= pad; mx += pad;
-    var X = function (k) { return L + (k + 0.5) * pw / n; }, Y = function (v) { return Tp + (mx - v) / (mx - mn) * ph; };
+    var pb = pw * n / (n + Math.max(2, Math.round(n * 0.07)));   // right space after the last candle
+    var X = function (k) { return L + (k + 0.5) * pb / n; }, Y = function (v) { return Tp + (mx - v) / (mx - mn) * ph; };
     var area = !!(o && o.area), lineMode = !!o && (n > 300 || area);
-    var bw = Math.max(o ? 0.7 : 1, Math.min(5, pw / n * 0.62));
+    var bw = Math.max(o ? 0.7 : 1, Math.min(5, pb / n * 0.62));
     var g = '<defs><clipPath id="cclip"><rect x="' + L + '" y="' + Tp + '" width="' + pw + '" height="' + ph + '"/></clipPath></defs>';
     for (i = 0; i <= 3; i++) {
       var gv = mn + (mx - mn) * i / 3, gy = Y(gv);
@@ -1873,7 +1884,7 @@
     }
     if (useVol) {
       var maxV = 0; for (i = 0; i < n; i++) if (vv[i] > maxV) maxV = vv[i];
-      var vw = Math.max(0.6, Math.min(5, pw / n * 0.7));
+      var vw = Math.max(0.6, Math.min(5, pb / n * 0.7));
       g += '<line x1="' + L + '" x2="' + (Wd - R) + '" y1="' + (vTop + vh) + '" y2="' + (vTop + vh) + '" class="grid"/>';
       for (i = 0; i < n; i++) {
         if (!(vv[i] > 0) || !(maxV > 0)) continue;
@@ -1884,7 +1895,7 @@
     }
     var geo = '', xh = '';
     if (o) { /* geometry for the press-and-hold crosshair (app.js reads these) */
-      geo = ' data-n="' + n + '" data-l="' + L + '" data-pw="' + pw + '" data-vw="' + Wd + '" data-tp="' + Tp + '" data-ph="' + ph + '" data-mn="' + mn + '" data-mx="' + mx + '"';
+      geo = ' data-n="' + n + '" data-l="' + L + '" data-pw="' + pb + '" data-vw="' + Wd + '" data-tp="' + Tp + '" data-ph="' + ph + '" data-mn="' + mn + '" data-mx="' + mx + '"';
       xh = '<g class="xh" id="xh"><line class="xl" x1="0" x2="0" y1="' + Tp + '" y2="' + (Tp + ph) + '"/><circle class="xd" r="3.4" cx="0" cy="0"/></g>';
     }
     return '<svg class="chart' + (o ? ' big' : '') + '" viewBox="0 0 ' + Wd + ' ' + Ht + '"' + geo + ' role="img" aria-label="' + (useVol ? 'Price chart with volume' : 'Price chart') + '">' + g + xh + '</svg>';

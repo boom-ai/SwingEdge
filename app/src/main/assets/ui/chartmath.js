@@ -22,17 +22,20 @@
     if (n <= 0) return { s: 0, c: 0 };
     var mn = Math.min(minBars > 0 ? minBars : MINB, n);
     c = fin(c) ? c : n; c = clamp(c, mn, n);
-    s = fin(s) ? s : n - c; s = clamp(s, 0, n - c);
+    var pad = padOf(c);
+    s = fin(s) ? s : n - c + pad; s = clamp(s, 0, n - c + pad);
     return { s: s, c: c };
   }
+  /* empty space kept to the right of the last bar (in bars) so the latest candle never touches the edge */
+  function padOf(c) { return c > 0 ? Math.max(2, Math.round(c * 0.1)) : 0; }
   function viewOf(v, n, minBars) { v = v || {}; return clampView(v.s, v.c, n, minBars); }
-  function defaultView(n) { n = cnt(n); var c = Math.min(DEFAULT_BARS, n); return clampView(n - c, c, n); }
+  function defaultView(n) { n = cnt(n); var c = Math.min(DEFAULT_BARS, n); return clampView(n - c + padOf(c), c, n); }
   function rangeCount(key, n) {
     n = cnt(n); var c = n;
     for (var i = 0; i < RANGES.length; i++) if (RANGES[i][0] === key) { c = RANGES[i][1] > 0 ? RANGES[i][1] : n; break; }
     return Math.min(n, Math.max(Math.min(MINB, n), c));
   }
-  function rangeView(key, n) { n = cnt(n); var c = rangeCount(key, n); return clampView(n - c, c, n); }
+  function rangeView(key, n) { n = cnt(n); var c = rangeCount(key, n); return clampView(n - c + padOf(c), c, n); }
   /* every range chip the current view equals (right-aligned and the same bar count); several when the history is short */
   function activeRanges(v, n) {
     n = cnt(n); var out = [];
@@ -257,7 +260,7 @@
 
   var api = {
     MINB: MINB, RANGES: RANGES, DEFAULT_BARS: DEFAULT_BARS,
-    clampView: clampView, viewOf: viewOf, defaultView: defaultView, rangeCount: rangeCount, rangeView: rangeView, activeRanges: activeRanges,
+    padOf: padOf, clampView: clampView, viewOf: viewOf, defaultView: defaultView, rangeCount: rangeCount, rangeView: rangeView, activeRanges: activeRanges,
     zoomAt: zoomAt, panBy: panBy, pinchView: pinchView, shiftForNewData: shiftForNewData,
     xOf: xOf, idxAt: idxAt, yOf: yOf, priceAt: priceAt,
     priceRange: priceRange, levelSide: levelSide, niceTicks: niceTicks, fmtTick: fmtTick, fmtPrice: fmtPrice, fmtDate: fmtDate, dateTicks: dateTicks, dateMeta: dateMeta,

@@ -173,6 +173,7 @@ document.getElementById('f').onload=async()=>{
   click('[data-c="tab"][data-id="today"]');await sleep(400);
   ok(qa('#view .idxt').length===4&&/Nifty 50/.test(q('#view .idxg').textContent)&&/\d/.test(q('#view .idxt b').textContent),'Today shows 4 index tiles with values');
   ok(!!q('#view .msum')&&/Total value/.test(q('#view .msum').textContent),'money summary below the tiles');
+  await sleep(3500);ok(!!q('.tkr .tki')&&log.some(c=>c.n==='liveQuotes'),'live ticker strip shown and live prices requested');
   click('#view [data-c="idx-edit"]');await sleep(100);ok(qa('#sheet-root [data-c="idx-toggle"]').length>=25,'index picker lists all indices');
   click('#sheet-root [data-c="idx-toggle"][data-id="SMALL100"]');click('#sheet-root [data-c="idx-toggle"][data-id="SENSEX"]');await sleep(400);hist();await sleep(300);
   ok(qa('#view .idxt').length===4&&!!q('#view .idxt[data-id="SMALL100"]')&&!q('#view .idxt[data-id="SENSEX"]'),'adding Smallcap 100 and removing Sensex updates the tiles');
@@ -344,12 +345,12 @@ document.getElementById('f').onload=async()=>{
   await sect('full chart: gestures',async()=>{
     await openSym('RELIANCE');click('#st-chart .xpand');await sleep(1600);
     const I=cfi(),cv=I.canvas,res=reps['c:RELIANCE'];ok(!!I&&!!cv&&!!res,'chart ready for gestures (500 bars in reply: '+!!res+')');
-    let s=I.state();ok(s.c===126&&s.s===374,'default window = last 126 bars: '+s.s+'/'+s.c);
+    let s=I.state();ok(s.c===126&&s.s===374+w.CM.padOf(126),'default window = last 126 bars: '+s.s+'/'+s.c);
     const cr=rect(cv),cx=cr.left+s.plot.l+s.plot.w/2,cy=cr.top+cr.height/3;
     const wheel=(dy,x)=>{cv.dispatchEvent(new w.WheelEvent('wheel',{deltaY:dy,clientX:x==null?cx:x,clientY:cy,bubbles:true,cancelable:true}));I.flush();};
     wheel(-400);s=I.state();ok(s.c<126&&s.c>=20,'wheel up zooms in within the clamp: c='+s.c);
     for(let k=0;k<40;k++)wheel(-400);s=I.state();ok(s.c===20,'zoom in stops at 20 bars: c='+s.c);
-    for(let k=0;k<80;k++)wheel(400);s=I.state();ok(s.c===500&&s.s===0,'zoom out stops at all bars: '+s.s+'/'+s.c);
+    for(let k=0;k<80;k++)wheel(400);s=I.state();ok(s.c===500&&s.s<=w.CM.padOf(500),'zoom out stops at all bars: '+s.s+'/'+s.c);
     I.reset();I.flush();wheel(-300);const z=I.state();ok(z.c<126&&z.s>=0&&z.s+z.c<=500+1e-6,'zoom keeps the window inside the data: '+z.s+'/'+z.c);
     // pan by mouse drag
     I.setView({s:200,c:100});I.flush();const sp=I.state().s;
@@ -385,7 +386,7 @@ document.getElementById('f').onload=async()=>{
     const tp=mkT(cv,1,cx,cy);tev(cv,'touchstart',[tp]);await sleep(40);tev(cv,'touchend',[],[tp]);await sleep(40);ok(I.state().cross<0&&q('#cf-ro').hidden,'a tap dismisses the crosshair');
     await sleep(500);I.setView({s:100,c:40});I.flush();
     const d1=mkT(cv,1,cx,cy);tev(cv,'touchstart',[d1]);await sleep(30);tev(cv,'touchend',[],[d1]);await sleep(60);tev(cv,'touchstart',[mkT(cv,1,cx+3,cy)]);await sleep(30);tev(cv,'touchend',[],[mkT(cv,1,cx+3,cy)]);I.flush();
-    s=I.state();ok(s.c===126&&s.s===374,'double-tap resets to the default window: '+s.s+'/'+s.c);
+    s=I.state();ok(s.c===126&&s.s===374+w.CM.padOf(126),'double-tap resets to the default window: '+s.s+'/'+s.c);
     // toggles + ranges
     const fr=I.state().frames;click('.cfe[data-id="100"]');I.flush();ok(I.state().emas.indexOf(100)>=0&&I.state().frames>fr&&q('.cfe[data-id="100"]').getAttribute('aria-pressed')==='true','EMA 100 toggle redraws and is pressed: '+JSON.stringify(I.state().emas)+' frames '+fr+'->'+I.state().frames+' '+q('.cfe[data-id="100"]').getAttribute('aria-pressed'));
     click('.cfe[data-id="10"]');I.flush();ok(I.state().emas.indexOf(10)<0,'EMA 10 toggle off: '+JSON.stringify(I.state().emas));click('.cfe[data-id="10"]');I.flush();

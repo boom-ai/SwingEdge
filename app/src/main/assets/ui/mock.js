@@ -988,6 +988,10 @@
           stats: { ltp: i.ltp, ret5: i.ret.d5, ret21: i.ret.d21, ret63: i.ret.d63, ret126: i.ret.d126, sma50: i.ema.e50, sma200: i.ema.e200, rsi14: i.rsi14, high52: i.high52, low52: i.low52 } }, 0);
       }, 300);
     },
+    liveQuotes: function (a) {
+      var q = {}; (Array.isArray(a.syms) ? a.syms : []).forEach(function (sym) { if (!validSym(sym)) return; var m = model(sym), l = m.info.ltp; q[sym] = { ltp: Math.round(l * 100) / 100, chg: Math.round(l * m.info.dayChgPct) / 100, pct: m.info.dayChgPct, at: Date.now() }; });
+      setTimeout(function () { finish('liveQuotes', { ok: true, at: Date.now(), quotes: q }, 0); }, 120);
+    },
     indexQuotes: function (a) {
       var cat = [['NIFTY50','Nifty 50',24850.5],['BANKNIFTY','Bank Nifty',52110.2],['SENSEX','Sensex',81302.1],['NIFTY100','Large cap 100',25510.4],['NEXT50','Nifty Next 50',68200],['MID100','Midcap 100',57210],['MID150','Midcap 150',21010],['MIDSEL','Midcap Select',12800],['SMALL100','Smallcap 100',18420],['SMALL250','Smallcap 250',17100],['NIFTY500','Nifty 500',23100],['FIN','Financial Services',23900],['PVTBANK','Private Bank',26100],['PSUBANK','PSU Bank',6900],['IT','Nifty IT',41200],['PHARMA','Pharma',22300],['HEALTH','Healthcare',14100],['AUTO','Auto',24800],['FMCG','FMCG',57100],['METAL','Metal',9300],['ENERGY','Energy',36200],['OILGAS','Oil & Gas',11800],['REALTY','Realty',1010],['INFRA','Infra',9100],['MEDIA','Media',1850],['CONSDUR','Consumer Durables',38900],['DEFENCE','Defence',8100],['CPSE','CPSE',6600],['VIX','India VIX',13.4]];
       var ids = Array.isArray(a.ids) && a.ids.length ? a.ids : ['NIFTY50','BANKNIFTY','SENSEX','NIFTY100'];

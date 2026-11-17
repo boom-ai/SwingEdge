@@ -289,6 +289,11 @@ object V13Tests {
         T.check(r.list("catalog").size >= 25, "catalog sent")
         val d = Json.parseObject(app.action("indexQuotes", "{}"))!!.list("items").map { it.asObj().str("id") }
         T.eq(d, IndexQuotes.DEFAULT, "defaults when no ids")
+        p.served[Yahoo.url(Params.YAHOO_HOST_1, "UP01", "1d", "1d")] = """{"chart":{"result":[{"meta":{"regularMarketPrice":101.5,"chartPreviousClose":100.0},"indicators":{"quote":[{"close":[101.5]}]}}]}}"""
+        val lq = Json.parseObject(app.action("liveQuotes", """{"syms":["up01","BAD SYM","UP01"]}"""))!!
+        val qq = (lq["quotes"] as Map<*, *>)["UP01"] as Map<*, *>
+        T.eq(qq["ltp"], 101.5, "live ltp"); T.eq(qq["pct"], 1.5, "live pct vs previous close")
+        T.eq((lq["quotes"] as Map<*, *>).size, 1, "junk and duplicates dropped")
     }
 
     fun news() {

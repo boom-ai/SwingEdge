@@ -1,0 +1,16 @@
+name: probe
+on: workflow_dispatch
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          UA="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Mobile Safari/537.36"
+          for H in https://www.nseindia.com https://www.nseindia.in; do
+            curl -sS -m 20 -A "$UA" -c /tmp/c$RANDOM -o /dev/null -w "home $H %{http_code}\n" $H/ || true
+            for P in "/api/option-chain-indices?symbol=NIFTY" "/api/option-chain-contract-info?symbol=NIFTY" "/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=18-Nov-2026" "/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=25-Nov-2026" "/api/quote-derivative?symbol=NIFTY" "/api/marketStatus"; do
+              curl -sS -m 20 -A "$UA" -H "Accept: application/json" -H "Referer: $H/option-chain" -b /tmp/cj -c /tmp/cj -L -o /tmp/o -w "%{http_code} %{size_download} $H$P\n" "$H$P" || true
+              head -c 600 /tmp/o; echo; echo ---
+            done
+          done

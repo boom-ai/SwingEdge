@@ -166,7 +166,7 @@
       if (name === 'moneyFlow') { onMoney(res, ok, err); return; }
       if (name === 'flowSector') { onSector(res, ok, err); return; }
       if (name === 'fnoTicker' || name === 'fnoLab') { onLive(name, res, ok); return; }
-      if (name.indexOf('fno') === 0) { fnoBusy = false; ui.fno = ui.fno || { sym: 'NIFTY' }; if (ok) { var pq = {}; SE.A(ui.fno.res && ui.fno.res.chain && ui.fno.res.chain.rows).forEach(function (x) { pq[String(x.k)] = { CE: x.ce || {}, PE: x.pe || {} }; }); ui.fno.prev = pq; ui.fno.res = res; var ce = SE.T(res && res.chain && res.chain.expiry); if (ce) ui.fno.exp = ce; } else ui.fno.res = ui.fno.res || { ok: true, error: err }; if (sheet && sheet.kind === 'fno' && !(name === 'fno' && ui.fno.form)) paintSheet(true); return; }
+      if (name.indexOf('fno') === 0) { fnoBusy = false; ui.fno = ui.fno || { sym: 'NIFTY' }; if (ok) { var pq = {}; SE.A(ui.fno.res && ui.fno.res.chain && ui.fno.res.chain.rows).forEach(function (x) { pq[String(x.k)] = { CE: x.ce || {}, PE: x.pe || {} }; }); ui.fno.prev = pq; ui.fno.res = res; var ce = SE.T(res && res.chain && res.chain.expiry); if (ce) ui.fno.exp = ce; } else ui.fno.res = ui.fno.res || { ok: true, error: err }; if (sheet && sheet.kind === 'fno' && !(name === 'fno' && ui.fno.form)) { if (document.getElementById('fno-main') && name === 'fno') fnoParts(['main']); else paintSheet(true); } return; }
       if (name === 'options') { ui.opt = ui.opt || { calc: {} }; if (ok) ui.opt.res = res; if (sheet && sheet.kind === 'opt') paintSheet(true); return; }
       if (name === 'indexView') { var im = ui.index || (ui.index = {}); im.loading = false; if (ok) { im.res = res; im.sel = SE.T(res && res.index); } else im.err = err; if (sheet && sheet.kind === 'index') paintSheet(true); return; }
       if (name === 'funds') { var fm = ui.funds || (ui.funds = {}); fm.loading = false; if (ok) { fm.res = res; fm.err = ''; fm.at = Date.now(); } else fm.err = err; if (ui.tab === 'funds') render(); return; }
@@ -528,8 +528,32 @@
     var list = SE.A(res.ticker);
     if (list.length) { var pv = {}; ui.tick.list.forEach(function (x) { pv[x.name] = x.last; }); ui.tick = { list: list, prev: pv, at: Date.now() }; }
     if (name === 'fnoLab') ui.lab = res;
-    if (sheet && sheet.kind === 'fno') { if (!(ui.fno && ui.fno.form)) paintSheet(true); }
-    else if (ui.tab === 'today') render(true);
+    ui.now = Date.now();
+    patchTickers();
+    if (name === 'fnoLab') { fnoParts(['calls', 'learn']); if (!sheet && ui.tab === 'today') render(true); }
+  }
+  /* update ticker tiles in place: no redraw, scroll kept, a short green/red flash on every tick */
+  function patchTickers() {
+    var hosts = document.querySelectorAll('.ltk'); if (!hosts.length) return;
+    var lb = SE.tickLabel(S, ui), list = ui.tick.list, prev = ui.tick.prev;
+    for (var h = 0; h < hosts.length; h++) {
+      var host = hosts[h], strip = host.querySelector('.lts');
+      if (!strip || strip.children.length !== list.length) { var big = host.classList.contains('big'), wrap = document.createElement('div'); wrap.innerHTML = SE.liveTicker(ui, big, S); host.parentNode.replaceChild(wrap.firstChild, host); continue; }
+      var l = host.querySelector('.ltl'); if (l) { l.className = 'ltl' + lb[0]; l.lastChild.nodeValue = lb[1]; }
+      for (var i = 0; i < list.length; i++) {
+        var x = list[i], el = strip.children[i]; if (!el || el.getAttribute('data-n') !== x.name) continue;
+        var chg = typeof x.chg === 'number' ? x.chg : null, d = chg === null ? 'flat' : chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat';
+        var o = prev[x.name], v = x.last, fl = typeof o === 'number' && typeof v === 'number' && v !== o ? (v > o ? 'fup' : 'fdn') : '';
+        el.className = 'lti ' + d;
+        var b = el.querySelector('.lv2'), c = el.querySelector('.lc');
+        if (b) b.textContent = SE.fmtIdx(v); if (c) c.textContent = SE.tickChg(chg, typeof x.pct === 'number' ? x.pct : null);
+        if (fl) { void el.offsetWidth; el.classList.add(fl); }
+      }
+    }
+  }
+  function fnoParts(parts) {
+    if (!sheet || sheet.kind !== 'fno') return;
+    parts.forEach(function (p) { var el = document.getElementById('fno-' + p); if (!el) return; var h = SE.fnoPart(p, S, ui); if (el._h !== h) { el.innerHTML = h; el._h = h; } });
   }
   function liveLoop() {
     try {

@@ -1285,3 +1285,15 @@ button.fstrip { display: block; width: 100%; text-align: left; color: inherit; p
 .fr3 .mut.wrapn { white-space: normal; overflow: visible; }
 .sm2 { font-size: 12px; line-height: 1.4; margin-top: 4px; }
 .fr1 b.wrapn { white-space: normal; flex: 1 1 auto; min-width: min-content; }
+/* v20: pro-style ticker colours */
+.lti { border-left: 3px solid var(--line-2); min-width: 120px; }
+.lti.up { border-left-color: var(--green); background: rgba(129, 201, 149, .08); }
+.lti.down { border-left-color: var(--red); background: rgba(242, 139, 130, .08); }
+.lti.up .lv2, .lti.up .lc { color: var(--green); }
+.lti.down .lv2, .lti.down .lc { color: var(--red); }
+.lti.flat .lc { color: var(--muted); }
+.lti .lc { font-weight: 600; }
+.lti.fup { animation: flu2 .9s ease-out; } .lti.fdn { animation: fld2 .9s ease-out; }
+@keyframes flu2 { 0% { background: rgba(129, 201, 149, .55); } 100% { background: rgba(129, 201, 149, .08); } }
+@keyframes fld2 { 0% { background: rgba(242, 139, 130, .55); } 100% { background: rgba(242, 139, 130, .08); } }
+.ltl { min-width: 56px; }

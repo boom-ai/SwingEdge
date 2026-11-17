@@ -1420,8 +1420,9 @@
   function fnoSheet(S, ui) {
     var f = O(ui.fno), r = O(f.res), c = O(r.chain), acc = O(r.account), foot = btn('sheet-close', null, 'Close', '');
     var sym = T(f.sym) || 'NIFTY';
-    var h = liveTicker(ui, true) + labCalls(S, ui) + '<h3 class="skh">Paper trading · option chain</h3><div class="ixc">' + ['NIFTY', 'BANKNIFTY'].map(function (k) { return '<button type="button" class="rchip' + (k === sym ? ' on' : '') + '" data-c="fno-sym" data-id="' + k + '"><span>' + k + '</span></button>'; }).join('') + '</div>';
-    if (!isObj(f.res)) return shell('F&O live', h + skCard('Live chain', 6), foot);
+    var top = '<div id="fno-tk">' + liveTicker(ui, true, S) + '</div><div id="fno-calls">' + labCalls(S, ui) + '</div>';
+    var h = '<h3 class="skh">Paper trading · option chain</h3><div class="ixc">' + ['NIFTY', 'BANKNIFTY'].map(function (k) { return '<button type="button" class="rchip' + (k === sym ? ' on' : '') + '" data-c="fno-sym" data-id="' + k + '"><span>' + k + '</span></button>'; }).join('') + '</div>';
+    if (!isObj(f.res)) return shell('F&O live', top + '<div id="fno-main">' + h + skCard('Live chain', 6) + '</div><div id="fno-learn">' + labLearn(ui) + '</div>', foot);
     var live = r.live === true;
     h += '<div class="card fhead"><div class="fr1"><b class="big">' + esc(sym) + ' ' + f1(c.spot) + '</b><span class="sp"></span><span class="ldot ' + (live ? 'on' : 'off') + '">' + (live ? 'LIVE' : 'NO PRICE') + '</span></div>' +
       '<div class="mut">' + (T(c.ts).trim() ? 'NSE ' + esc(T(c.ts)) : esc(T(r.error) || 'Waiting for NSE')) + (N(c.lot) ? ' · lot ' + N(c.lot) : '') + '</div>' +
@@ -1461,18 +1462,33 @@
       return '<tr><td>' + dShort(o.at) + '</td><td>' + esc(T(o.status) === 'FILLED' ? (o.buy ? 'BUY ' : 'SELL ') : T(o.status) + ' ') + (N(o.lots) || 0) + '× ' + (N(o.strike) || 0) + ' ' + esc(T(o.side)) + (T(o.note) ? ' · ' + esc(T(o.note)) : '') + '</td><td>' + f1(o.fillPx) + '</td><td class="' + tone(o.pnl) + '">' + (o.buy ? DASH : rsS(o.pnl)) + '</td></tr>'; }));
     h += '<div class="hint hintpad"><span class="t">Paper money. Prices from NSE’s live option chain, refreshed every 3 s while this screen is open, and every 10 s in the background while you hold positions (stops and targets keep working). Buys fill at the ask, sells at the bid, with full charges.</span></div>' +
       '<div class="btns hintpad">' + btn('fno-reset', null, 'Reset to ₹1,00,000', 'sm ghost', {}) + '</div>';
-    return shell('F&O live', h + labLearn(ui), foot);
+    return shell('F&O live', top + '<div id="fno-main">' + h + '</div><div id="fno-learn">' + labLearn(ui) + '</div>', foot);
+  }
+  /* parts of the F&O screen that are refreshed in place (the sheet itself is never redrawn by the live feed) */
+  function fnoPart(part, S, ui) {
+    S = O(S); ui = O(ui);
+    if (part === 'calls') return labCalls(S, ui);
+    if (part === 'learn') return labLearn(ui);
+    if (part === 'main') { var full = fnoSheet(S, ui), i = full.indexOf('<div id="fno-main">'), j = full.indexOf('<div id="fno-learn">'); return i >= 0 && j > i ? full.slice(i + 19, j - 6) : ''; }
+    return '';
   }
   /* live index ticker: Nifty, Bank Nifty, Fin Nifty, Midcap Nifty, India VIX; flashes green/red on every change */
-  function liveTicker(ui, big) {
-    var t = A(O(ui.tick).list), pv = O(O(ui.tick).prev), at = N(O(ui.tick).at);
+  function tickLabel(S, ui) {
+    var at = N(O(ui.tick).at), fresh = at !== null && ui.now - at < 20000;
+    if (O(S).marketOpen === false) return ['', 'CLOSED'];
+    return fresh ? [' on', 'LIVE'] : ['', 'DELAYED'];
+  }
+  function tickTile(x) {
+    var nm = T(x.name), v = N(x.last), pct = N(x.pct), chg = N(x.chg), d = chg === null ? 'flat' : chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat';
+    return '<div class="lti ' + d + '" data-n="' + esc(nm) + '"><span class="ln">' + esc(nm) + '</span><b class="num lv2">' + fmtIdx(v) + '</b>' +
+      '<span class="num lc">' + tickChg(chg, pct) + '</span></div>';
+  }
+  function fmtIdx(v) { return v !== null && v !== undefined ? Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : DASH; }
+  function tickChg(chg, pct) { return chg === null ? '' : (chg > 0 ? '▲ +' : chg < 0 ? '▼ −' : '') + Math.abs(chg).toFixed(2) + ' (' + (pct === null ? '' : (pct > 0 ? '+' : pct < 0 ? '−' : '') + Math.abs(pct).toFixed(2) + '%') + ')'; }
+  function liveTicker(ui, big, S) {
+    var t = A(O(ui.tick).list), lb = tickLabel(S, ui);
     if (!t.length) return '<div class="ltk' + (big ? ' big' : '') + '"><span class="ltl"><i></i>LIVE</span><span class="mut">Connecting to NSE…</span></div>';
-    var fresh = at !== null && ui.now - at < 20000;
-    return '<div class="ltk' + (big ? ' big' : '') + '"><span class="ltl' + (fresh ? ' on' : '') + '"><i></i>' + (fresh ? 'LIVE' : 'DELAYED') + '</span><div class="lts">' + t.map(function (x) {
-      var nm = T(x.name), v = N(x.last), o = N(pv[nm]), fl = o !== null && v !== null && v !== o ? (v > o ? ' fup' : ' fdn') : '', pct = N(x.pct), chg = N(x.chg);
-      return '<div class="lti' + fl + '"><span class="ln">' + esc(nm) + '</span><b class="num">' + (v !== null ? v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : DASH) + '</b>' +
-        '<span class="num ' + tone(chg) + '">' + (chg !== null ? (chg >= 0 ? '+' : '') + chg.toFixed(2) : '') + ' (' + pc(pct, true) + ')</span></div>';
-    }).join('') + '</div></div>';
+    return '<div class="ltk' + (big ? ' big' : '') + '"><span class="ltl' + lb[0] + '"><i></i>' + lb[1] + '</span><div class="lts">' + t.map(tickTile).join('') + '</div></div>';
   }
   var LSTAT = { WORKING: ['buy', 'Working'], LEARNING: ['neutral', 'Learning'], UNPROVEN: ['neutral', 'Unproven'], FAILING: ['sell', 'Failing'] };
   function labCalls(S, ui) {
@@ -1502,7 +1518,7 @@
   }
   function fnoStrip(S, ui) {
     var L = O(ui.lab), n = A(L.today).filter(function (x) { return T(x.status) === 'OPEN'; }).length;
-    return '<button type="button" class="card fstrip" data-c="fno-open"><div class="fsh"><b>F&amp;O live</b><span class="mut">' + (n ? n + ' open call' + (n > 1 ? 's' : '') : 'calls · chain · paper') + ' ›</span></div>' + liveTicker(ui, false) + '</button>';
+    return '<button type="button" class="card fstrip" data-c="fno-open"><div class="fsh"><b>F&amp;O live</b><span class="mut">' + (n ? n + ' open call' + (n > 1 ? 's' : '') : 'calls · chain · paper') + ' ›</span></div>' + liveTicker(ui, false, S) + '</button>';
   }
   /* ---------- Money flow ---------- */
   function crSigned(v) {
@@ -2453,7 +2469,8 @@
     panelOpen: function (ui, i) { var ms = mgrs(O(O(O(ui).stock).info).panel); var m = ms[i]; return m ? pnlOpen(ui, ms, m) : false; },
     stockPart: stockPart, searchBody: searchBody, view: view, sheet: sheet, deviceList: deviceList, deviceIssues: deviceIssues,
     takeCalc: takeCalc, closeCalc: closeCalc, settingsCalc: settingsCalc, isBusy: function (S) { return isBusy(O(S)); },
-    actItems: function (S) { return actItems(O(S)); }
+    actItems: function (S) { return actItems(O(S)); },
+    fnoPart: fnoPart, tickTile: tickTile, tickLabel: function (S, ui) { return tickLabel(O(S), O(ui)); }, fmtIdx: fmtIdx, tickChg: tickChg, liveTicker: function (ui, big, S) { return liveTicker(O(ui), big, O(S)); }
   };
   root.SE = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

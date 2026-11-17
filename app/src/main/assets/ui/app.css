@@ -1257,3 +1257,31 @@ svg .ads0 { stop-color: #F28B82; stop-opacity: .34; } svg .ads1 { stop-color: #F
 svg .audot { fill: var(--green); } svg .addot { fill: var(--red); }
 svg .startln { stroke: #9AA0A6; stroke-width: 1; stroke-dasharray: 2 5; opacity: .7; }
 svg .grid { stroke: #2A2B2E; } svg .ax { fill: #9AA0A6; }
+/* v19: live F&O ticker, calls, flashing chain */
+.ltk { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.ltl { flex: none; display: inline-flex; align-items: center; gap: 5px; font: 700 10.5px/1 var(--sans); letter-spacing: .06em; color: var(--muted); }
+.ltl i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.ltl.on { color: var(--green); } .ltl.on i { background: var(--green); animation: ltp 1.4s ease-in-out infinite; }
+@keyframes ltp { 50% { opacity: .2; } }
+.lts { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.lts::-webkit-scrollbar { display: none; }
+.lti { flex: none; display: flex; flex-direction: column; padding: 6px 10px; border-radius: 10px; background: var(--raised); border: 1px solid var(--line); transition: background .6s; }
+.lti .ln { font-size: 11px; color: var(--text-2); white-space: nowrap; }
+.lti b { font: 600 15px/1.25 var(--cond); white-space: nowrap; }
+.lti .num { font-size: 11.5px; white-space: nowrap; }
+.ltk.big .lti b { font-size: 17px; }
+.lti.fup { animation: flu 1.2s ease-out; } .lti.fdn { animation: fld 1.2s ease-out; }
+@keyframes flu { 0% { background: rgba(129, 201, 149, .45); } 100% { background: var(--raised); } }
+@keyframes fld { 0% { background: rgba(242, 139, 130, .45); } 100% { background: var(--raised); } }
+.qb.fup { animation: qfu 1.2s ease-out; color: var(--green); } .qb.fdn { animation: qfd 1.2s ease-out; color: var(--red); }
+@keyframes qfu { 0% { background: rgba(129, 201, 149, .5); } 100% { background: transparent; } }
+@keyframes qfd { 0% { background: rgba(242, 139, 130, .5); } 100% { background: transparent; } }
+button.fstrip { display: block; width: 100%; text-align: left; color: inherit; padding: 10px 12px; }
+.fstrip .fsh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.fstrip .fsh .mut { font-size: 12px; }
+.fcall .cb { padding: 12px; } .fcall .fr1 { gap: 8px; }
+.fcall .lv { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin: 8px 0; }
+.fcall .lv .v { white-space: nowrap; overflow: visible; }
+.fr3 .mut.wrapn { white-space: normal; overflow: visible; }
+.sm2 { font-size: 12px; line-height: 1.4; margin-top: 4px; }
+.fr1 b.wrapn { white-space: normal; flex: 1 1 auto; min-width: min-content; }

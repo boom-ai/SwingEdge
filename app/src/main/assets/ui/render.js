@@ -552,9 +552,9 @@
   }
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
-    if (ui.fullCards !== true) return banner(ui) + statusPanel(S, ui, now) + simpleToday(S, ui, items, bs) +
+    if (ui.fullCards !== true) return banner(ui) + fnoStrip(S, ui) + statusPanel(S, ui, now) + simpleToday(S, ui, items, bs) +
       '<div class="btns hintpad">' + btn('fullcards', null, 'Detailed view', 'sm ghost', { icon: 'layers' }) + '</div>';
-    var h = banner(ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs);
+    var h = banner(ui) + fnoStrip(S, ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs);
     if (ui.fullCards === true || !items.length) h += '<div class="sec"><h2>Act now</h2>' + (items.length ? '<span class="cnt">' + items.length + '</span>' : '') + '</div>';
     if (!items.length) {
       h += '<div class="empty"><div class="ei">' + ic(bs.icon) + '</div><h3>' + esc(bs.title) + '</h3><p>' + esc(bs.text) + '</p>' +
@@ -1214,7 +1214,7 @@
     return h;
   }
   function simpleToday(S, ui, items, bs) {
-    var h = optToday(S), sells = [], cap = N(O(S.settings).capital) || 0;
+    var h = '', sells = [], cap = N(O(S.settings).capital) || 0;
     items.forEach(function (x) {
       var t = O(x.it), q = N(t.qty) || 0, half = Math.floor(q / 2), n = null;
       if (x.type === 'trade') n = t.action === 'BOOK_HALF' ? half : q;
@@ -1420,8 +1420,8 @@
   function fnoSheet(S, ui) {
     var f = O(ui.fno), r = O(f.res), c = O(r.chain), acc = O(r.account), foot = btn('sheet-close', null, 'Close', '');
     var sym = T(f.sym) || 'NIFTY';
-    var h = '<div class="ixc">' + ['NIFTY', 'BANKNIFTY'].map(function (k) { return '<button type="button" class="rchip' + (k === sym ? ' on' : '') + '" data-c="fno-sym" data-id="' + k + '"><span>' + k + '</span></button>'; }).join('') + '</div>';
-    if (!isObj(f.res)) return shell('F&O paper', h + skCard('Live chain', 6), foot);
+    var h = liveTicker(ui, true) + labCalls(S, ui) + '<h3 class="skh">Paper trading · option chain</h3><div class="ixc">' + ['NIFTY', 'BANKNIFTY'].map(function (k) { return '<button type="button" class="rchip' + (k === sym ? ' on' : '') + '" data-c="fno-sym" data-id="' + k + '"><span>' + k + '</span></button>'; }).join('') + '</div>';
+    if (!isObj(f.res)) return shell('F&O live', h + skCard('Live chain', 6), foot);
     var live = r.live === true;
     h += '<div class="card fhead"><div class="fr1"><b class="big">' + esc(sym) + ' ' + f1(c.spot) + '</b><span class="sp"></span><span class="ldot ' + (live ? 'on' : 'off') + '">' + (live ? 'LIVE' : 'NO PRICE') + '</span></div>' +
       '<div class="mut">' + (T(c.ts).trim() ? 'NSE ' + esc(T(c.ts)) : esc(T(r.error) || 'Waiting for NSE')) + (N(c.lot) ? ' · lot ' + N(c.lot) : '') + '</div>' +
@@ -1451,15 +1451,58 @@
     var rows = A(c.rows);
     if (rows.length) h += '<h3 class="skh">Option chain · tap a price to buy</h3><div class="card bt"><table class="btt chain"><tr><th>CE bid</th><th>CE ask</th><th class="k">Strike</th><th>PE bid</th><th>PE ask</th></tr>' + rows.map(function (x) {
       var ce = O(x.ce), pe = O(x.pe), k = N(x.k) || 0, atm = k === N(c.atm);
-      var cellf = function (q, side, v) { return '<td><button type="button" class="qb" data-c="fno-pick" data-id="' + side + ':' + k + '">' + f1(v) + '</button></td>'; };
-      return '<tr class="' + (atm ? 'atm' : '') + '">' + cellf(ce, 'CE', ce.bid) + cellf(ce, 'CE', ce.ask) + '<td class="k"><b>' + k + '</b></td>' + cellf(pe, 'PE', pe.bid) + cellf(pe, 'PE', pe.ask) + '</tr>';
+      var pv = O(O(f.prev)[String(k)]);
+      var cellf = function (q, side, v, fld) { var old = N(O(pv[side])[fld]), cur = N(v), fl = old !== null && cur !== null && cur !== old ? (cur > old ? ' fup' : ' fdn') : '';
+        return '<td><button type="button" class="qb' + fl + '" data-c="fno-pick" data-id="' + side + ':' + k + '">' + f1(v) + '</button></td>'; };
+      return '<tr class="' + (atm ? 'atm' : '') + '">' + cellf(ce, 'CE', ce.bid, 'bid') + cellf(ce, 'CE', ce.ask, 'ask') + '<td class="k"><b>' + k + '</b></td>' + cellf(pe, 'PE', pe.bid, 'bid') + cellf(pe, 'PE', pe.ask, 'ask') + '</tr>';
     }).join('') + '</table></div>';
     var done = A(r.orders).filter(function (o) { return T(o.status) !== 'OPEN'; }).slice(0, 15);
     if (done.length) h += '<h3 class="skh">Order history</h3>' + tbl(['Time', 'Order', 'Price', 'P&L'], done.map(function (o) {
       return '<tr><td>' + dShort(o.at) + '</td><td>' + esc(T(o.status) === 'FILLED' ? (o.buy ? 'BUY ' : 'SELL ') : T(o.status) + ' ') + (N(o.lots) || 0) + '× ' + (N(o.strike) || 0) + ' ' + esc(T(o.side)) + (T(o.note) ? ' · ' + esc(T(o.note)) : '') + '</td><td>' + f1(o.fillPx) + '</td><td class="' + tone(o.pnl) + '">' + (o.buy ? DASH : rsS(o.pnl)) + '</td></tr>'; }));
     h += '<div class="hint hintpad"><span class="t">Paper money. Prices from NSE’s live option chain, refreshed every 3 s while this screen is open, and every 10 s in the background while you hold positions (stops and targets keep working). Buys fill at the ask, sells at the bid, with full charges.</span></div>' +
       '<div class="btns hintpad">' + btn('fno-reset', null, 'Reset to ₹1,00,000', 'sm ghost', {}) + '</div>';
-    return shell('F&O paper', h, foot);
+    return shell('F&O live', h + labLearn(ui), foot);
+  }
+  /* live index ticker: Nifty, Bank Nifty, Fin Nifty, Midcap Nifty, India VIX; flashes green/red on every change */
+  function liveTicker(ui, big) {
+    var t = A(O(ui.tick).list), pv = O(O(ui.tick).prev), at = N(O(ui.tick).at);
+    if (!t.length) return '<div class="ltk' + (big ? ' big' : '') + '"><span class="ltl"><i></i>LIVE</span><span class="mut">Connecting to NSE…</span></div>';
+    var fresh = at !== null && ui.now - at < 20000;
+    return '<div class="ltk' + (big ? ' big' : '') + '"><span class="ltl' + (fresh ? ' on' : '') + '"><i></i>' + (fresh ? 'LIVE' : 'DELAYED') + '</span><div class="lts">' + t.map(function (x) {
+      var nm = T(x.name), v = N(x.last), o = N(pv[nm]), fl = o !== null && v !== null && v !== o ? (v > o ? ' fup' : ' fdn') : '', pct = N(x.pct), chg = N(x.chg);
+      return '<div class="lti' + fl + '"><span class="ln">' + esc(nm) + '</span><b class="num">' + (v !== null ? v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : DASH) + '</b>' +
+        '<span class="num ' + tone(chg) + '">' + (chg !== null ? (chg >= 0 ? '+' : '') + chg.toFixed(2) : '') + ' (' + pc(pct, true) + ')</span></div>';
+    }).join('') + '</div></div>';
+  }
+  var LSTAT = { WORKING: ['buy', 'Working'], LEARNING: ['neutral', 'Learning'], UNPROVEN: ['neutral', 'Unproven'], FAILING: ['sell', 'Failing'] };
+  function labCalls(S, ui) {
+    var L = O(ui.lab), td = A(L.today), cap = N(O(S.settings).capital) || 0;
+    var h = '<div class="sec"><h2>Today’s F&amp;O calls</h2><span class="cnt">' + td.length + '</span></div>';
+    if (!L.ok) return h + '<div class="hint hintpad"><span class="t">Loading calls…</span></div>';
+    if (!td.length) return h + '<div class="hint hintpad">' + ic('clock') + '<span class="t">No call yet today. Seven rules watch Nifty and Bank Nifty from 9:20 am to 2:30 pm; a call appears here the moment one triggers (and on your phone once that rule has proven itself).</span></div>';
+    return h + td.map(function (x) {
+      var st = LSTAT[T(x.stratStatus)] || LSTAT.LEARNING, open = T(x.status) === 'OPEN', pnl = N(x.pnl), hit = T(x.liveHit);
+      var stTxt = open ? (hit === 'TARGET' ? 'Target hit, book it' : hit === 'STOP' ? 'Stop hit, exit' : 'Open') : T(x.status) === 'TARGET' ? 'Closed at target' : T(x.status) === 'STOP' ? 'Stopped out' : 'Closed 3:15 pm';
+      var lots = N(x.lots) || 0;
+      return '<article class="card fcall"><div class="cb"><div class="fr1">' + tag(T(x.side) === 'CE' ? 'buy' : 'sell', 'BUY ' + T(x.side)) + '<b class="wrapn">' + esc(T(x.sym)) + ' ' + (N(x.strike) || 0) + ' ' + esc(T(x.side)) + '</b><span class="sp"></span>' + tag(st[0], st[1]) + '</div>' +
+        '<div class="mut sm2">' + esc(T(x.stratName)) + ' · ' + esc(T(x.why)) + ' · ' + hm(x.at) + ' · exp ' + esc(T(x.expiry)) + '</div>' +
+        '<div class="lv"><div><div class="k">Buy ≤</div><div class="v sm">₹' + f1(N(x.entry) * 1.02) + '</div></div><div><div class="k">Stop</div><div class="v sm down">₹' + f1(x.stop) + '</div></div>' +
+        '<div><div class="k">Target</div><div class="v sm up">' + (N(x.target) ? '₹' + f1(x.target) : '3:15 pm') + '</div></div><div><div class="k">Now</div><div class="v sm">₹' + f1(x.now) + '</div></div></div>' +
+        '<div class="fr3"><span class="mut wrapn">' + (lots ? lots + ' lot' + (lots > 1 ? 's' : '') + ' (' + (lots * (N(x.lot) || 0)) + ' qty) for ' + rsB(cap) : 'Too costly for your capital') + ' · exit by 3:15 pm</span><span class="sp"></span><b class="num ' + tone(pnl) + '">' + stTxt + ' ' + rsS(pnl) + '/lot</b></div></div></article>';
+    }).join('') + '<div class="hint hintpad">' + ic('shield') + '<span class="t">Calls marked Learning or Unproven are paper tests, not advice: no rule here has proven itself yet, and SEBI found about 9 in 10 retail F&amp;O traders lose money. Buy ≤ is the ask + 2%.</span></div>';
+  }
+  function labLearn(ui) {
+    var L = O(ui.lab), ss = A(L.strategies), rec = O(L.record);
+    if (!ss.length) return '';
+    var h = '<h3 class="skh">What the rules have learned</h3><div class="mut sm2" style="margin-bottom:6px">' + (N(rec.n) || 0) + ' paper trades · ' + (N(rec.wins) || 0) + ' won · net ' + rsS(rec.total) + ' per lot. After each trade every stop/target pair is replayed on the same prices, and the best one is used for the next call.</div>';
+    return h + tbl(['Rule', 'Trades', 'Avg/lot', 'Best exit', 'Status'], ss.map(function (x) {
+      var st = LSTAT[T(x.status)] || LSTAT.LEARNING;
+      return '<tr><td><b>' + esc(T(x.name)) + '</b><br><span class="mut">' + esc(T(x.sym)) + '</span></td><td>' + (N(x.n) || 0) + '</td><td class="' + tone(x.avg) + '">' + rsS(x.avg) + '</td><td>−' + (N(x.stopPct) || 0) + '% / ' + (N(x.tgtPct) ? '+' + N(x.tgtPct) + '%' : '3:15') + '</td><td>' + tag(st[0], st[1]) + '</td></tr>';
+    })) + '<div class="hint hintpad"><span class="t">Working = 20+ trades with a positive average after charges (t ≥ 1.5). Only Working rules send phone alerts. Failing rules keep being tested in the background, and their calls stay labelled.</span></div>';
+  }
+  function fnoStrip(S, ui) {
+    var L = O(ui.lab), n = A(L.today).filter(function (x) { return T(x.status) === 'OPEN'; }).length;
+    return '<button type="button" class="card fstrip" data-c="fno-open"><div class="fsh"><b>F&amp;O live</b><span class="mut">' + (n ? n + ' open call' + (n > 1 ? 's' : '') : 'calls · chain · paper') + ' ›</span></div>' + liveTicker(ui, false) + '</button>';
   }
   /* ---------- Money flow ---------- */
   function crSigned(v) {

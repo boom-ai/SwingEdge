@@ -13,6 +13,14 @@ document.getElementById('f').onload=async()=>{
   const calls=[],log=[];const orig=w.Android.action;w.Android.action=function(n,a){calls.push(n);try{log.push({n:n,a:JSON.parse(a||'{}')});}catch(e){}return orig.call(this,n,a);};
   const toasts=()=>qa('.toast').map(t=>t.textContent).join(' | ');
   await sleep(100);
+  if(q('[data-c="fullcards"]')&&!q('#view .card.k-buy')){click('[data-c="fullcards"]');await sleep(50);}
+  ok(!!q('#view .fstrip'),'Today shows the F&O live strip');
+  await sleep(2500);ok(qa('#view .fstrip .lti').length===5,'live ticker: Nifty, Bank Nifty, Fin Nifty, Midcap Nifty, VIX');
+  click('#view .fstrip');await sleep(1500);
+  ok(!!q('#sheet-root .fcall')&&/BUY CE/.test(q('#sheet-root .fcall').textContent)&&/Stop/.test(q('#sheet-root .fcall').textContent),'F&O live shows today\'s calls with buy/stop/target');
+  ok(!!q('#sheet-root .ltk.big .lti')&&/learned/.test(q('#sheet-root').textContent),'F&O live: big ticker + learning table');
+  await sleep(2200);ok(!!q('#sheet-root .lti.fup, #sheet-root .lti.fdn'),'ticker flashes on price change');
+  w.history.back();await sleep(200);
   ok(qa('#view .card.k-buy').length===3,'3 buy cards');
   // order: exits, book half, sell, trim, buy
   const tags=qa('#view .sec ~ article .sym .tag').map(t=>t.textContent).join(',');

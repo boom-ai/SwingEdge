@@ -242,3 +242,63 @@ object V12Tests {
         T.check(act("fnoReset", "{}").obj("account").num("cash", 0.0) == 100000.0, "reset to ₹1 lakh")
     }
 }
+
+
+object V15Tests {
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v15-fno-lab" to ::lab)
+    /** Yahoo 5m JSON for [day]: closes per bar starting 9:15 IST. */
+    fun bars(day: Int, prev: Double, closes: List<Double>): String {
+        val t0 = (day.toLong() * 86400L + 9 * 3600 + 15 * 60) - 19800L
+        val ts = closes.indices.map { t0 + it * 300 }
+        fun arr(f: (Int) -> Double) = closes.indices.joinToString(",") { f(it).toString() }
+        return "{\"chart\":{\"result\":[{\"meta\":{\"chartPreviousClose\":$prev},\"timestamp\":[${ts.joinToString(",")}],\"indicators\":{\"quote\":[{" +
+            "\"open\":[${arr { if (it == 0) closes[0] else closes[it - 1] }}],\"high\":[${arr { closes[it] + 2 }}],\"low\":[${arr { closes[it] - 2 }}],\"close\":[${arr { closes[it] }}]}]}}]}}"
+    }
+    fun lab() {
+        // unit: parsing + ORB trigger only on a completed bar beyond the 9:15–9:30 range
+        val day = java.time.LocalDate.of(2026, 11, 18).toEpochDay().toInt()
+        val cl = listOf(25400.0, 25410.0, 25405.0, 25460.0)          // 9:15, 9:20, 9:25 range; 9:30 bar breaks out
+        val b = FnoLab.parseBars(bars(day, 25390.0, cl))!!
+        T.eq(b.n, 4, "bars parsed"); T.eq(b.min[0], 9 * 60 + 15, "IST minutes")
+        T.check(FnoLab.signals("NIFTY", b, 9 * 60 + 34, emptySet()).none { it.strat == "ORB" }, "no ORB before the breakout bar completes")
+        val sg = FnoLab.signals("NIFTY", b, 9 * 60 + 36, emptySet())
+        T.check(sg.any { it.strat == "ORB" && it.side == "CE" }, "ORB call on the close above the range: ${sg.map { it.strat }}")
+        T.check(FnoLab.signals("NIFTY", b, 9 * 60 + 36, setOf("ORB")).none { it.strat == "ORB" }, "fires once a day")
+        T.check(FnoLab.parseBars("junk") == null, "junk bars -> null")
+        // replay + learning
+        T.eq(FnoLab.replay(100.0, listOf(95.0, 69.0, 200.0), 30.0, 50.0).second, "STOP", "stop first")
+        T.eq(FnoLab.replay(100.0, listOf(120.0, 151.0, 60.0), 30.0, 50.0).second, "TARGET", "target first")
+        T.eq(FnoLab.replay(100.0, listOf(110.0, 120.0), 30.0, 0.0).first, 120.0, "no target holds to the last bid")
+        val lb = LabBook()
+        repeat(10) { i -> val t = LabTrade("x$i", "ORB", "NIFTY", "23-Nov-2026", 25450, "CE", 65, 100.0, 0, day, bids = arrayListOf(110.0, 125.0, 135.0, 60.0)); lb.open.add(t); FnoLab.close(lb, t) }
+        T.eq(lb.closed.size, 10, "closed trades kept"); T.eq(lb.stats["ORB|NIFTY"]!!.size, FnoLab.STOPS.size * FnoLab.TGTS.size + 1, "every exit pair learned")
+        T.eq(FnoLab.bestExit(lb, "ORB|NIFTY").second, 30.0, "learned: +30% target beats the default here")
+        T.eq(FnoLab.status(lb, "ORB|NIFTY"), "LEARNING", "under 20 trades = learning")
+        T.eq(FnoLab.lots(100000.0, 100.0, 65, 30.0), 1, "1 lot: risk 1,950 ≤ 5%"); T.eq(FnoLab.lots(100000.0, 500.0, 65, 30.0), 0, "too costly -> 0")
+        T.check(LabBook.from(Json.parseObject(Json.stringify(lb.toMap()))).stats["ORB|NIFTY"]!!["live"]!!.n == 10, "book round-trips")
+        // integration through the app
+        val p = FakePlatform.standard(); p.setTime(day, 9 * 60 + 36)
+        val H = "https://www.nseindia.com"
+        p.served[Fno.infoUrl(H, "NIFTY")] = "{\"expiryDates\":[\"18-Nov-2026\",\"23-Nov-2026\",\"01-Dec-2026\"]}"
+        p.served[Fno.chainUrl(H, "NIFTY", "23-Nov-2026")] = V12Tests.chainJson(25450.0, 100.0, 101.0)
+        p.served[Yahoo.tickerUrl(Params.YAHOO_HOST_1, "^NSEI", "1d", "5m")] = bars(day, 25390.0, cl)
+        p.served[H + "/api/allIndices"] = "{\"data\":[{\"index\":\"NIFTY 50\",\"last\":25460.5,\"variation\":70.5,\"percentChange\":0.28},{\"index\":\"INDIA VIX\",\"last\":12.1,\"variation\":-0.2,\"percentChange\":-1.6}]}"
+        val app = SwingApp(p)
+        T.eq(app.fnoLabStep(), "ok", "lab step runs")
+        var v = Json.parseObject(app.action("fnoLab", "{}"))!!
+        val td = v.list("today").map { it.asObj() }
+        T.check(td.size == 1 && td[0].str("strat") == "ORB" && td[0].str("side") == "CE" && td[0].int("strike") == 25450, "ORB call taken at ATM: $td")
+        T.eq(td[0].num("entry"), 101.0, "entry at the live ask"); T.eq(td[0].str("expiry"), "23-Nov-2026", "skips the expiry that is today")
+        T.eq(v.list("ticker").size, 2, "live ticker from NSE"); T.eq(v.list("ticker")[0].asObj().num("last"), 25460.5, "nifty last")
+        p.setTime(day, 10 * 60); p.served[Fno.chainUrl(H, "NIFTY", "23-Nov-2026")] = V12Tests.chainJson(25480.0, 160.0, 161.0)
+        app.fnoLabStep()
+        T.eq(Json.parseObject(app.action("fnoLab", "{}"))!!.list("today")[0].asObj().str("liveHit"), "TARGET", "live target hit seen")
+        p.setTime(day, 15 * 60 + 16); app.fnoLabStep()
+        v = Json.parseObject(app.action("fnoLab", "{}"))!!
+        val c = v.list("today")[0].asObj()
+        T.check(c.str("status") == "TARGET" && c.num("pnl") > 0, "closed at target with a profit after charges: $c")
+        T.eq(v.obj("record").int("n"), 1, "record counts it")
+        T.check(v.list("strategies").any { it.asObj().str("id") == "ORB" && it.asObj().int("n") == 1 }, "strategy learned from it")
+        T.eq(Json.parseObject(app.action("fnoTicker", "{}"))!!.list("ticker").size, 2, "ticker action")
+    }
+}

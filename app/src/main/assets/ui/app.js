@@ -165,7 +165,8 @@
       if (name === 'stockInfo') { onInfoResult(res, ok, err); return; }
       if (name === 'moneyFlow') { onMoney(res, ok, err); return; }
       if (name === 'flowSector') { onSector(res, ok, err); return; }
-      if (name.indexOf('fno') === 0) { fnoBusy = false; ui.fno = ui.fno || { sym: 'NIFTY' }; if (ok) { ui.fno.res = res; var ce = SE.T(res && res.chain && res.chain.expiry); if (ce) ui.fno.exp = ce; } else ui.fno.res = ui.fno.res || { ok: true, error: err }; if (sheet && sheet.kind === 'fno' && !(name === 'fno' && ui.fno.form)) paintSheet(true); return; }
+      if (name === 'fnoTicker' || name === 'fnoLab') { onLive(name, res, ok); return; }
+      if (name.indexOf('fno') === 0) { fnoBusy = false; ui.fno = ui.fno || { sym: 'NIFTY' }; if (ok) { var pq = {}; SE.A(ui.fno.res && ui.fno.res.chain && ui.fno.res.chain.rows).forEach(function (x) { pq[String(x.k)] = { CE: x.ce || {}, PE: x.pe || {} }; }); ui.fno.prev = pq; ui.fno.res = res; var ce = SE.T(res && res.chain && res.chain.expiry); if (ce) ui.fno.exp = ce; } else ui.fno.res = ui.fno.res || { ok: true, error: err }; if (sheet && sheet.kind === 'fno' && !(name === 'fno' && ui.fno.form)) paintSheet(true); return; }
       if (name === 'options') { ui.opt = ui.opt || { calc: {} }; if (ok) ui.opt.res = res; if (sheet && sheet.kind === 'opt') paintSheet(true); return; }
       if (name === 'indexView') { var im = ui.index || (ui.index = {}); im.loading = false; if (ok) { im.res = res; im.sel = SE.T(res && res.index); } else im.err = err; if (sheet && sheet.kind === 'index') paintSheet(true); return; }
       if (name === 'funds') { var fm = ui.funds || (ui.funds = {}); fm.loading = false; if (ok) { fm.res = res; fm.err = ''; fm.at = Date.now(); } else fm.err = err; if (ui.tab === 'funds') render(); return; }
@@ -518,13 +519,36 @@
   function fnoArgs(extra) { var a = { sym: ui.fno.sym || 'NIFTY', expiry: ui.fno.exp || '' }; for (var k in extra) a[k] = extra[k]; return a; }
   function fnoSend(name, extra) { if (fnoBusy && name === 'fno') return; fnoBusy = true; try { bridge().action(name, JSON.stringify(fnoArgs(extra || {}))); } catch (e) { fnoBusy = false; } }
   function fnoLoad() { fnoSend('fno', {}); }
+  /* ---------- live ticker + lab calls ---------- */
+  ui.tick = { list: [], prev: {}, at: 0 }; ui.lab = {};
+  var tickAt = 0, labAt = 0, tickBusy = 0;
+  function onLive(name, res, ok) {
+    if (name === 'fnoTicker') tickBusy = 0;
+    if (!ok || !res) return;
+    var list = SE.A(res.ticker);
+    if (list.length) { var pv = {}; ui.tick.list.forEach(function (x) { pv[x.name] = x.last; }); ui.tick = { list: list, prev: pv, at: Date.now() }; }
+    if (name === 'fnoLab') ui.lab = res;
+    if (sheet && sheet.kind === 'fno') { if (!(ui.fno && ui.fno.form)) paintSheet(true); }
+    else if (ui.tab === 'today') render(true);
+  }
+  function liveLoop() {
+    try {
+      if (document.hidden || !S) return;
+      var t = Date.now(), fnoOn = !!(sheet && sheet.kind === 'fno'), onToday = ui.tab === 'today' && !sheet;
+      if (!fnoOn && !onToday) return;
+      var open = S.marketOpen === true, gap = open ? (fnoOn ? 2000 : 4000) : 60000;
+      if (t - tickAt >= gap && !(tickBusy && t - tickBusy < 8000)) { tickAt = t; tickBusy = t; bridge().action('fnoTicker', '{}'); }
+      if ((t - labAt >= (open ? 15000 : 120000) || !ui.lab.ok) && t - labAt >= 5000) { labAt = t; bridge().action('fnoLab', '{}'); }
+    } catch (e) { tickBusy = 0; }
+  }
+  setInterval(liveLoop, 1000);
   function fnoPoll(on) {
     if (fnoTimer) { clearInterval(fnoTimer); fnoTimer = null; }
     if (on) fnoTimer = setInterval(function () {
       if (!sheet || sheet.kind !== 'fno') { fnoPoll(false); return; }
       if (document.hidden || (ui.fno && ui.fno.form)) return;
       fnoLoad();
-    }, 3000);
+    }, 2000);
   }
   function fnoReadForm() {
     var fm = ui.fno.form; if (!fm) return false;

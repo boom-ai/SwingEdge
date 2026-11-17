@@ -56,7 +56,7 @@ class OptionWatchService : Service() {
             val app = application as App
             val fast = try { app.swing.fnoActive() } catch (t: Throwable) { false }
             try { app.swing.fnoBackground() } catch (t: Throwable) { Log.w(App.TAG, "fno check", t) }
-            if (now - lastOpt >= PERIOD_MS - 1000) { lastOpt = now; try { app.swing.optionsQuick() } catch (t: Throwable) { Log.w(App.TAG, "options check", t) } }
+            if (now - lastOpt >= PERIOD_MS - 1000) { lastOpt = now; try { app.swing.optionsQuick() } catch (t: Throwable) { Log.w(App.TAG, "options check", t) }; try { app.swing.fnoLabStep() } catch (t: Throwable) { Log.w(App.TAG, "fno lab", t) } }
             handler?.postDelayed(this, if (fast) FAST_MS else PERIOD_MS)
         }
     }
@@ -68,7 +68,7 @@ class OptionWatchService : Service() {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CH) else @Suppress("DEPRECATION") Notification.Builder(this)
         val n = b.setSmallIcon(android.R.drawable.ic_menu_recent_history).setContentTitle("Options live watch")
-            .setContentText("Live watch: options paper trades and alerts until 3:20 pm").setContentIntent(open).setOngoing(true).build()
+            .setContentText("Live F&O: calls, tickers and paper trades until 3:20 pm").setContentIntent(open).setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(NID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else startForeground(NID, n)
     }
 
@@ -87,7 +87,7 @@ class OptionWatchService : Service() {
         const val PERIOD_MS = 60_000L
         /** paper F&O positions / orders open: check stops and targets every 10 s */
         const val FAST_MS = 10_000L
-        const val START_MIN = 9 * 60 + 40
+        const val START_MIN = 9 * 60 + 16
         const val END_MIN = 15 * 60 + 20
 
         fun inWindow(nowMs: Long): Boolean {

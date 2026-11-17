@@ -925,6 +925,13 @@
       var q = String(a.q == null ? '' : a.q);
       setTimeout(function () { finish('search', { ok: true, q: q, results: doSearch(q), list: listMeta() }, 0); }, 70);
     },
+    fnoTicker: function () { var j = function (b) { return Math.round((b + (Math.random() - 0.5) * b * 0.0006) * 100) / 100; };
+      setTimeout(function () { finish('fnoTicker', { ok: true, at: Date.now(), ticker: [{ name: 'Nifty 50', last: j(25387.4), chg: 96.3, pct: 0.38 }, { name: 'Bank Nifty', last: j(62110.2), chg: -80.5, pct: -0.13 }, { name: 'Fin Nifty', last: j(27120), chg: 40, pct: 0.15 }, { name: 'Midcap Nifty', last: j(13150), chg: 55, pct: 0.42 }, { name: 'India VIX', last: j(12.4), chg: -0.2, pct: -1.6 }] }, 0); }, 80); },
+    fnoLab: function () { var now = Date.now();
+      var call = function (id, strat, nm, sym, k, side, e, now2, st, ss, why) { return { id: id, strat: strat, stratName: nm, sym: sym, expiry: '25-Nov-2026', strike: k, side: side, entry: e, at: now - 3600e3, why: why, stop: e * 0.7, target: e * 1.5, stopPct: 30, tgtPct: 50, lot: sym === 'NIFTY' ? 65 : 30, lots: 1, now: now2, status: st, liveHit: '', exitPx: 0, pnl: Math.round((now2 - e) * (sym === 'NIFTY' ? 65 : 30) - 60), spot: 25400, stratStatus: ss, day: 0 }; };
+      setTimeout(function () { finish('fnoLab', { ok: true, at: now, ticker: [], record: { n: 14, wins: 6, total: -1840, avg: -131 },
+        today: [call('L3', 'ORB', 'Opening-range breakout', 'NIFTY', 25400, 'CE', 118.5, 131.2, 'OPEN', 'LEARNING', '5-min close 25412 above the 9:15–9:30 high 25398'), call('L2', 'GAPFADE', 'Gap fade', 'BANKNIFTY', 62100, 'PE', 310, 236, 'STOP', 'FAILING', 'Gap up 0.8% is failing: now below the open')],
+        strategies: [['ORB','Opening-range breakout','NIFTY',6,-90],['FIRSTHR','First-hour momentum','NIFTY',3,210],['TREND','Trend day','BANKNIFTY',2,-400],['GAPFADE','Gap fade','BANKNIFTY',3,-610]].map(function (x) { return { id: x[0], name: x[1], sym: x[2], n: x[3], wins: 2, avg: x[4], total: x[4] * x[3], t: 0.2, status: x[0] === 'GAPFADE' ? 'LEARNING' : 'LEARNING', stopPct: 30, tgtPct: 50 }; }) }, 0); }, 150); },
     fno: function (a) { mockFno('fno', a); }, fnoOrder: function (a) { mockFno('fnoOrder', a); }, fnoCancel: function (a) { mockFno('fnoCancel', a); }, fnoReset: function (a) { mockFno('fnoReset', a); },
     options: function (a) { setTimeout(function () {
       var now = Date.now(), d = 86400000;

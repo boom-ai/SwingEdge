@@ -125,7 +125,7 @@ function run(S, ui, tag) {
 bases.forEach((b, i) => run(b.state, { tab: 'today', expanded: {}, pending: {}, device: b.device, now: Date.now() }, 'base' + i));
 // unmutated new screens must render completely, with the real numbers in them
 {
-  const b = bases[0], t = STOCKS[0], u = { tab: 'setups', pending: {}, device: b.device, now: Date.now(), emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, stock: { sym: t.sym, info: t.info, chart: t.chart, want: 260, range: 260 }, recent: [{ sym: 'ITC', name: 'ITC Ltd' }], search: { q: 'tata', sent: 'tata', shown: 'tata', results: SEARCHES[0].results } };
+  const b = bases[0], t = STOCKS[0], u = { tab: 'setups', fullCards: true, pending: {}, device: b.device, now: Date.now(), emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, stock: { sym: t.sym, info: t.info, chart: t.chart, want: 260, range: 260 }, recent: [{ sym: 'ITC', name: 'ITC Ltd' }], search: { q: 'tata', sent: 'tata', shown: 'tata', results: SEARCHES[0].results } };
   const must = (what, html, re) => { renders++; if (!re.test(html)) { fails++; console.log('FAIL', what, 'missing', re); } };
   const html = SE.sheet('stock', b.state, u, { id: t.sym });
   must('stock page', html, /Tata Motors Ltd/); must('stock page', html, /10 \/ 20 EMA/); must('stock page', html, /Technical checklist/); must('stock page', html, /Setups it matches/); must('stock page', html, /aria-label="Price chart with volume"/);
@@ -142,12 +142,12 @@ bases.forEach((b, i) => run(b.state, { tab: 'today', expanded: {}, pending: {}, 
   must('target sheet', SE.sheet('target', b.state, u3, { id: 'RELIANCE' }), /(Save|Update) target/);
   must('chartfull sheet', SE.sheet('chartfull', b.state, u3, { id: 'RELIANCE' }), /cf-canvas/);
   must('search', SE.sheet('search', b.state, u, {}), /TATAMOTORS/); must('watchlist', SE.view(b.state, u), /My watchlist/);
-  { const ni = mockReply('stockInfo', { sym: 'MARUTI' }), pu = Object.assign({}, u, { pnl: {}, vOpen: {}, stock: { sym: 'MARUTI', info: ni, chart: t.chart, want: 260, range: 260 } });
+  { const ni = mockReply('stockInfo', { sym: 'MARUTI' }), pu = Object.assign({}, u, { fullCards: true, pnl: {}, vOpen: {}, stock: { sym: 'MARUTI', info: ni, chart: t.chart, want: 260, range: 260 } });
     const ph = SE.stockPart('panel', b.state, pu, { id: 'MARUTI' });
     must('panel', ph, /Analyst panel/); must('panel', ph, /managers/); must('panel', ph, /does not decide/); must('panel', ph, /BUY CANDIDATE/); must('panel', ph, /What would change the call/); must('panel', ph, /Replies to/);
     ni.panel.managers.forEach(m => must('panel mgr ' + m.id, ph, new RegExp('>' + m.name + '<')));
     const lv = SE.stockPart('verdict', b.state, pu, { id: 'MARUTI' }); must('verdict collapsed', lv, /data-c="vopen"/); renders++; if (/class="vrs"/.test(lv)) { fails++; console.log('FAIL why list not collapsed'); }
-    const li = mockReply('stockInfo', { sym: 'NEWIPO' }), lu = Object.assign({}, u, { stock: { sym: 'NEWIPO', info: li, chart: t.chart, want: 130 } });
+    const li = mockReply('stockInfo', { sym: 'NEWIPO' }), lu = Object.assign({}, u, { fullCards: true, stock: { sym: 'NEWIPO', info: li, chart: t.chart, want: 130 } });
     const lh = SE.sheet('stock', b.state, lu, { id: 'NEWIPO' });
     must('listing', lh, /sk-listing/); must('listing', lh, /NEW · listed/); must('listing', lh, /A rating becomes possible in/); must('listing', lh, /Base rate/); must('listing', lh, /NOT RATED/); must('listing chip', lh, /Since listing/);
     renders++; if (/EMA 200/.test(SE.stockPart('body', b.state, lu, {}))) { fails++; console.log('FAIL EMA rows shown for a new listing'); }

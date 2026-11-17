@@ -1680,6 +1680,8 @@ class SwingApp(private val p: Platform) {
                 "funds" -> LinkedHashMap(Funds.view(fundData(a.bool("force"))))
                 "fundInfo" -> Funds.info(fundData(false), a.str("code"))
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
+                "fnoLab" -> labView()
+                "fnoTicker" -> fnoTicker()
                 "fno", "fnoOrder", "fnoCancel", "fnoLevels", "fnoReset" -> fnoAction(name, a)
                 "options" -> synchronized(optLock) { Options.view(optLoad(), optSpots, optVix) }
                 "indexView" -> {
@@ -1986,6 +1988,83 @@ class SwingApp(private val p: Platform) {
         }
     }
 
+    // ------------------------------------------------------------------ F&O lab: learning intraday calls + live ticker
+    private val labLock = Any()
+    private var labBook: LabBook? = null
+    private val labBars = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, IntraBars>>()
+    @Volatile private var tickCache: Pair<Long, List<Map<String, Any?>>>? = null
+    private fun labLoad(): LabBook { labBook?.let { return it }; val b = try { LabBook.from(Json.parseObject(p.read(LAB_FILE) ?: "")) } catch (t: Throwable) { LabBook() }; labBook = b; return b }
+    private fun labSave(b: LabBook) { try { p.write(LAB_FILE, Json.stringify(b.toMap())) } catch (t: Throwable) {} }
+    private fun capital() = try { st.settings.capital } catch (t: Throwable) { 100000.0 }
+
+    private fun labView(): Map<String, Any?> = synchronized(labLock) {
+        val b = labLoad(); val v = LinkedHashMap(FnoLab.view(b, Clock.epochDay(p.now()), capital(), fnoChains))
+        v["ticker"] = fnoTickerList(); v["at"] = p.now(); v
+    }
+    private fun fnoTickerList(): List<Map<String, Any?>> {
+        val now = p.now(); tickCache?.let { if (now - it.first < 2_500L) return it.second }
+        val got = FnoLab.parseIndices(fnoGet { it + "/api/allIndices" })
+        if (got.isNotEmpty()) tickCache = Pair(now, got)
+        return got.ifEmpty { tickCache?.second ?: emptyList() }
+    }
+    private fun fnoTicker(): Map<String, Any?> = linkedMapOf("ok" to true, "at" to p.now(), "ticker" to fnoTickerList(),
+        "chains" to listOf("NIFTY", "BANKNIFTY").mapNotNull { s -> fnoChains.values.filter { it.sym == s }.maxByOrNull { it.fetchedAt }?.let { linkedMapOf("sym" to s, "spot" to it.spot, "at" to it.fetchedAt) } })
+
+    private fun labExpiry(sym: String, forExpiryDay: Boolean): String? {
+        val day = Clock.epochDay(p.now())
+        val ex = fnoExpiries(sym)
+        if (forExpiryDay) return ex.firstOrNull { Fno.expDay(it) == day }
+        return ex.firstOrNull { Fno.expDay(it) - day >= 2 } ?: ex.firstOrNull()
+    }
+
+    /** Background (every minute from the live watch, 9:15–15:30): fire new calls, follow open ones, close at 15:15 and learn. */
+    fun fnoLabStep(): String {
+        return try {
+            val now = p.now(); val day = Clock.epochDay(now); val m = Clock.minuteOfDay(now)
+            val dow = java.time.LocalDate.ofEpochDay(day.toLong()).dayOfWeek.value
+            if (dow > 5 || m < 9 * 60 + 15 || m > 15 * 60 + 35) return "closed"
+            val events = ArrayList<Pair<String, String>>()
+            // 1) follow open trades on the live chain
+            val open = synchronized(labLock) { labLoad().open.map { it } }
+            for (t in open) {
+                val c = if (t.day == day) fnoChain(t.sym, t.expiry, 30_000L) else null
+                val q = c?.quote(t.strike, t.side)
+                synchronized(labLock) {
+                    val b = labLoad()
+                    if (q != null && q.bid > 0 && t.bids.size < FnoLab.MAX_PATH) t.bids.add(q.bid)
+                    if (q != null) FnoLab.liveCheck(t, q.bid)?.let { hit -> if (FnoLab.status(b, FnoLab.key(t)) == "WORKING") events.add(Pair("${t.sym} ${t.strike} ${t.side}: " + (if (hit == "STOP") "stop hit, exit now" else "target hit, book it"), "Bid ₹${Fno.r2(q.bid)} vs entry ₹${t.entry} (${FnoLab.stratName(t.strat)})")) }
+                    if (t.day < day || m >= FnoLab.EXIT_MIN) FnoLab.close(b, t)
+                }
+            }
+            // 2) new calls
+            if (m in (9 * 60 + 20)..(14 * 60 + 30)) for ((sym, ysym) in FnoLab.INDEX) {
+                val cb = labBars[sym]
+                val bars = if (cb != null && now - cb.first < 55_000L) cb.second else FnoLab.parseBars(httpAll(listOf(Yahoo.tickerUrl(Params.YAHOO_HOST_1, ysym, "1d", "5m"))).firstOrNull())?.also { labBars[sym] = Pair(now, it) }
+                if (bars == null) continue
+                val fired = synchronized(labLock) { labLoad().fired.filter { it.value == day && it.key.endsWith("|$sym") }.keys.map { it.substringBefore("|") }.toSet() }
+                val expToday = sym == "NIFTY" && labExpiry(sym, true) != null
+                for (sg in FnoLab.signals(sym, bars, m, fired, expToday)) {
+                    val exp = labExpiry(sym, sg.strat == "EXPIRY") ?: continue
+                    val c = fnoChain(sym, exp, 5_000L) ?: continue
+                    val k = FnoLab.atm(c); val q = c.quote(k, sg.side) ?: continue
+                    if (q.ask <= 0 || now - c.fetchedAt > Fno.STALE_MS) continue
+                    synchronized(labLock) {
+                        val b = labLoad()
+                        b.fired["${sg.strat}|$sym"] = day
+                        val key = sg.strat + "|" + sym; val (sp, tp) = FnoLab.bestExit(b, key)
+                        b.seq++
+                        val t = LabTrade("L${b.seq}", sg.strat, sym, exp, k, sg.side, Fno.LOT[sym] ?: 0, q.ask, now, day, sg.why, sp, tp, arrayListOf(q.bid), spot = c.spot)
+                        b.open.add(t)
+                        if (FnoLab.status(b, key) == "WORKING") events.add(Pair("BUY $sym $k ${sg.side} ≤ ₹${Fno.r2(q.ask * 1.02)}", "${FnoLab.stratName(sg.strat)}: ${sg.why}. Stop ₹${Fno.r2(q.ask * (1 - sp / 100))}" + (if (tp > 0) ", target ₹${Fno.r2(q.ask * (1 + tp / 100))}" else "") + ", exit by 3:15 pm."))
+                    }
+                }
+            }
+            synchronized(labLock) { labSave(labLoad()) }
+            for ((k, e) in events.withIndex()) try { p.notify("buy", 7500 + ((e.first.hashCode() + k) and 0xff), e.first, e.second) } catch (t: Throwable) {}
+            "ok"
+        } catch (t: Throwable) { log("fno lab: $t"); "error" }
+    }
+
     /** True when paper F&O positions or pending orders need fast checks. */
     fun fnoActive(): Boolean = try { synchronized(fnoLock) { val b = fnoLoad(); b.pos.isNotEmpty() || b.orders.any { it.status == "OPEN" } } } catch (t: Throwable) { false }
 
@@ -2225,6 +2304,7 @@ class SwingApp(private val p: Platform) {
         const val HOLD_MAX_DAYS = 120
         const val OPT_FILE = "opt_paper.json"
         const val FNO_FILE = "fno_paper.json"
+        const val LAB_FILE = "fno_lab.json"
         const val TRAIL_ATR = 5.0
         const val FLOW_BASE = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/"
         val FLOW_FILES = listOf("flows.csv", "industries.csv", "holders.csv", "deals.csv", "indices.csv")

@@ -19,6 +19,7 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.SwingEdge"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:usesCleartextTraffic="false">
 
         <activity
@@ -35,7 +36,7 @@
 
         <service
             android:name=".ScanJobService"
-            android:exported="true"
+            android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <service
@@ -49,7 +50,7 @@
 
         <receiver
             android:name=".BootReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />

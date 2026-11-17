@@ -97,6 +97,7 @@ class MainActivity : Activity() {
             s.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             s.cacheMode = WebSettings.LOAD_DEFAULT
             s.setGeolocationEnabled(false)
+            s.safeBrowsingEnabled = true
             w.webViewClient = Client()
             w.webChromeClient = Chrome()
             w.addJavascriptInterface(Bridge(), "Android")
@@ -249,6 +250,10 @@ class MainActivity : Activity() {
         fun action(name: String?, argsJson: String?) {
             try {
                 val n = name ?: return
+                if (n.length > MAX_BRIDGE_NAME || (argsJson?.length ?: 0) > MAX_BRIDGE_JSON) {
+                    Log.w(App.TAG, "bridge.action rejected: oversized argument")
+                    return
+                }
                 val a = if (argsJson.isNullOrBlank() || argsJson == "undefined" || argsJson == "null") "{}" else argsJson
                 runAction(n, a)
             } catch (t: Throwable) {
@@ -479,7 +484,7 @@ class MainActivity : Activity() {
                 val url = uri.toString()
                 if (url.startsWith(ASSET_PREFIX)) return false
                 when (uri.scheme?.lowercase()) {
-                    "http", "https", "mailto", "tel" -> {
+                    "http", "https", "mailto" -> {
                         try {
                             startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                         } catch (t: Throwable) {
@@ -535,7 +540,7 @@ class MainActivity : Activity() {
     private inner class Chrome : WebChromeClient() {
         override fun onConsoleMessage(m: ConsoleMessage?): Boolean {
             try {
-                if (m != null) Log.d(App.TAG, "js: ${m.message()} (${m.sourceId()}:${m.lineNumber()})")
+                if (m != null && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) Log.d(App.TAG, "js: ${m.message()} (${m.sourceId()}:${m.lineNumber()})")
             } catch (_: Throwable) {
             }
             return true
@@ -548,6 +553,8 @@ class MainActivity : Activity() {
         private const val START_URL = "file:///android_asset/ui/index.html"
         private const val REQ_PICK_FILE = 41
         private const val REQ_NOTIF = 42
+        private const val MAX_BRIDGE_JSON = 256 * 1024
+        private const val MAX_BRIDGE_NAME = 64
         private const val MAX_IMPORT_BYTES = 2 * 1024 * 1024
         private const val ACTION_IMPORT = "importHoldings"
         private const val JS_STATE_CHANGED =

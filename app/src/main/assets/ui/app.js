@@ -36,7 +36,6 @@
     dirty = false;
     try {
       ui.now = Date.now();
-      loadIdx(false);
       var h = SE.header(S, ui);
       if (h !== cache.top) { elTop.innerHTML = h; cache.top = h; }
       var t = SE.tabbar(S, ui);
@@ -55,7 +54,6 @@
         }
       }
       if (sheet && sheet.kind === 'track') repaintTrack();
-      if (sheet && sheet.kind === 'wlpick' && !sheet.waiting) { var nv = elSheet.querySelector('input[name="name"]'); if (!nv || !nv.value) paintSheet(true); }
       if (renderFailed) { renderFailed = false; elErr.hidden = true; }
     } catch (e) {
       renderFailed = true;
@@ -91,7 +89,6 @@
     } catch (e) { ok = false; }
     if (!ok && lastJson === null) showErr('Could not read app data yet. Retrying.');
     else if (ok && !renderFailed) elErr.hidden = true;
-    applyLive();
     readDevice();
     syncStock();
     if (sheet && sheet.kind === 'chartfull') cfMeta();
@@ -174,10 +171,6 @@
       if (name === 'funds') { var fm = ui.funds || (ui.funds = {}); fm.loading = false; if (ok) { fm.res = res; fm.err = ''; fm.at = Date.now(); } else fm.err = err; if (ui.tab === 'funds') render(); return; }
       if (name === 'fundInfo') { ui.fundInfo = ui.fundInfo || {}; var fc = SE.T(res && res.code) || (sheet && sheet.kind === 'fund' ? SE.T(sheet.data.id) : ''); if (fc) ui.fundInfo[fc] = ok ? res : { ok: false, error: err }; if (sheet && sheet.kind === 'fund') paintSheet(true); return; }
       if (name === 'addWatch' || name === 'removeWatch') { onWatchResult(name, ok, err); return; }
-      if (name === 'liveQuotes') { onLive(res, ok); return; }
-      if (name === 'indexQuotes') { ui.idx = ui.idx || {}; ui.idx.loading = false; if (ok) { ui.idx.items = res.items; ui.idx.catalog = res.catalog; } render(true); if (sheet && sheet.kind === 'idxpick') paintSheet(true); return; }
-      if (name === 'news') { var ns = ui.stock; if (ns && (!res.sym || String(res.sym).toUpperCase() === ns.sym)) { ns.news = ok ? { items: SE.A(res.items) } : { err: err }; paintStock(['body']); } return; }
-      if (name === 'wlAdd' || name === 'wlRemove' || name === 'wlCreate' || name === 'wlRename' || name === 'wlDelete') { onWlResult(name, res, ok, err); return; }
       if (name === 'getChart' && chartReply(res, ok, err)) return;
       clearPending(name, true);
       if (name === 'setTarget' || name === 'clearTarget') onTargetResult(name, res, ok);
@@ -320,14 +313,6 @@
     if (!sheet || sheet.waiting) return;
     var k = sheet.kind, id = SE.T(sheet.data.id), a;
     if (k === 'search') { searchEnter(); return; }
-    if (k === 'wlname' || k === 'wlpick') {
-      var wn = val('name').trim();
-      if (!check([['name', wn.length > 0 && wn.length <= 30, 'Type a name (up to 30 letters)']])) return;
-      if (k === 'wlname' && id) { sheetBusy('wlRename'); act('wlRename', { id: id, name: wn }, 'wlRename'); }
-      else { sheetBusy('wlCreate'); act('wlCreate', k === 'wlpick' ? { name: wn, sym: id } : { name: wn }, 'wlCreate'); }
-      return;
-    }
-    if (k === 'wldel') { sheetBusy('wlDelete'); act('wlDelete', { id: id }, 'wlDelete'); return; }
     if (k === 'take') {
       var p = num('price'), q = num('qty');
       if (!check([['price', p !== null && p > 0 && p < 1e7, 'Enter the price you paid'], ['qty', q !== null && q >= 1 && Math.round(q) === q && q < 1e8, 'Whole number of shares']])) return;
@@ -703,7 +688,6 @@
     else { st.info = null; st.err = err; }
     paintStock(['head', 'price', 'act', 'verdict', 'panel', 'chart', 'body']);
     if (sheet && sheet.kind === 'chartfull') cfMeta();
-    if (ok && !ui.stock.news) loadNews();
     if (ok && typeof ui.afterInfo === 'function') { var fn = ui.afterInfo; ui.afterInfo = null; try { fn(); } catch (e) { /* ignore */ } }
   }
   function retryStock() {
@@ -745,76 +729,6 @@
     if (ok) toast(name === 'addWatch' ? 'Added to your watchlist' : 'Removed from your watchlist', 'ok');
     else { if (rec && rec.onFail) rec.onFail(); toast('Watchlist: ' + err, 'err'); }
     render(true); paintStock(['act']);
-  }
-  var IDX_DEF = ['NIFTY50', 'BANKNIFTY', 'SENSEX', 'NIFTY100'];
-  var IDX_CSV = { NIFTY50: 'Nifty 50', BANKNIFTY: 'Nifty Bank', SENSEX: 'Nifty 50', NIFTY100: 'Nifty 100', NEXT50: 'Nifty Next 50', MID100: 'Nifty Midcap 100', MID150: 'Nifty Midcap 150', MIDSEL: 'Nifty Midcap 50',
-    SMALL100: 'Nifty Smallcap 100', SMALL250: 'Nifty Smallcap 250', NIFTY500: 'Nifty 500', FIN: 'Nifty Financial Services', PVTBANK: 'Nifty Private Bank', PSUBANK: 'Nifty PSU Bank', IT: 'Nifty IT', PHARMA: 'Nifty Pharma',
-    HEALTH: 'Nifty Healthcare', AUTO: 'Nifty Auto', FMCG: 'Nifty FMCG', METAL: 'Nifty Metal', ENERGY: 'Nifty Energy', OILGAS: 'Nifty Oil & Gas', REALTY: 'Nifty Realty', INFRA: 'Nifty Infrastructure', MEDIA: 'Nifty Media',
-    CONSDUR: 'Nifty Consumer Durables', DEFENCE: 'Nifty India Defence', CPSE: 'Nifty CPSE', VIX: 'Nifty 50' };
-  try { var _iv = JSON.parse(localStorage.getItem('se.idx') || 'null'); if (Array.isArray(_iv) && _iv.length) ui.idxIds = _iv.filter(function (x) { return typeof x === 'string'; }).slice(0, 12); } catch (e) {}
-  function saveIdx(v) { ui.idxIds = v; try { localStorage.setItem('se.idx', JSON.stringify(v)); } catch (e) {} loadIdx(true); render(true); }
-  /* ---------- live prices: poll liveQuotes for the symbols on screen, overlay them on the last state ---------- */
-  ui.live = {};
-  var liveAt = 0, liveBusy = 0;
-  function liveSyms() {
-    var out = [], add = function (x) { var y = SE.T(x && x.sym).trim().toUpperCase(); if (y && out.indexOf(y) < 0) out.push(y); };
-    if (ui.stock && sheet) add(ui.stock);
-    var keys = ui.tab === 'portfolio' ? ['holdings'] : ui.tab === 'trades' ? ['trades', 'signals'] : ui.tab === 'setups' ? ['myWatch', 'ideas', 'watch'] : ['holdings', 'trades', 'signals', 'myWatch', 'ideas'];
-    keys.forEach(function (k) { SE.A(S[k]).forEach(add); });
-    if (ui.tab !== 'setups') SE.A(S.myWatch).slice(0, 15).forEach(add);
-    return out.slice(0, 60);
-  }
-  function liveTick() {
-    try {
-      if (document.hidden || !S) return;
-      var t = Date.now(), gap = S.marketOpen === true ? 15000 : 300000;
-      loadIdx(false);
-      if (t - liveAt < gap || (liveBusy && t - liveBusy < 20000)) return;
-      var syms = liveSyms(); if (!syms.length) return;
-      liveAt = t; liveBusy = t;
-      bridge().action('liveQuotes', JSON.stringify({ syms: syms }));
-    } catch (e) { liveBusy = 0; }
-  }
-  setInterval(liveTick, 3000);
-  function applyLive() {
-    var L = ui.live, now = Date.now(); if (!S || !L) return;
-    var put = function (x, kind) {
-      if (!x || typeof x !== 'object') return; var q = L[SE.T(x.sym).toUpperCase()]; if (!q || !(q.ltp > 0) || now - q.got > 600000) return;
-      x.ltp = q.ltp; if (typeof q.pct === 'number') x.dayChgPct = q.pct; x.live = true;
-      var qty = Number(x.qty) || 0;
-      if (kind === 'holdings' && qty > 0 && Number(x.avg) > 0) { x.valueRs = q.ltp * qty; x.pnlRs = (q.ltp - x.avg) * qty; x.pnlPct = (q.ltp / x.avg - 1) * 100; }
-      if (kind === 'trades' && qty > 0 && Number(x.entry) > 0 && x.status === 'OPEN') { x.pnlRs = (q.ltp - x.entry) * qty; x.pnlPct = (q.ltp / x.entry - 1) * 100; }
-    };
-    ['myWatch', 'ideas', 'watch', 'holdings', 'trades', 'signals'].forEach(function (k) { if (Array.isArray(S[k])) S[k].forEach(function (x) { put(x, k); }); });
-    var st = ui.stock; if (st && st.info) { var q = L[st.sym]; if (q && q.ltp > 0 && now - q.got < 600000) { st.info.ltp = q.ltp; if (typeof q.pct === 'number') st.info.dayChgPct = q.pct; if (q.ltp > 0 && typeof q.chg === 'number') st.info.prevClose = q.ltp - q.chg; st.info.live = true; st.info.asOf = q.at || now; } }
-  }
-  function onLive(res, ok) {
-    liveBusy = 0; if (!ok || !res || typeof res.quotes !== 'object') return;
-    var g = Date.now(); Object.keys(res.quotes).forEach(function (k) { var q = res.quotes[k]; if (q && q.ltp > 0) { q.got = g; ui.live[k] = q; } });
-    applyLive(); render(true); paintStock(['price']);
-  }
-  var idxAt = 0;
-  function loadIdx(force) {
-    var t = Date.now(), gap = S && S.marketOpen === true ? 15000 : 600000;
-    if (!force && (t - idxAt < gap || (ui.idx && ui.idx.loading && t - idxAt < 20000))) return;
-    idxAt = t; ui.idx = ui.idx || {}; ui.idx.loading = true;
-    try { bridge().action('indexQuotes', JSON.stringify({ ids: ui.idxIds && ui.idxIds.length ? ui.idxIds : IDX_DEF })); } catch (e) { ui.idx.loading = false; }
-  }
-  function loadNews() {
-    var st = ui.stock; if (!st) return;
-    st.news = { loading: true }; paintStock(['body']);
-    try { bridge().action('news', JSON.stringify({ sym: st.sym })); } catch (e) { st.news = { err: 'Could not reach the app.' }; paintStock(['body']); }
-  }
-  function onWlResult(name, res, ok, err) {
-    clearPending(name, true); Object.keys(ui.pending).forEach(function (k) { if (k.indexOf('wl:') === 0) { clearTimeout(ui.pending[k]); delete ui.pending[k]; } });
-    if (!ok) { if (sheet && sheet.waiting === name) sheetIdle(err); else toast(err, 'err'); render(true); return; }
-    var msg = { wlAdd: 'Added to ' + SE.T(res.list || 'watchlist'), wlRemove: 'Removed', wlCreate: 'List created', wlRename: 'Renamed', wlDelete: 'List deleted' }[name];
-    if (name === 'wlCreate' && res.id) { ui.wl = SE.T(res.id); try { localStorage.setItem('se.wl', ui.wl); } catch (e) {} }
-    if (name === 'wlDelete' || name === 'wlCreate') ui.watchEdit = false;
-    toast(msg, 'ok');
-    if (sheet && sheet.waiting === name && sheet.kind !== 'wlpick') closeSheet();
-    else if (sheet && sheet.kind === 'wlpick') { sheet.waiting = null; pull(); setTimeout(function () { if (sheet && sheet.kind === 'wlpick') paintSheet(true); }, 400); }
-    pull(); render(true);
   }
   function toggleWatch() {
     var st = ui.stock; if (!stockOpen() || !st.info || watchPending(st.sym)) return;
@@ -1045,13 +959,8 @@
       case 'opt-open': ui.opt = ui.opt || { calc: {} }; openSheet('opt', {}, true); try { bridge().action('options', '{}'); } catch (e) {} break;
       case 'opt-idx': ui.opt = ui.opt || { calc: {} }; ui.opt.calc = ui.opt.calc || {}; optRead(); ui.opt.calc.idx = id; paintSheet(true); break;
       case 'opt-calc': ui.opt = ui.opt || { calc: {} }; optRead(); paintSheet(true); break;
-      case 'idx-edit': openSheet('idxpick', {}, true); break;
-      case 'idx-toggle': (function () { var v = ui.idxIds && ui.idxIds.length ? ui.idxIds.slice() : IDX_DEF.slice(), i = v.indexOf(id); if (i >= 0) { if (v.length > 1) v.splice(i, 1); } else if (v.length < 12) v.push(id); else toast('Up to 12 indices', 'err'); saveIdx(v); paintSheet(true); })(); break;
-      case 'idx-reset': saveIdx(IDX_DEF.slice()); paintSheet(true); break;
-      case 'idx-tile': { var nm = IDX_CSV[id]; ui.index = ui.index || {}; openSheet('index', {}, true); loadIndex(nm || ui.index.sel || ''); } break;
       case 'index-open': ui.index = ui.index || {}; openSheet('index', {}, true); loadIndex(ui.index.sel || ''); break;
       case 'index-pick': loadIndex(id); break;
-      case 'guide-done': ui.guideDone = true; try { localStorage.setItem('se.guide', '1'); } catch (e) {} render(); break;
       case 'short-toggle': ui.showShort = !ui.showShort; render(); break;
       case 'fullcards': ui.fullCards = !ui.fullCards; try { localStorage.setItem('se.fullCards', ui.fullCards ? '1' : '0'); } catch (e) {} render(); break;
       case 'money-seg': if (ui.money) { ui.money.seg = id; render(); } break;
@@ -1101,26 +1010,6 @@
       case 'recent-clear': ui.recent = []; try { window.localStorage.removeItem('se_recent'); } catch (e) { /* ignore */ } paintSearchBody(); break;
       case 'watch': toggleWatch(); break;
       case 'watch-edit': ui.watchEdit = !ui.watchEdit; render(true); break;
-      case 'wl-sel': ui.wl = id; ui.watchEdit = false; try { localStorage.setItem('se.wl', id); } catch (e) {} render(true); break;
-      case 'wl-new': openSheet('wlname', {}); break;
-      case 'wl-rename': openSheet('wlname', { id: id }); break;
-      case 'wl-del': openSheet('wldel', { id: id }); break;
-      case 'wl-pick': if (id) openSheet('wlpick', { id: id }, true); break;
-      case 'wl-chart': openStock(id, el && el.getAttribute('data-name')); openChartFull(); break;
-      case 'wl-rm': act('wlRemove', { sym: id, id: el ? el.getAttribute('data-list') : '' }, 'wlRemove:' + id); break;
-      case 'wl-toggle': (function () {
-        var sym = el ? SE.T(el.getAttribute('data-sym')) : '', w = SE.A(S.wlists).filter(function (l) { return SE.T(l.id) === id; })[0]; if (!w || !sym) return;
-        var on = (Array.isArray(w.syms) ? w.syms : []).some(function (y) { return SE.T(y).toUpperCase() === sym.toUpperCase(); });
-        act(on ? 'wlRemove' : 'wlAdd', { sym: sym, id: id }, 'wl:' + id);
-      })(); break;
-      case 'alert-open': (function () {
-        var sy = el ? SE.T(el.getAttribute('data-sym')) : '';
-        SE.markRead(id); ui.feedOpen = ui.feedOpen || {};
-        if (sy) { render(true); openStock(sy); return; }
-        ui.feedOpen[id] = !ui.feedOpen[id]; render(true);
-      })(); break;
-      case 'feed-allread': SE.markAllRead(S); render(true); break;
-      case 'news-load': loadNews(); break;
       case 'watch-remove': watchCall('removeWatch', id, null); break;
       case 'stock-add': openSheet('add', { sym: id }); break;
       case 'range': {
@@ -1195,7 +1084,7 @@
   setInterval(function () { if (!document.hidden) render(); }, 30000);   // keeps "3 min ago" fresh; no-op when nothing changed
 
   /* ---------- boot ---------- */
-  try { ui.fullCards = localStorage.getItem('se.fullCards') === '1'; ui.guideDone = localStorage.getItem('se.guide') === '1' || /(^|[?&])(sheet|scenario)=/.test(location.search); } catch (e) {}
+  try { ui.fullCards = localStorage.getItem('se.fullCards') === '1'; } catch (e) {}
   pull();
   if (ui.tab === 'money') loadMoney(false);
   if (ui.tab === 'funds') loadFunds(false);

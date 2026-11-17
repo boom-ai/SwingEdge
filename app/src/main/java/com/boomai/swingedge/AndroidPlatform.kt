@@ -93,7 +93,7 @@ class AndroidPlatform(context: Context) : Platform {
             val started = System.nanoTime()
             val u = URL(url)
             val scheme = u.protocol?.lowercase()
-            if (scheme != "https") return null
+            if (scheme != "https" && scheme != "http") return null
             conn = u.openConnection() as HttpURLConnection
             conn.connectTimeout = CONNECT_TIMEOUT_MS
             conn.readTimeout = READ_TIMEOUT_MS

@@ -13,8 +13,6 @@ document.getElementById('f').onload=async()=>{
   const calls=[],log=[];const orig=w.Android.action;w.Android.action=function(n,a){calls.push(n);try{log.push({n:n,a:JSON.parse(a||'{}')});}catch(e){}return orig.call(this,n,a);};
   const toasts=()=>qa('.toast').map(t=>t.textContent).join(' | ');
   await sleep(100);
-  ok(qa('#view .btt').length===3,'simple today: options + sell + buy tables');
-  click('[data-c="fullcards"]'); await sleep(50);
   ok(qa('#view .card.k-buy').length===3,'3 buy cards');
   // order: exits, book half, sell, trim, buy
   const tags=qa('#view .sec ~ article .sym .tag').map(t=>t.textContent).join(',');
@@ -99,16 +97,9 @@ document.getElementById('f').onload=async()=>{
   ok(!!q('.inhold')&&!q('[data-c="stock-add"]'),'holding shows "In your portfolio" instead of the add button');
   // watchlist toggle: optimistic, persists in state, survives a poll
   const wb=()=>q('#st-act .wbtn');
-  ok(/Watchlist/.test(wb().textContent)&&!/✓/.test(wb().textContent),'button starts as "+ Watchlist"');
-  {const ch=q('#st-chart'),vd=q('#st-verdict');ok(ch&&vd&&(ch.compareDocumentPosition(vd)&4)&&q('#st-act').nextElementSibling===ch,'chart sits right below the action buttons, above the verdict');}
-  click('#st-act .wbtn');await sleep(100);ok(qa('#sheet-root .wlp').length===2,'watchlist picker lists both lists');
-  click('#sheet-root .wlp[data-id="w2"]');await sleep(800);ok(st().wlists[1].syms.includes('TATAMOTORS')&&st().myWatch.some(x=>x.sym==='TATAMOTORS'),'added to the chosen list (Breakouts)');
-  ok(!!q('#sheet-root .wlp.on[data-id="w2"]'),'picker shows the tick on that list');
-  click('#sheet-root [data-c="submit"]');ok(/name/i.test(q('#sheet-root .fld.bad .err').textContent),'creating a list with no name asks for a name');
-  q('#sheet-root input[name="name"]').value='Swing picks';click('#sheet-root [data-c="submit"]');await sleep(900);
-  ok(st().wlists.some(l=>l.name==='Swing picks'&&l.syms.includes('TATAMOTORS')),'new list created with this stock from the picker');
-  hist();await sleep(200);w.onStateChanged();await sleep(150);ok(stockOpen()&&/In watchlist ✓/.test(wb().textContent),'back on the stock page, button shows "In watchlist ✓"');
-  ok(!!q('#st-body #sk-news .nwi'),'news headlines load on the stock page');
+  ok(/Add to watchlist/.test(wb().textContent),'button starts as "Add to watchlist"');
+  click('#st-act .wbtn');ok(/In watchlist ✓/.test(wb().textContent)&&wb().disabled,'toggle is optimistic and locked while in flight');
+  await sleep(800);ok(st().myWatch.some(x=>x.sym==='TATAMOTORS'),'myWatch now contains TATAMOTORS');ok(!wb().disabled&&/In watchlist ✓/.test(wb().textContent),'button settled as "In watchlist ✓"');
   const bodyEl=q('#st-body');bodyEl.__mark=1;q('#st-scroll').scrollTop=600;const sy=q('#st-scroll').scrollTop;
   w.onStateChanged();await sleep(150);
   ok(q('#st-body')===bodyEl&&bodyEl.__mark===1,'a state poll does not re-render the open stock page');
@@ -141,6 +132,8 @@ document.getElementById('f').onload=async()=>{
   const ni=calls.filter(c=>c==='stockInfo').length;click('[data-c="stock-retry"]');ok(!!q('#st-body .skel')&&calls.filter(c=>c==='stockInfo').length===ni+1,'Retry re-requests and shows a skeleton');await sleep(900);ok(/No price data/.test(q('#st-body').textContent),'still failing -> error again');
   hist();await sleep(150);hist();await sleep(150);
   click('.topbar [data-c="search"]');typeQ('FAILWATCH');await sleep(450);click('[data-c="lookup"][data-id="FAILWATCH"]');await sleep(900);
+  click('#st-act .wbtn');ok(/In watchlist ✓/.test(wb().textContent),'optimistic flip for a doomed add');await sleep(800);
+  ok(/Add to watchlist/.test(wb().textContent)&&!st().myWatch.some(x=>x.sym==='FAILWATCH')&&/full/.test(toasts()),'failed add rolls back the toggle and shows the error: '+toasts().slice(0,80));
   click('#st-head [data-c="sheet-close"]');await sleep(150);hist();await sleep(150);ok(q('#sheet-root').hidden,'sheets all closed');
   // every symbol tap opens the stock page
   const tapOpen=async(sel,sym,what)=>{const e=q(sel);if(!e){ok(false,what+': '+sel+' missing');return;}e.click();await sleep(150);ok(stockOpen()&&q('#st-head').textContent.indexOf(sym)>=0,what+' opens the stock page for '+sym);hist();await sleep(150);};
@@ -150,42 +143,17 @@ document.getElementById('f').onload=async()=>{
   click('[data-c="tab"][data-id="trades"]');await tapOpen('#view .card .symbtn',q('#view .card .symbtn b').textContent,'Trade card symbol');
   click('[data-c="tab"][data-id="portfolio"]');await tapOpen('#view .card .symbtn',q('#view .card .symbtn b').textContent,'Holding card symbol');
   const wl=q('#view .wl');if(wl)await tapOpen('#view .wl',wl.getAttribute('data-id'),'best/worst row');
-  click('[data-c="tab"][data-id="setups"]');click('#view .wlchips .chip[data-id="w1"]');ok(!!q('#view .wsec')&&qa('#view .wmain').length===3&&qa('#view .wlchips .chip[data-id]').length===3,'watchlist shows its rows and one chip per list ('+qa('#view .wmain').length+')');
+  click('[data-c="tab"][data-id="setups"]');ok(!!q('#view .wsec')&&qa('#view .wmain').length===5,'My watchlist section shows its rows: 3 defaults + no-data row + the stock added above ('+qa('#view .wmain').length+')');
   await tapOpen('#view .srow:not(.wmain):not(.idea)',q('#view .srow:not(.wmain):not(.idea)').getAttribute('data-id'),'EMA-cross row');
-  await tapOpen('#view .wside[data-id="DIXON"]','DIXON','watchlist Info button');
-  click('#view .wmain[data-id="DIXON"]');await sleep(200);ok(!!q('#sheet-root .cfs'),'tapping a watchlist stock opens its full chart');hist();await sleep(150);hist();await sleep(150);
-  click('#view .wlchips .chip[data-id="w2"]');ok(qa('#view .wmain').length===2&&/Breakouts/.test(q('#view .wsec h2').textContent),'switching chips shows the other list');click('#view .wlchips .chip[data-id="w1"]');
-  ok(!!q('#view .irow .wside[data-c="wl-pick"]')||!q('#view .idea'),'each setup row has a "+ List" button');
+  await tapOpen('#view .wmain','DIXON','watchlist row');
   ok(/no data yet/i.test(qa('#view .wrow').filter(r=>/NEWLISTCO/.test(r.textContent))[0].textContent),'dataOk:false watchlist row says "no data yet"');
   ok(qa('#view .srow:not(.wmain):not(.idea) .s2.g5 > span').length===5*qa('#view .srow:not(.wmain):not(.idea)').length,'EMA values laid out as a five-column grid');
   // edit mode removes
-  click('[data-c="watch-edit"]');ok(qa('#view .wrm').length===3&&!!q('#view [data-c="wl-rename"]')&&!!q('#view [data-c="wl-del"]'),'Edit shows remove per row plus Rename / Delete list');
-  click('#view .wrm[data-id="DIXON"]');await sleep(800);
-  ok(!st().wlists[0].syms.includes('DIXON')&&!q('#view .wrm[data-id="DIXON"]'),'removed from that list');
-  click('#view [data-c="wl-rename"]');q('#sheet-root input[name="name"]').value='Core';click('#sheet-root [data-c="submit"]');await sleep(800);
-  ok(st().wlists[0].name==='Core'&&/Core/.test(q('#view .wsec h2').textContent),'list renamed');
-  click('#view .wlchips [data-c="wl-new"]');q('#sheet-root input[name="name"]').value='Temp';click('#sheet-root [data-c="submit"]');await sleep(800);
-  ok(/Temp/.test(q('#view .wsec h2').textContent),'new list created and selected');
-  click('[data-c="watch-edit"]');click('#view [data-c="wl-del"]');click('#sheet-root [data-c="submit"]');await sleep(800);
-  ok(!st().wlists.some(l=>l.name==='Temp'),'list deleted');
-  click('#view .wsec [data-c="search"]');ok(!!inp(),'"Add" opens the search');hist();await sleep(150);
-  // index tiles + money summary on Today
-  click('[data-c="tab"][data-id="today"]');await sleep(400);
-  ok(qa('#view .idxt').length===4&&/Nifty 50/.test(q('#view .idxg').textContent)&&/\d/.test(q('#view .idxt b').textContent),'Today shows 4 index tiles with values');
-  ok(!!q('#view .msum')&&/Total value/.test(q('#view .msum').textContent),'money summary below the tiles');
-  await sleep(3500);ok(!!q('.tkr .tki')&&log.some(c=>c.n==='liveQuotes'),'live ticker strip shown and live prices requested');
-  click('#view [data-c="idx-edit"]');await sleep(100);ok(qa('#sheet-root [data-c="idx-toggle"]').length>=25,'index picker lists all indices');
-  click('#sheet-root [data-c="idx-toggle"][data-id="SMALL100"]');click('#sheet-root [data-c="idx-toggle"][data-id="SENSEX"]');await sleep(400);hist();await sleep(300);
-  ok(qa('#view .idxt').length===4&&!!q('#view .idxt[data-id="SMALL100"]')&&!q('#view .idxt[data-id="SENSEX"]'),'adding Smallcap 100 and removing Sensex updates the tiles');
-  click('[data-c="tab"][data-id="setups"]');
-  // alerts: openable, unread count drops per opened alert
-  {const bn=()=>{const b=q('.bell .bdg');return b?+b.textContent:0;};const n0=bn();click('.bell');await sleep(50);const un=qa('#view .fi.un');
-   ok(un.length>0&&un.length===n0,'bell count matches unread alerts ('+n0+')');
-   const nos=un.filter(x=>!x.getAttribute('data-sym'))[0]||un[0];const hadSym=!!nos.getAttribute('data-sym');nos.click();await sleep(150);
-   ok(bn()===n0-1,'opening one alert lowers the count by one ('+bn()+')');
-   if(hadSym){ok(stockOpen(),'alert with a stock opens that stock');hist();await sleep(150);}else ok(!!q('#view .fi.ex'),'alert without a stock expands');
-   const mr=q('#view [data-c="feed-allread"]');if(mr){mr.click();await sleep(50);}ok(bn()===0&&!q('#view .fi.un'),'Mark all read clears the badge');
-   click('[data-c="tab"][data-id="setups"]');}
+  click('[data-c="watch-edit"]');ok(qa('#view .wrm').length===5,'Edit shows a remove button per row');
+  click('#view .wrm[data-id="DIXON"]');ok(q('#view .wrm[data-id="DIXON"]').disabled,'remove locks its row while in flight');await sleep(800);
+  ok(!st().myWatch.some(x=>x.sym==='DIXON')&&!q('#view .wrm[data-id="DIXON"]'),'removed from state and from the list');
+  click('[data-c="watch-edit"]');ok(qa('#view .wrm').length===0,'Done leaves edit mode');
+  click('#view .wsec [data-c="search"]');ok(!!inp(),'"Add stock" opens the search');hist();await sleep(150);
   // ===== v3: verdict card, targets, ideas, interactive charts =====
   const reps={};const oar=w.onActionResult;w.onActionResult=function(n,j){try{const o=JSON.parse(j);if(n==='stockInfo'&&o&&o.sym)reps['i:'+o.sym]=o;if(n==='newListings')reps.nl=o;if(n==='getChart'&&o&&o.sym&&o.c&&o.c.length>=500)reps['c:'+o.sym]=o;}catch(e){}return oar.apply(this,arguments);};
   const sect=async(name,fn)=>{try{await fn();}catch(e){ok(false,'EXCEPTION in '+name+': '+(e&&e.stack||e));while(!q('#sheet-root').hidden){hist();await sleep(150);}}};
@@ -207,8 +175,8 @@ document.getElementById('f').onload=async()=>{
     ok(pos('TARGET HIT')<pos('Best setups now')&&pos('TARGET HIT')<pos('class="sym"><span class="tag buy">BUY')||pos('TARGET HIT')<pos('Best setups now'),'hit rows come before the ideas');
     const first=q('#view .srow.idea');const sym=first.getAttribute('data-id');first.click();await sleep(150);ok(stockOpen()&&q('#st-head').textContent.indexOf(sym)>=0,'tapping an idea opens the stock page for '+sym);await closeAll();
     click('#view [data-c="tab"][data-id="setups"]');await sleep(80);
-    ok(qa('#view .srow.idea').length>5&&/a screen, not a guarantee/i.test(q('#view').textContent),'Setups lists the full ranked list ('+qa('#view .srow.idea').length+') with the explanation line');
-    ok(q('#view').innerHTML.indexOf('Best setups now')<q('#view').innerHTML.indexOf('Fresh EMA crossovers'),'ideas sit above the EMA crossovers');
+    ok(qa('#view .srow.idea').length>5&&/a screen, not proven/i.test(q('#view').textContent),'Setups lists the full ranked list ('+qa('#view .srow.idea').length+') with the explanation line');
+    ok(q('#view').innerHTML.indexOf('Best setups now')<q('#view').innerHTML.indexOf('EMA'),'ideas sit above the EMA crossovers');
   });
   await sect('verdict BUY',async()=>{
     await openSym('RELIANCE');
@@ -218,7 +186,7 @@ document.getElementById('f').onload=async()=>{
     ok(/Rule-based and tested on past data/.test(v.textContent)||/tested/i.test(v.textContent),'caveat shown');
     ok(!/guaranteed|sure shot|risk-free/i.test(q('#sheet-root').textContent),'no forbidden wording on the page');
     ok(!!q('#st-vcard [data-c="target-from-call"]')&&!/Buy now|Place order/i.test(v.textContent),'"Set these as my target" present, no order button');
-    ok(q('#st-chart').compareDocumentPosition(v)&4&&q('#st-act').compareDocumentPosition(q('#st-chart'))&4,'chart sits between the action row and the verdict');
+    ok(v.compareDocumentPosition(q('#st-chart'))&4&&q('#st-act').compareDocumentPosition(v)&4,'verdict sits between the action row and the chart');
     click('#st-vcard [data-c="target-from-call"]');
     ok(!!q('#sheet-root input[name="target"]')&&Number(q('[name=target]').value)===Number(c.t1)&&Number(q('[name=stop]').value)===Number(c.stop),'target sheet prefilled with t1/stop: '+q('[name=target]').value+'/'+q('[name=stop]').value);
     hist();await sleep(150);ok(stockOpen(),'Back returns to the stock page from the target sheet');
@@ -245,7 +213,7 @@ document.getElementById('f').onload=async()=>{
     const pill=q('#st-pnl .pch .vpill'),vp=q('#st-vcard .vpill');
     ok(!!pill&&pill.textContent.trim()===vp.textContent.trim()&&/BUY CANDIDATE/.test(pill.textContent),'chair pill mirrors the call: '+(pill&&pill.textContent));
     ok(/What would change the call/.test(pn.textContent)&&qa('#st-pnl .pcc').length===2,'chair shows Pros/Cons and what would change the call');
-    const pn2=q('#st-pnl');ok(q('#st-verdict').compareDocumentPosition(pn2)&4&&q('#st-chart').compareDocumentPosition(pn2)&4,'panel sits below the chart and verdict');
+    const pn2=q('#st-pnl');ok(q('#st-verdict').compareDocumentPosition(pn2)&4&&pn2.compareDocumentPosition(q('#st-chart'))&4,'panel sits between the verdict card and the chart');
     ok(qa('#st-vcard .vcb').length===2&&!q('#st-vcard .vrs')&&!q('#st-vcard .vhist'),'"Why this call" and "What happened before" start collapsed');
     click('#st-vcard [data-c="vopen"][data-id="why"]');ok(!!q('#st-vcard .vrs li')&&q('#st-vcard [data-id="why"]').getAttribute('aria-expanded')==='true','"Why this call" opens on tap');
     ok(!!q('#st-vcard .vzone')&&!!q('#st-vcard .lv')&&/How the tested plan exits/.test(q('#st-vcard').textContent)&&!!q('#st-vcard .vevid'),'levels, size, tested record and exit rule stay visible');
@@ -345,12 +313,12 @@ document.getElementById('f').onload=async()=>{
   await sect('full chart: gestures',async()=>{
     await openSym('RELIANCE');click('#st-chart .xpand');await sleep(1600);
     const I=cfi(),cv=I.canvas,res=reps['c:RELIANCE'];ok(!!I&&!!cv&&!!res,'chart ready for gestures (500 bars in reply: '+!!res+')');
-    let s=I.state();ok(s.c===126&&s.s===374+w.CM.padOf(126),'default window = last 126 bars: '+s.s+'/'+s.c);
+    let s=I.state();ok(s.c===126&&s.s===374,'default window = last 126 bars: '+s.s+'/'+s.c);
     const cr=rect(cv),cx=cr.left+s.plot.l+s.plot.w/2,cy=cr.top+cr.height/3;
     const wheel=(dy,x)=>{cv.dispatchEvent(new w.WheelEvent('wheel',{deltaY:dy,clientX:x==null?cx:x,clientY:cy,bubbles:true,cancelable:true}));I.flush();};
     wheel(-400);s=I.state();ok(s.c<126&&s.c>=20,'wheel up zooms in within the clamp: c='+s.c);
     for(let k=0;k<40;k++)wheel(-400);s=I.state();ok(s.c===20,'zoom in stops at 20 bars: c='+s.c);
-    for(let k=0;k<80;k++)wheel(400);s=I.state();ok(s.c===500&&s.s<=w.CM.padOf(500),'zoom out stops at all bars: '+s.s+'/'+s.c);
+    for(let k=0;k<80;k++)wheel(400);s=I.state();ok(s.c===500&&s.s===0,'zoom out stops at all bars: '+s.s+'/'+s.c);
     I.reset();I.flush();wheel(-300);const z=I.state();ok(z.c<126&&z.s>=0&&z.s+z.c<=500+1e-6,'zoom keeps the window inside the data: '+z.s+'/'+z.c);
     // pan by mouse drag
     I.setView({s:200,c:100});I.flush();const sp=I.state().s;
@@ -386,7 +354,7 @@ document.getElementById('f').onload=async()=>{
     const tp=mkT(cv,1,cx,cy);tev(cv,'touchstart',[tp]);await sleep(40);tev(cv,'touchend',[],[tp]);await sleep(40);ok(I.state().cross<0&&q('#cf-ro').hidden,'a tap dismisses the crosshair');
     await sleep(500);I.setView({s:100,c:40});I.flush();
     const d1=mkT(cv,1,cx,cy);tev(cv,'touchstart',[d1]);await sleep(30);tev(cv,'touchend',[],[d1]);await sleep(60);tev(cv,'touchstart',[mkT(cv,1,cx+3,cy)]);await sleep(30);tev(cv,'touchend',[],[mkT(cv,1,cx+3,cy)]);I.flush();
-    s=I.state();ok(s.c===126&&s.s===374+w.CM.padOf(126),'double-tap resets to the default window: '+s.s+'/'+s.c);
+    s=I.state();ok(s.c===126&&s.s===374,'double-tap resets to the default window: '+s.s+'/'+s.c);
     // toggles + ranges
     const fr=I.state().frames;click('.cfe[data-id="100"]');I.flush();ok(I.state().emas.indexOf(100)>=0&&I.state().frames>fr&&q('.cfe[data-id="100"]').getAttribute('aria-pressed')==='true','EMA 100 toggle redraws and is pressed: '+JSON.stringify(I.state().emas)+' frames '+fr+'->'+I.state().frames+' '+q('.cfe[data-id="100"]').getAttribute('aria-pressed'));
     click('.cfe[data-id="10"]');I.flush();ok(I.state().emas.indexOf(10)<0,'EMA 10 toggle off: '+JSON.stringify(I.state().emas));click('.cfe[data-id="10"]');I.flush();

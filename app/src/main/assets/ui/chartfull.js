@@ -1,7 +1,7 @@
 /* SwingEdge — full-screen interactive chart: <canvas> renderer + gesture controller.
    Pure maths lives in chartmath.js (CM); markup and the readout panel HTML come from render.js (SE).
    Gestures (canvas has touch-action:none, so there is no page scroll to fight with):
-     one finger drag = pan (with inertia) · two fingers side by side = time zoom, one above the other = price zoom · drag the price axis = price zoom · drag the time axis = time zoom · double-tap price axis = auto-fit · hold ~250 ms then drag = crosshair
+     one finger drag = pan (with inertia) · two fingers = pinch zoom around the midpoint · hold ~250 ms then drag = crosshair
      tap (while a crosshair shows) = hide it · double tap = reset to the default window
      mouse: wheel = zoom at the cursor (shift/horizontal wheel = pan) · drag = pan · hover or hold+drag = crosshair · double click = reset
    Drawing happens only inside requestAnimationFrame and only when something changed. */
@@ -91,19 +91,8 @@
       invalidate();
     }
     function setView(v) { st.view = CM.viewOf(v, st.n); st.fling = 0; invalidate(); }
-    function resetView() { st.view = CM.defaultView(st.n); st.yr = null; st.fling = 0; clearCross(); invalidate(); }
-    /* vertical zoom: scale the price range around a price (factor > 1 = zoom in), or pan it by pixels */
-    function curY() { var pr = st.pr || { min: 0, max: 1 }; return st.yr || { lo: pr.min, hi: pr.max }; }
-    function yZoom(factor, atFrac) {
-      var r = curY(), span = r.hi - r.lo; if (!(span > 0)) return;
-      var f = Math.max(0.05, Math.min(20, factor)), mid = r.hi - span * Math.max(0, Math.min(1, atFrac));
-      var ns = span / f; st.yr = { lo: mid - (mid - r.lo) / f, hi: mid + (r.hi - mid) / f };
-      if (!(ns > 0)) st.yr = null; invalidate();
-    }
-    function yPan(dyPx) { var r = curY(), span = r.hi - r.lo, ph = Math.max(20, st.geo.ph || 100); var d = dyPx / ph * span; st.yr = { lo: r.lo + d, hi: r.hi + d }; invalidate(); }
-    function yAuto() { st.yr = null; invalidate(); }
+    function resetView() { st.view = CM.defaultView(st.n); st.fling = 0; clearCross(); invalidate(); }
     function setRange(key) { st.view = CM.rangeView(key, st.n); st.fling = 0; invalidate(); }
-    function yManual() { return !!st.yr; }
 
     /* ---------- geometry ---------- */
     function layout() {
@@ -166,12 +155,11 @@
       var i0 = Math.max(0, Math.floor(v.s)), i1 = Math.min(n - 1, Math.ceil(v.s + v.c) - 1);
       var pr = CM.priceRange(st.H, st.L, i0, i1, st.series, st.opts.levels ? st.lvVals : null);
       st.pr = pr;
-      if (st.yr) { pr = { min: st.yr.lo, max: st.yr.hi }; st.pr = pr; }   // manual vertical zoom
       var mn = pr.min, mx = pr.max, step = G.w / v.c, ph = G.ph, pt = G.t, pb = G.pb;
       var Y = function (p) { return pt + (mx - p) / (mx - mn) * ph; };
 
       /* grid + price axis */
-      var tk = CM.niceTicks(mn, mx, Math.max(3, Math.round(ph / 95)));
+      var tk = CM.niceTicks(mn, mx, Math.max(3, Math.round(ph / 62)));
       ctx.lineWidth = 1; ctx.strokeStyle = COL.grid; ctx.beginPath();
       for (i = 0; i < tk.ticks.length; i++) { var gy = Math.round(Y(tk.ticks[i])) + 0.5; ctx.moveTo(G.l, gy); ctx.lineTo(G.r, gy); }
       ctx.stroke();
@@ -270,7 +258,6 @@
         }
       }
       ctx.restore();
-      if (st.yr) text('Price scale fixed · double-tap the price axis to auto-fit', G.l + 6, G.t + 13, 'rgba(168,199,250,.85)', '500 11px ' + FONT, 'left');
 
       /* volume strip */
       if (G.vol) {
@@ -386,11 +373,8 @@
     function down(cx, cy, mouse) {
       g.rect = canvas.getBoundingClientRect(); g.mouse = !!mouse;
       var p = localPt(cx, cy);
-      g.mode = 'pending'; g.t0 = now(); g.x0 = p.x; g.y0 = p.y; g.lastX = p.x; g.lastY = p.y; g.samples = [{ x: p.x, t: g.t0 }]; st.fling = 0;
+      g.mode = 'pending'; g.t0 = now(); g.x0 = p.x; g.y0 = p.y; g.lastX = p.x; g.samples = [{ x: p.x, t: g.t0 }]; st.fling = 0;
       cancelHold();
-      var G0 = st.geo;
-      if (p.x > G0.r) { g.mode = 'yaxis'; return; }                       // right price axis: drag up/down = vertical zoom
-      if (p.y > (G0.vb || G0.pb) - 2 && p.y <= st.h) { g.mode = 'xaxis'; g.v0 = { s: st.view.s, c: st.view.c }; return; }   // bottom time axis: drag = horizontal zoom
       g.hold = setTimeout(function () { g.hold = 0; if (g.mode === 'pending') { g.mode = 'cross'; setCross(g.x0, g.y0); } }, HOLD_MS);
     }
     function move(cx, cy) {
@@ -399,10 +383,7 @@
         if (Math.abs(p.x - g.x0) > SLOP || Math.abs(p.y - g.y0) > SLOP) { cancelHold(); g.mode = 'pan'; g.lastX = g.x0; }
         else return;
       }
-      if (g.mode === 'yaxis') { yZoom(Math.exp((g.lastY - p.y) * 0.008), 0.5); g.lastY = p.y; return; }
-      if (g.mode === 'xaxis') { st.view = CM.zoomAt(st.view, Math.exp((p.x - g.lastX) * 0.006), 1, st.n); g.lastX = p.x; invalidate(); return; }
       if (g.mode === 'pan') {
-        if (st.yr) { yPan(p.y - g.lastY); g.lastY = p.y; }
         st.view = CM.panBy(st.view, p.x - g.lastX, st.geo.w, st.n); g.lastX = p.x;
         g.samples.push({ x: p.x, t: t }); if (g.samples.length > 12) g.samples.shift();
         invalidate();
@@ -411,13 +392,12 @@
     function up() {
       cancelHold();
       var t = now(), mode = g.mode; g.mode = '';
-      if (mode === 'yaxis' || mode === 'xaxis') { if (t - g.t0 < 250 && Math.abs(g.lastY - g.y0) < 8 && Math.abs(g.lastX - g.x0) < 8) { var dblA = t - g.tapT < DBL_MS; if (dblA && mode === 'yaxis') { g.tapT = 0; yAuto(); } else g.tapT = t; } return; }
       if (mode === 'pan') {
         var vel = CM.flingVelocity(g.samples, t);
         if (Math.abs(vel) > 0.05) { st.fling = vel; st.flingT = 0; invalidate(); }
       } else if (mode === 'pending') {                                    // a tap
         var dbl = t - g.tapT < DBL_MS && Math.abs(g.x0 - g.tapX) < DBL_PX && Math.abs(g.y0 - g.tapY) < DBL_PX;
-        if (dbl) { g.tapT = 0; if (g.x0 > st.geo.r) yAuto(); else { resetView(); if (cfg.onReset) cfg.onReset(); } }
+        if (dbl) { g.tapT = 0; resetView(); if (cfg.onReset) cfg.onReset(); }
         else { g.tapT = t; g.tapX = g.x0; g.tapY = g.y0; if (st.cross >= 0) clearCross(); }
       }
     }
@@ -428,9 +408,6 @@
       if (ts.length === 1) { down(ts[0].clientX, ts[0].clientY, false); }
       else if (ts.length === 2) {
         cancelHold(); g.mode = 'pinch'; g.rect = canvas.getBoundingClientRect();
-        var adx = Math.abs(ts[0].clientX - ts[1].clientX), ady = Math.abs(ts[0].clientY - ts[1].clientY);
-        g.pv = ady > adx * 1.2;                                            // fingers stacked vertically = vertical zoom only
-        g.dy0 = Math.max(12, ady); g.yr0 = curY(); g.my = ((ts[0].clientY + ts[1].clientY) / 2 - g.rect.top - st.geo.t) / Math.max(20, st.geo.ph);
         g.d0 = Math.max(1, dist(ts[0], ts[1])); g.v0 = { s: st.view.s, c: st.view.c };
         g.f0 = ((ts[0].clientX + ts[1].clientX) / 2 - g.rect.left - st.geo.l) / st.geo.w; st.fling = 0;
         clearCross();
@@ -439,11 +416,7 @@
     function onTouchMove(e) {
       if (e.cancelable) e.preventDefault();
       var ts = e.touches;
-      if (g.mode === 'pinch' && ts.length >= 2 && g.pv) {
-        var dyn = Math.max(12, Math.abs(ts[0].clientY - ts[1].clientY)), f = dyn / g.dy0, r0 = g.yr0, span0 = r0.hi - r0.lo;
-        var at = r0.hi - span0 * Math.max(0, Math.min(1, g.my));
-        st.yr = { lo: at - (at - r0.lo) / f, hi: at + (r0.hi - at) / f }; invalidate();
-      } else if (g.mode === 'pinch' && ts.length >= 2) {
+      if (g.mode === 'pinch' && ts.length >= 2) {
         var f1 = ((ts[0].clientX + ts[1].clientX) / 2 - g.rect.left - st.geo.l) / st.geo.w;
         st.view = CM.pinchView(g.v0, g.d0, Math.max(1, dist(ts[0], ts[1])), g.f0, f1, st.n);
         invalidate();
@@ -479,7 +452,6 @@
       e.preventDefault();
       var r = canvas.getBoundingClientRect(), x = e.clientX - r.left, G = st.geo, unit = e.deltaMode === 1 ? 16 : 1;
       var dx = e.deltaX * unit, dy = e.deltaY * unit;
-      if (x > G.r) { yZoom(Math.exp(-dy * 0.002), ((e.clientY - r.top) - G.t) / Math.max(20, G.ph)); st.fling = 0; return; }
       if (e.shiftKey || Math.abs(dx) > Math.abs(dy)) {
         st.view = CM.panBy(st.view, -(dx || dy), G.w, st.n);
       } else {

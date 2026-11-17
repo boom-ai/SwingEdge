@@ -660,7 +660,7 @@ object V2Tests {
             T.eq(act(app, "addWatch", """{"sym":"W50"}""")["ok"], true, "re-adding an existing one when full is fine")
             // old state files without the field, and junk in it
             val m = LinkedHashMap(Json.parseObject(p.files[SwingApp.STATE_FILE])!!)
-            m.remove("watchlist"); m.remove("wlists")
+            m.remove("watchlist")
             p.files[SwingApp.STATE_FILE] = Json.stringify(m)
             st = SimTests.state(SwingApp(p), "old state file")
             T.check(st.list("myWatch").isEmpty() && st.long("lastScanAt") > 0, "old state file loads, empty watchlist")

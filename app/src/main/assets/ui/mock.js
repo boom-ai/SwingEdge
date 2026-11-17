@@ -679,11 +679,10 @@
       r.spark = r.spark.map(function (x) { return r2(x * f); }); r.dayChgPct = m.info.dayChgPct;
     });
     s.myWatch = defaultWatch(); s.track = trackData();
-    s.wlists = [{ id: 'w1', name: 'My watchlist', syms: ['DIXON', 'SIEMENS', 'NEWLISTCO'] }, { id: 'w2', name: 'Breakouts', syms: ['BHARTIARTL'] }];
     s.ideas = ideasList(); s.targets = defaultTargets();
     s.optOpen = [{ idx: 'NIFTY', side: 'CE', strike: 24850, entry: 118.6, limit: 119.8, stop: 83.0, target: 177.9, last: 121.0, lots: 1, spotStop: 24735, spotTgt: 25010, openedAt: Date.now() - 5 * 60000, lot: 65 }];
     s.optRecord = { trades: 12, wins: 5, netRs: 3925, proven: false };
-    if (scenario === 'empty') { s.watch = []; s.myWatch = []; s.wlists = []; s.ideas = []; s.targets = []; s.track = emptyTrack(); }
+    if (scenario === 'empty') { s.watch = []; s.myWatch = []; s.ideas = []; s.targets = []; s.track = emptyTrack(); }
     if (scenario === 'empty') {
       s.signals = []; s.trades = []; s.holdings = []; s.feed = [];
       s.portfolio = portfolioOf([]);
@@ -793,12 +792,6 @@
     if (state.feed.length > 100) state.feed.length = 100;
   }
   function notify() { try { if (typeof window.onStateChanged === 'function') window.onStateChanged(); } catch (e) { /* ignore */ } }
-  function wlMut(name, a, fn) {
-    var sym = String(a.sym || '').toUpperCase(); if (!Array.isArray(state.wlists)) state.wlists = [];
-    var w = state.wlists.filter(function (l) { return l.id === a.id; })[0] || state.wlists[0];
-    if (!w) return finish(name, { ok: false, error: 'Make a watchlist first' });
-    var r = fn(w, sym); r.ok = true; r.sym = sym; r.id = w.id; finish(name, r);
-  }
   function finish(name, res, delay) {
     setTimeout(function () {
       try { if (typeof window.onActionResult === 'function') window.onActionResult(name, JSON.stringify(res)); } catch (e) { /* ignore */ }
@@ -988,24 +981,6 @@
           stats: { ltp: i.ltp, ret5: i.ret.d5, ret21: i.ret.d21, ret63: i.ret.d63, ret126: i.ret.d126, sma50: i.ema.e50, sma200: i.ema.e200, rsi14: i.rsi14, high52: i.high52, low52: i.low52 } }, 0);
       }, 300);
     },
-    liveQuotes: function (a) {
-      var q = {}; (Array.isArray(a.syms) ? a.syms : []).forEach(function (sym) { if (!validSym(sym)) return; var m = model(sym), l = m.info.ltp; q[sym] = { ltp: Math.round(l * 100) / 100, chg: Math.round(l * m.info.dayChgPct) / 100, pct: m.info.dayChgPct, at: Date.now() }; });
-      setTimeout(function () { finish('liveQuotes', { ok: true, at: Date.now(), quotes: q }, 0); }, 120);
-    },
-    indexQuotes: function (a) {
-      var cat = [['NIFTY50','Nifty 50',24850.5],['BANKNIFTY','Bank Nifty',52110.2],['SENSEX','Sensex',81302.1],['NIFTY100','Large cap 100',25510.4],['NEXT50','Nifty Next 50',68200],['MID100','Midcap 100',57210],['MID150','Midcap 150',21010],['MIDSEL','Midcap Select',12800],['SMALL100','Smallcap 100',18420],['SMALL250','Smallcap 250',17100],['NIFTY500','Nifty 500',23100],['FIN','Financial Services',23900],['PVTBANK','Private Bank',26100],['PSUBANK','PSU Bank',6900],['IT','Nifty IT',41200],['PHARMA','Pharma',22300],['HEALTH','Healthcare',14100],['AUTO','Auto',24800],['FMCG','FMCG',57100],['METAL','Metal',9300],['ENERGY','Energy',36200],['OILGAS','Oil & Gas',11800],['REALTY','Realty',1010],['INFRA','Infra',9100],['MEDIA','Media',1850],['CONSDUR','Consumer Durables',38900],['DEFENCE','Defence',8100],['CPSE','CPSE',6600],['VIX','India VIX',13.4]];
-      var ids = Array.isArray(a.ids) && a.ids.length ? a.ids : ['NIFTY50','BANKNIFTY','SENSEX','NIFTY100'];
-      var items = ids.map(function (id, i) { var c = cat.filter(function (x) { return x[0] === id; })[0]; if (!c) return null; var p = ((i * 37) % 21 - 9) / 10; return { id: id, label: c[1], last: c[2], chg: Math.round(c[2] * p) / 100, pct: p }; }).filter(Boolean);
-      setTimeout(function () { finish('indexQuotes', { ok: true, at: Date.now(), items: items, catalog: cat.map(function (c) { return { id: c[0], label: c[1] }; }) }, 0); }, 150);
-    },
-    news: function (a) { var sym = String(a.sym || '').toUpperCase(); setTimeout(function () { finish('news', { ok: true, sym: sym, items: [
-      { title: sym + ' shares rise after quarterly results beat estimates', link: 'https://example.com/a', source: 'Economic Times', ts: Date.now() - 3 * 3600e3 },
-      { title: 'Brokerage raises target price on ' + sym, link: 'https://example.com/b', source: 'Moneycontrol', ts: Date.now() - 26 * 3600e3 }] }, 0); }, 250); },
-    wlAdd: function (a) { wlMut('wlAdd', a, function (w, sym) { if (w.syms.indexOf(sym) < 0) w.syms.push(sym); if (!(state.myWatch || []).some(function (x) { return x.sym === sym; })) state.myWatch.push(watchRow(sym)); return { list: w.name }; }); },
-    wlRemove: function (a) { wlMut('wlRemove', a, function (w, sym) { w.syms = w.syms.filter(function (y) { return y !== sym; }); return {}; }); },
-    wlCreate: function (a) { var nm = String(a.name || '').trim(); if (!nm) return finish('wlCreate', { ok: false, error: 'Give the watchlist a name' }); var id = 'w' + (state.wlists.length + 1) + Date.now() % 1000, sym = String(a.sym || '').toUpperCase(); state.wlists.push({ id: id, name: nm, syms: sym ? [sym] : [] }); if (sym && !(state.myWatch || []).some(function (x) { return x.sym === sym; })) state.myWatch.push(watchRow(sym)); finish('wlCreate', { ok: true, id: id, name: nm }); },
-    wlRename: function (a) { var w = state.wlists.filter(function (l) { return l.id === a.id; })[0]; if (!w) return finish('wlRename', { ok: false, error: 'List not found' }); w.name = String(a.name || '').trim(); finish('wlRename', { ok: true }); },
-    wlDelete: function (a) { state.wlists = state.wlists.filter(function (l) { return l.id !== a.id; }); finish('wlDelete', { ok: true }); },
     addWatch: function (a) {
       var sym = String(a.sym || '').toUpperCase();
       if (!validSym(sym)) return finish('addWatch', { ok: false, error: sym + ' is not an NSE symbol I can find' });

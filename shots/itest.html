@@ -169,6 +169,14 @@ document.getElementById('f').onload=async()=>{
   click('[data-c="watch-edit"]');click('#view [data-c="wl-del"]');click('#sheet-root [data-c="submit"]');await sleep(800);
   ok(!st().wlists.some(l=>l.name==='Temp'),'list deleted');
   click('#view .wsec [data-c="search"]');ok(!!inp(),'"Add" opens the search');hist();await sleep(150);
+  // index tiles + money summary on Today
+  click('[data-c="tab"][data-id="today"]');await sleep(400);
+  ok(qa('#view .idxt').length===4&&/Nifty 50/.test(q('#view .idxg').textContent)&&/\d/.test(q('#view .idxt b').textContent),'Today shows 4 index tiles with values');
+  ok(!!q('#view .msum')&&/Total value/.test(q('#view .msum').textContent),'money summary below the tiles');
+  click('#view [data-c="idx-edit"]');await sleep(100);ok(qa('#sheet-root [data-c="idx-toggle"]').length>=25,'index picker lists all indices');
+  click('#sheet-root [data-c="idx-toggle"][data-id="SMALL100"]');click('#sheet-root [data-c="idx-toggle"][data-id="SENSEX"]');await sleep(400);hist();await sleep(300);
+  ok(qa('#view .idxt').length===4&&!!q('#view .idxt[data-id="SMALL100"]')&&!q('#view .idxt[data-id="SENSEX"]'),'adding Smallcap 100 and removing Sensex updates the tiles');
+  click('[data-c="tab"][data-id="setups"]');
   // alerts: openable, unread count drops per opened alert
   {const bn=()=>{const b=q('.bell .bdg');return b?+b.textContent:0;};const n0=bn();click('.bell');await sleep(50);const un=qa('#view .fi.un');
    ok(un.length>0&&un.length===n0,'bell count matches unread alerts ('+n0+')');
@@ -198,7 +206,7 @@ document.getElementById('f').onload=async()=>{
     ok(pos('TARGET HIT')<pos('Best setups now')&&pos('TARGET HIT')<pos('class="sym"><span class="tag buy">BUY')||pos('TARGET HIT')<pos('Best setups now'),'hit rows come before the ideas');
     const first=q('#view .srow.idea');const sym=first.getAttribute('data-id');first.click();await sleep(150);ok(stockOpen()&&q('#st-head').textContent.indexOf(sym)>=0,'tapping an idea opens the stock page for '+sym);await closeAll();
     click('#view [data-c="tab"][data-id="setups"]');await sleep(80);
-    ok(qa('#view .srow.idea').length>5&&/a screen, not proven/i.test(q('#view').textContent),'Setups lists the full ranked list ('+qa('#view .srow.idea').length+') with the explanation line');
+    ok(qa('#view .srow.idea').length>5&&/a screen, not a guarantee/i.test(q('#view').textContent),'Setups lists the full ranked list ('+qa('#view .srow.idea').length+') with the explanation line');
     ok(q('#view').innerHTML.indexOf('Best setups now')<q('#view').innerHTML.indexOf('Fresh EMA crossovers'),'ideas sit above the EMA crossovers');
   });
   await sect('verdict BUY',async()=>{

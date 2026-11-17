@@ -144,7 +144,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "news") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "news" || name == "indexQuotes") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1711,6 +1711,7 @@ class SwingApp(private val p: Platform) {
                 "fundInfo" -> Funds.info(fundData(false), a.str("code"))
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
                 "news" -> newsFor(a)
+                "indexQuotes" -> indexQuotes(a)
                 "fno", "fnoOrder", "fnoCancel", "fnoLevels", "fnoReset" -> fnoAction(name, a)
                 "options" -> synchronized(optLock) { Options.view(optLoad(), optSpots, optVix) }
                 "indexView" -> {
@@ -1954,6 +1955,32 @@ class SwingApp(private val p: Platform) {
         val items = News.parse(try { p.httpGetAll(listOf(News.url(q))).firstOrNull() } catch (t: Throwable) { null })
         if (items.isNotEmpty()) newsCache[sym] = Pair(now, items)
         return linkedMapOf("ok" to true, "sym" to sym, "items" to items)
+    }
+
+    @Volatile private var idxCache: Pair<Long, Map<String, Triple<Double, Double, Double>>>? = null
+    private val idxYahoo = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Triple<Double, Double, Double>>>()
+    private fun indexQuotes(a: Map<String, Any?>): Map<String, Any?> {
+        val want = ((a["ids"] as? List<*>).orEmpty().mapNotNull { it as? String }.ifEmpty { IndexQuotes.DEFAULT }).distinct().take(12)
+        val defs = want.mapNotNull { w -> IndexQuotes.CATALOG.firstOrNull { it.id == w } }
+        val now = p.now(); val ttl = 45_000L
+        var nse = idxCache?.takeIf { now - it.first < ttl }?.second
+        if (nse == null && defs.any { it.nse != null }) {
+            nse = IndexQuotes.parseNse(fnoGet { h -> h + IndexQuotes.NSE_PATH })
+            if (nse.isNotEmpty()) idxCache = Pair(now, nse) else nse = idxCache?.second ?: emptyMap()
+        }
+        val items = ArrayList<Map<String, Any?>>()
+        for (d in defs) {
+            var q = d.nse?.let { nse?.get(IndexQuotes.norm(it)) }
+            if (q == null && d.yahoo != null) {
+                val c = idxYahoo[d.yahoo]
+                q = if (c != null && now - c.first < ttl) c.second else {
+                    val y = IndexQuotes.parseYahoo(try { p.httpGetAll(listOf(IndexQuotes.yahooUrl(d.yahoo))).firstOrNull() } catch (t: Throwable) { null })
+                    if (y != null) idxYahoo[d.yahoo] = Pair(now, y); y ?: c?.second
+                }
+            }
+            items.add(linkedMapOf("id" to d.id, "label" to d.label, "last" to q?.first, "chg" to q?.second, "pct" to q?.third))
+        }
+        return linkedMapOf("ok" to true, "at" to now, "items" to items, "catalog" to IndexQuotes.CATALOG.map { linkedMapOf("id" to it.id, "label" to it.label) })
     }
 
     private val newsCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<Map<String, Any?>>>>()

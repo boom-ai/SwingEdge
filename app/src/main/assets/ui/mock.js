@@ -988,6 +988,12 @@
           stats: { ltp: i.ltp, ret5: i.ret.d5, ret21: i.ret.d21, ret63: i.ret.d63, ret126: i.ret.d126, sma50: i.ema.e50, sma200: i.ema.e200, rsi14: i.rsi14, high52: i.high52, low52: i.low52 } }, 0);
       }, 300);
     },
+    indexQuotes: function (a) {
+      var cat = [['NIFTY50','Nifty 50',24850.5],['BANKNIFTY','Bank Nifty',52110.2],['SENSEX','Sensex',81302.1],['NIFTY100','Large cap 100',25510.4],['NEXT50','Nifty Next 50',68200],['MID100','Midcap 100',57210],['MID150','Midcap 150',21010],['MIDSEL','Midcap Select',12800],['SMALL100','Smallcap 100',18420],['SMALL250','Smallcap 250',17100],['NIFTY500','Nifty 500',23100],['FIN','Financial Services',23900],['PVTBANK','Private Bank',26100],['PSUBANK','PSU Bank',6900],['IT','Nifty IT',41200],['PHARMA','Pharma',22300],['HEALTH','Healthcare',14100],['AUTO','Auto',24800],['FMCG','FMCG',57100],['METAL','Metal',9300],['ENERGY','Energy',36200],['OILGAS','Oil & Gas',11800],['REALTY','Realty',1010],['INFRA','Infra',9100],['MEDIA','Media',1850],['CONSDUR','Consumer Durables',38900],['DEFENCE','Defence',8100],['CPSE','CPSE',6600],['VIX','India VIX',13.4]];
+      var ids = Array.isArray(a.ids) && a.ids.length ? a.ids : ['NIFTY50','BANKNIFTY','SENSEX','NIFTY100'];
+      var items = ids.map(function (id, i) { var c = cat.filter(function (x) { return x[0] === id; })[0]; if (!c) return null; var p = ((i * 37) % 21 - 9) / 10; return { id: id, label: c[1], last: c[2], chg: Math.round(c[2] * p) / 100, pct: p }; }).filter(Boolean);
+      setTimeout(function () { finish('indexQuotes', { ok: true, at: Date.now(), items: items, catalog: cat.map(function (c) { return { id: c[0], label: c[1] }; }) }, 0); }, 150);
+    },
     news: function (a) { var sym = String(a.sym || '').toUpperCase(); setTimeout(function () { finish('news', { ok: true, sym: sym, items: [
       { title: sym + ' shares rise after quarterly results beat estimates', link: 'https://example.com/a', source: 'Economic Times', ts: Date.now() - 3 * 3600e3 },
       { title: 'Brokerage raises target price on ' + sym, link: 'https://example.com/b', source: 'Moneycontrol', ts: Date.now() - 26 * 3600e3 }] }, 0); }, 250); },

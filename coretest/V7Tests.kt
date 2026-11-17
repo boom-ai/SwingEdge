@@ -244,7 +244,7 @@ object V12Tests {
 }
 
 object V13Tests {
-    fun all(): List<Pair<String, () -> Unit>> = listOf("v13-watchlists" to ::wl, "v13-news" to ::news)
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v13-watchlists" to ::wl, "v13-news" to ::news, "v14-index" to ::idx)
     fun wl() {
         val p = FakePlatform.standard(); val app = SwingApp(p)
         fun act(n: String, js: String) = Json.parseObject(app.action(n, js))!!
@@ -269,6 +269,28 @@ object V13Tests {
         repeat(15) { act("wlCreate", "{\"name\":\"L$it\"}") }
         T.check(lists().size == WList.MAX_LISTS, "capped at ${WList.MAX_LISTS} lists")
     }
+    fun idx() {
+        val nse = """{"data":[{"index":"NIFTY 50","last":24850.5,"variation":120.25,"percentChange":0.49,"previousClose":24730.25},{"index":"NIFTY BANK","last":"52,100.10","variation":-80,"percentChange":-0.15},{"index":"NIFTY 100","last":25500,"previousClose":25000},{"index":"NIFTY OIL & GAS","last":11000,"percentChange":1.1}]}"""
+        T.eq(IndexQuotes.parseNse(nse)[IndexQuotes.norm("NIFTY BANK")]?.first, 52100.1, "comma number parsed")
+        T.eq(IndexQuotes.parseNse(nse)[IndexQuotes.norm("NIFTY 100")]?.third, 2.0, "pct from previous close")
+        T.eq(IndexQuotes.parseNse("junk").size, 0, "junk -> empty")
+        val y = """{"chart":{"result":[{"meta":{"regularMarketPrice":81000.0,"chartPreviousClose":79000.0},"indicators":{"quote":[{"close":[79500.0,80000.0,81000.0]}]}}]}}"""
+        val q = IndexQuotes.parseYahoo(y)!!; T.eq(q.second, 1000.0, "yahoo change vs prior daily close"); T.check(Math.abs(q.third - 1.25) < 1e-9, "yahoo pct")
+        T.check(IndexQuotes.parseYahoo("{}") == null, "empty yahoo -> null")
+        val p = FakePlatform.standard(); p.setTime(java.time.LocalDate.of(2026, 10, 6).toEpochDay().toInt(), 10 * 60)
+        for (h in Fno.HOSTS) p.served[h + IndexQuotes.NSE_PATH] = nse
+        p.served[IndexQuotes.yahooUrl("^BSESN")] = y
+        val app = SwingApp(p)
+        val r = Json.parseObject(app.action("indexQuotes", """{"ids":["NIFTY50","SENSEX","OILGAS","MID150","BOGUS"]}"""))!!
+        val it = r.list("items").map { it.asObj() }
+        T.eq(it.map { it.str("id") }, listOf("NIFTY50", "SENSEX", "OILGAS", "MID150"), "unknown ids dropped, order kept")
+        T.eq(it[0].num("last"), 24850.5, "nifty from NSE"); T.eq(it[1].num("last"), 81000.0, "sensex from yahoo"); T.eq(it[2].num("pct"), 1.1, "oil & gas matched")
+        T.check(it[3]["last"] == null, "missing index -> null, no crash")
+        T.check(r.list("catalog").size >= 25, "catalog sent")
+        val d = Json.parseObject(app.action("indexQuotes", "{}"))!!.list("items").map { it.asObj().str("id") }
+        T.eq(d, IndexQuotes.DEFAULT, "defaults when no ids")
+    }
+
     fun news() {
         val xml = "<rss><channel><item><title>Tata Power wins order - Mint</title><link>https://news.google.com/x1</link><pubDate>Tue, 17 Nov 2026 08:00:00 GMT</pubDate><source url=\"https://m\">Mint</source></item>" +
             "<item><title><![CDATA[Q2 results &amp; outlook]]></title><link>http://bad</link></item></channel></rss>"

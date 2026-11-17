@@ -36,6 +36,7 @@
     dirty = false;
     try {
       ui.now = Date.now();
+      if (ui.tab === 'today') loadIdx(false);
       var h = SE.header(S, ui);
       if (h !== cache.top) { elTop.innerHTML = h; cache.top = h; }
       var t = SE.tabbar(S, ui);
@@ -172,6 +173,7 @@
       if (name === 'funds') { var fm = ui.funds || (ui.funds = {}); fm.loading = false; if (ok) { fm.res = res; fm.err = ''; fm.at = Date.now(); } else fm.err = err; if (ui.tab === 'funds') render(); return; }
       if (name === 'fundInfo') { ui.fundInfo = ui.fundInfo || {}; var fc = SE.T(res && res.code) || (sheet && sheet.kind === 'fund' ? SE.T(sheet.data.id) : ''); if (fc) ui.fundInfo[fc] = ok ? res : { ok: false, error: err }; if (sheet && sheet.kind === 'fund') paintSheet(true); return; }
       if (name === 'addWatch' || name === 'removeWatch') { onWatchResult(name, ok, err); return; }
+      if (name === 'indexQuotes') { ui.idx = ui.idx || {}; ui.idx.loading = false; if (ok) { ui.idx.items = res.items; ui.idx.catalog = res.catalog; } if (ui.tab === 'today') render(true); if (sheet && sheet.kind === 'idxpick') paintSheet(true); return; }
       if (name === 'news') { var ns = ui.stock; if (ns && (!res.sym || String(res.sym).toUpperCase() === ns.sym)) { ns.news = ok ? { items: SE.A(res.items) } : { err: err }; paintStock(['body']); } return; }
       if (name === 'wlAdd' || name === 'wlRemove' || name === 'wlCreate' || name === 'wlRename' || name === 'wlDelete') { onWlResult(name, res, ok, err); return; }
       if (name === 'getChart' && chartReply(res, ok, err)) return;
@@ -742,6 +744,20 @@
     else { if (rec && rec.onFail) rec.onFail(); toast('Watchlist: ' + err, 'err'); }
     render(true); paintStock(['act']);
   }
+  var IDX_DEF = ['NIFTY50', 'BANKNIFTY', 'SENSEX', 'NIFTY100'];
+  var IDX_CSV = { NIFTY50: 'Nifty 50', BANKNIFTY: 'Nifty Bank', SENSEX: 'Nifty 50', NIFTY100: 'Nifty 100', NEXT50: 'Nifty Next 50', MID100: 'Nifty Midcap 100', MID150: 'Nifty Midcap 150', MIDSEL: 'Nifty Midcap 50',
+    SMALL100: 'Nifty Smallcap 100', SMALL250: 'Nifty Smallcap 250', NIFTY500: 'Nifty 500', FIN: 'Nifty Financial Services', PVTBANK: 'Nifty Private Bank', PSUBANK: 'Nifty PSU Bank', IT: 'Nifty IT', PHARMA: 'Nifty Pharma',
+    HEALTH: 'Nifty Healthcare', AUTO: 'Nifty Auto', FMCG: 'Nifty FMCG', METAL: 'Nifty Metal', ENERGY: 'Nifty Energy', OILGAS: 'Nifty Oil & Gas', REALTY: 'Nifty Realty', INFRA: 'Nifty Infrastructure', MEDIA: 'Nifty Media',
+    CONSDUR: 'Nifty Consumer Durables', DEFENCE: 'Nifty India Defence', CPSE: 'Nifty CPSE', VIX: 'Nifty 50' };
+  try { var _iv = JSON.parse(localStorage.getItem('se.idx') || 'null'); if (Array.isArray(_iv) && _iv.length) ui.idxIds = _iv.filter(function (x) { return typeof x === 'string'; }).slice(0, 12); } catch (e) {}
+  function saveIdx(v) { ui.idxIds = v; try { localStorage.setItem('se.idx', JSON.stringify(v)); } catch (e) {} loadIdx(true); render(true); }
+  var idxAt = 0;
+  function loadIdx(force) {
+    var t = Date.now(), gap = S && S.marketOpen === true ? 60000 : 600000;
+    if (!force && (t - idxAt < gap || (ui.idx && ui.idx.loading && t - idxAt < 20000))) return;
+    idxAt = t; ui.idx = ui.idx || {}; ui.idx.loading = true;
+    try { bridge().action('indexQuotes', JSON.stringify({ ids: ui.idxIds && ui.idxIds.length ? ui.idxIds : IDX_DEF })); } catch (e) { ui.idx.loading = false; }
+  }
   function loadNews() {
     var st = ui.stock; if (!st) return;
     st.news = { loading: true }; paintStock(['body']);
@@ -987,6 +1003,10 @@
       case 'opt-open': ui.opt = ui.opt || { calc: {} }; openSheet('opt', {}, true); try { bridge().action('options', '{}'); } catch (e) {} break;
       case 'opt-idx': ui.opt = ui.opt || { calc: {} }; ui.opt.calc = ui.opt.calc || {}; optRead(); ui.opt.calc.idx = id; paintSheet(true); break;
       case 'opt-calc': ui.opt = ui.opt || { calc: {} }; optRead(); paintSheet(true); break;
+      case 'idx-edit': openSheet('idxpick', {}, true); break;
+      case 'idx-toggle': (function () { var v = ui.idxIds && ui.idxIds.length ? ui.idxIds.slice() : IDX_DEF.slice(), i = v.indexOf(id); if (i >= 0) { if (v.length > 1) v.splice(i, 1); } else if (v.length < 12) v.push(id); else toast('Up to 12 indices', 'err'); saveIdx(v); paintSheet(true); })(); break;
+      case 'idx-reset': saveIdx(IDX_DEF.slice()); paintSheet(true); break;
+      case 'idx-tile': { var nm = IDX_CSV[id]; ui.index = ui.index || {}; openSheet('index', {}, true); loadIndex(nm || ui.index.sel || ''); } break;
       case 'index-open': ui.index = ui.index || {}; openSheet('index', {}, true); loadIndex(ui.index.sel || ''); break;
       case 'index-pick': loadIndex(id); break;
       case 'guide-done': ui.guideDone = true; try { localStorage.setItem('se.guide', '1'); } catch (e) {} render(); break;

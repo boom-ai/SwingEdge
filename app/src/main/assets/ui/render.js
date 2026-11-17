@@ -616,6 +616,41 @@
     });
     return h + '<div class="hint hintpad">' + ic('info') + '<span class="t">A screener for your own chart reading, not buy calls. On NSE data from 2013 this setup did no better than a random uptrend stock over the next 6 days; held about a month it averaged +1.2% per trade against +0.7% for a random uptrend stock, with losing years. Tap a row for the chart.</span></div>';
   }
+  /* ---------- Today: index tiles + money summary ---------- */
+  var IDX_DEF = ['NIFTY50', 'BANKNIFTY', 'SENSEX', 'NIFTY100'];
+  var IDX_LAB = { NIFTY50: 'Nifty 50', BANKNIFTY: 'Bank Nifty', SENSEX: 'Sensex', NIFTY100: 'Large cap 100' };
+  function idxIds(ui) { var v = arr(O(ui).idxIds).filter(function (x) { return typeof x === 'string' && x; }); return v.length ? v.slice(0, 12) : IDX_DEF; }
+  function idxTiles(S, ui) {
+    var q = O(ui.idx), by = {}; A(q.items).forEach(function (x) { by[T(x.id)] = x; });
+    var cat = {}; A(q.catalog).forEach(function (c) { cat[T(c.id)] = T(c.label); });
+    var h = '<div class="sec idxsec"><h2>Markets</h2><span class="sp"></span><button type="button" class="linkbtn" data-c="idx-edit">Edit</button></div><div class="idxg">';
+    idxIds(ui).forEach(function (id) {
+      var x = by[id] || {}, last = N(x.last), pct = N(x.pct), chg = N(x.chg);
+      h += '<button type="button" class="idxt ' + (pct === null ? 'flat' : tone(pct)) + '" data-c="idx-tile" data-id="' + esc(id) + '"><span class="il">' + esc(T(x.label) || cat[id] || IDX_LAB[id] || id) + '</span>' +
+        '<b class="num">' + (last !== null && last > 0 ? last.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : (q.loading || !q.items ? '…' : DASH)) + '</b>' +
+        '<span class="num ip">' + (pct !== null && last > 0 ? (chg !== null ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + ' ' : '') + '(' + pc(pct, true) + ')' : '&nbsp;') + '</span></button>';
+    });
+    return h + '</div>';
+  }
+  function idxPickSheet(S, ui) {
+    var on = idxIds(ui), cat = A(O(ui.idx).catalog);
+    if (!cat.length) cat = IDX_DEF.map(function (k) { return { id: k, label: IDX_LAB[k] }; });
+    return shell('Choose your indices', '<p class="lead">Tap to show or hide. ' + on.length + ' shown (up to 12).</p><div class="chips wrapc">' + cat.map(function (c) {
+      var o = on.indexOf(T(c.id)) >= 0;
+      return '<button type="button" class="chip' + (o ? ' on' : '') + '" data-c="idx-toggle" data-id="' + esc(T(c.id)) + '">' + (o ? '✓ ' : '+ ') + esc(T(c.label)) + '</button>';
+    }).join('') + '</div>', btn('idx-reset', null, 'Reset', 'ghost') + btn('sheet-close', null, 'Done', 'pri'));
+  }
+  function moneySum(S) {
+    var cap = N(O(S.settings).capital) || 0, pf = O(S.portfolio), ot = openTrades(S);
+    var tInv = 0, tVal = 0; ot.forEach(function (t) { var q = N(t.qty) || 0; tInv += (N(t.entry) || 0) * q; tVal += (N(t.ltp) || N(t.entry) || 0) * q; });
+    var hVal = N(pf.valueRs) || 0, hPnl = N(pf.pnlRs) || 0, day = N(pf.dayPnlRs) || 0;
+    if (!cap && !hVal && !ot.length) return '';
+    var pnl = hPnl + (tVal - tInv), free = Math.max(0, cap - tInv);
+    var cell = function (k, v, cls) { return '<div><div class="k">' + k + '</div><div class="v sm ' + (cls || '') + '">' + v + '</div></div>'; };
+    return '<button type="button" class="card msum" data-c="tab" data-id="portfolio"><div class="cb"><div class="mh"><b>Your money</b><span class="mut">Holdings + open trades ›</span></div><div class="lv">' +
+      cell('Total value', rsB(hVal + tVal)) + cell('Today', rsS(day), tone(day)) + cell('Overall P&L', rsS(pnl), tone(pnl)) + cell('Free cash', rsB(free)) + '</div>' +
+      '<div class="meta">' + (ot.length ? ot.length + ' open trade' + (ot.length > 1 ? 's' : '') + ' · ' + rsB(tInv) + ' in use' : 'No open trades') + (hVal ? ' · holdings ' + rsB(hVal) : '') + (cap ? ' · capital ' + rsB(cap) : '') + '</div></div></button>';
+  }
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
     var guide = ui.guideDone === true ? '' : '<div class="card rules guide"><b>How to use SwingEdge</b><ol>' +
@@ -624,9 +659,10 @@
       '<li><b>🔔 Bell</b> (top right): every buy and sell alert. Phone notifications come too.</li>' +
       '<li>Tap any stock for one clear call: BUY / HOLD / SELL / WAIT. Search 🔍 any NSE stock.</li></ol>' +
       '<div class="btns">' + btn('guide-done', null, 'Got it', 'sm', {}) + '</div></div>';
-    if (ui.fullCards !== true) return banner(ui) + guide + statusPanel(S, ui, now) + simpleToday(S, ui, items, bs) +
+    var top = idxTiles(S, ui) + moneySum(S);
+    if (ui.fullCards !== true) return banner(ui) + top + guide + statusPanel(S, ui, now) + simpleToday(S, ui, items, bs) +
       '<div class="btns hintpad">' + btn('fullcards', null, 'Detailed view', 'sm ghost', { icon: 'layers' }) + '</div>';
-    var h = banner(ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs);
+    var h = banner(ui) + top + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs);
     if (ui.fullCards === true || !items.length) h += '<div class="sec"><h2>Act now</h2>' + (items.length ? '<span class="cnt">' + items.length + '</span>' : '') + '</div>';
     if (!items.length) {
       h += '<div class="empty"><div class="ei">' + ic(bs.icon) + '</div><h3>' + esc(bs.title) + '</h3><p>' + esc(bs.text) + '</p>' +
@@ -1148,12 +1184,12 @@
     var nm = T(x.name).trim(), lab = T(x.label).trim().toUpperCase() || 'BUY', k = CALLS[lab] || CALLS.BUY;
     var sv = (Array.isArray(x.spark) ? x.spark : []).map(N), up = sv.length > 1 && sv[sv.length - 1] !== null && sv[0] !== null ? sv[sv.length - 1] >= sv[0] : true;
     var lo = N(x.entryLow), hi = N(x.entryHigh);
-    var zone = lo > 0 && hi > 0 ? (Math.round(lo) === Math.round(hi) ? emaNum(lo) : emaNum(Math.min(lo, hi)) + '–' + emaNum(Math.max(lo, hi))) : DASH;
+    var zone = lo > 0 && hi > 0 ? (Math.round(lo) === Math.round(hi) ? emaNum(lo) : emaNum(Math.min(lo, hi)) + '–<wbr>' + emaNum(Math.max(lo, hi))) : DASH;
     var rr = N(x.rr), hz = N(x.horizonDays);
     return '<div class="wrow irow"><button type="button" class="srow idea" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' +
       '<span class="s1"><span class="rk num">' + (i + 1) + '</span><span class="wn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
       spark(x.spark, up) + '<span class="sp"><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + (N(x.dayChgPct) === null ? '' : pc(x.dayChgPct, true, true)) + '</span></span></span>' +
-      '<span class="s2 idz">' + scoreRing(x.score, k.cls, 36) + '<span class="idt"><span class="vpill sm ' + k.cls + '">' + esc(lab.slice(0, 5)) + '</span></span>' +
+      '<span class="s2 idz"><span class="idt"><span class="vpill sm ' + k.cls + '">' + esc(lab.slice(0, 5)) + '</span>' + (N(x.score) !== null ? '<span class="isc num">Score ' + Math.round(N(x.score)) + '</span>' : '') + '</span>' +
       '<span class="idc idw"><i>Entry zone</i><b class="num">' + zone + '</b></span><span class="idc"><i>Stop</i><b class="num">' + emaNum(x.stop) + '</b></span><span class="idc"><i>Target 1</i><b class="num">' + emaNum(x.t1) + '</b></span></span>' +
       (full && (T(x.headline).trim() || (rr !== null && rr > 0) || hz > 0) ? '<span class="s3 clip">' + ((rr !== null && rr > 0) ? 'Reward : risk 1 : ' + (rr > 99 ? '>99' : rr.toFixed(1)) : '') + (hz > 0 ? ((rr !== null && rr > 0) ? ' · ' : '') + 'about ' + cnt(hz) + ' trading days' : '') + '</span>' : '') +
       '</button><button type="button" class="wside" data-c="wl-pick" data-id="' + esc(sym) + '" aria-label="Add ' + esc(sym) + ' to a watchlist">' + ic('plus') + '<i>List</i></button></div>';
@@ -1168,7 +1204,7 @@
       return today ? h + '<div class="hint hintpad">' + ic('layers') + '<span class="t">The ranked list fills after the next full scan (2:45 pm or Scan now).</span></div>'
         : h + '<div class="empty"><div class="ei">' + ic('layers') + '</div><h3>No ranked setups yet</h3><p>The ranked list fills after the next full scan (2:45 pm or Scan now).</p></div>';
     }
-    return h + '<div class="hint hintpad ideanote">' + ic('layers') + '<span class="t">Highest momentum scores today, held about ' + (hz > 0 ? cnt(hz) : 60) + ' trading days. A screen, not proven buy calls: in 2022–26 this list did not beat random uptrend stocks. Separate from the short-term strategy calls.</span></div>' +
+    return h + '<div class="hint hintpad ideanote">' + ic('layers') + '<span class="t">Strongest trends today · hold up to ' + (hz > 0 ? cnt(hz) : 60) + ' days. A screen, not a guarantee. Tap + List to save one.</span></div>' +
       '<div class="card mv">' + show.map(function (x, i) { return ideaRow(x, i, !today); }).join('') + '</div>';
   }
 
@@ -2401,6 +2437,7 @@
     if (kind === 'index') return indexSheet(S, ui);
     if (kind === 'opt') return optSheet(S, ui);
     if (kind === 'fno') return fnoSheet(S, ui);
+    if (kind === 'idxpick') return idxPickSheet(S, ui);
     if (kind === 'wlpick') return wlPickSheet(S, ui, data);
     if (kind === 'wlname') return wlNameSheet(S, ui, data);
     if (kind === 'wldel') return wlDelSheet(S, ui, data);

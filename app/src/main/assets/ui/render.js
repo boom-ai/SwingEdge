@@ -297,14 +297,19 @@
     var h = '<div class="topbar"><div class="brand">' + ic('logo') + 'SwingEdge</div>' +
       '<div class="mkt ' + (open ? 'open' : closed ? 'closed' : '') + '"><i class="dot"></i><span class="clip">' + esc(note) + '</span></div>' +
       '<button type="button" class="iconbtn" data-c="search" aria-label="Search stocks">' + ic('search') + '</button>' +
-      '<button type="button" class="iconbtn" data-c="settings" aria-label="Settings' + (issues ? ', phone setup needs attention' : '') + '">' + ic('gear') + (issues ? '<i class="pip"></i>' : '') + '</button></div>';
+      '<button type="button" class="iconbtn" data-c="settings" aria-label="Settings' + (issues ? ', phone setup needs attention' : '') + '">' + ic('gear') + (issues ? '<i class="pip"></i>' : '') + '</button>' +
+      '<button type="button" class="iconbtn bell' + (ui.tab === 'alerts' ? ' on' : '') + '" data-c="tab" data-id="alerts" aria-label="Alerts' + (unreadN(S) ? ', ' + unreadN(S) + ' new' : '') + '">' + ic('alerts') + (unreadN(S) ? '<i class="bdg">' + Math.min(99, unreadN(S)) + '</i>' : '') + '</button></div>';
     if (isBusy(S)) {
       var p = N(S.busy.pct);
       h += '<div class="busyline' + (p === null ? ' indet' : '') + '"><i' + (p === null ? '' : ' style="width:' + Math.max(0, Math.min(100, p)) + '%"') + '></i></div>';
     }
     return h;
   }
-  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['funds', 'Funds'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
+  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['funds', 'Funds'], ['trades', 'Trades'], ['portfolio', 'Portfolio']];
+  var feedSeen = 0;
+  try { feedSeen = +localStorage.getItem('se.feedSeen') || 0; } catch (e) {}
+  function unreadN(S) { var n = 0; A(S.feed).forEach(function (x) { var t = ts(x.ts); if (t !== null && t > feedSeen && /buy|sell|stop|target|exit/i.test(T(x.kind) + ' ' + T(x.title))) n++; }); return n; }
+  function markFeedSeen() { feedSeen = Date.now(); try { localStorage.setItem('se.feedSeen', String(feedSeen)); } catch (e) {} }
   function tabbar(S, ui) {
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
@@ -552,7 +557,13 @@
   }
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
-    if (ui.fullCards !== true) return banner(ui) + statusPanel(S, ui, now) + simpleToday(S, ui, items, bs) +
+    var guide = ui.guideDone === true ? '' : '<div class="card rules guide"><b>How to use SwingEdge</b><ol>' +
+      '<li><b>Buy</b> table: buy at the next open only if the price is at or below “Buy ≤”, then place the stop-loss order at your broker.</li>' +
+      '<li><b>Sell</b> table: sell the quantity shown, today.</li>' +
+      '<li><b>🔔 Bell</b> (top right): every buy and sell alert. Phone notifications come too.</li>' +
+      '<li>Tap any stock for one clear call: BUY / HOLD / SELL / WAIT. Search 🔍 any NSE stock.</li></ol>' +
+      '<div class="btns">' + btn('guide-done', null, 'Got it', 'sm', {}) + '</div></div>';
+    if (ui.fullCards !== true) return banner(ui) + guide + statusPanel(S, ui, now) + simpleToday(S, ui, items, bs) +
       '<div class="btns hintpad">' + btn('fullcards', null, 'Detailed view', 'sm ghost', { icon: 'layers' }) + '</div>';
     var h = banner(ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs);
     if (ui.fullCards === true || !items.length) h += '<div class="sec"><h2>Act now</h2>' + (items.length ? '<span class="cnt">' + items.length + '</span>' : '') + '</div>';
@@ -1143,7 +1154,7 @@
       '<div class="cfstage" id="cf-stage"><canvas id="cf-canvas" class="cfcv" role="img" aria-label="' + esc((sym || 'Stock') + ' price chart. Pinch to zoom, drag to pan, press and hold for a crosshair.') + '"></canvas>' +
       '<div class="cfro" id="cf-ro" hidden></div><div class="cfmsg" id="cf-msg"' + (msg ? '' : ' hidden') + '>' + msg + '</div></div>' +
       '<div class="cftog" id="cf-tog">' + cfToggles(ui) + '</div>' +
-      '<p class="cfhint">Pinch zoom · drag pan · hold for crosshair · double-tap reset</p></section>';
+      '<p class="cfhint"><b>Price zoom:</b> drag the price axis up/down, or pinch with one finger above the other · <b>Time zoom:</b> pinch side by side, or drag the dates · hold = crosshair · double-tap = reset</p></section>';
   }
   /* readout for one bar (b = CM.barInfo result) */
   function dateFull(t) { var n = ts(t); if (n === null) return DASH; var d = ist(n); return WD[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + MON[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); }
@@ -1177,6 +1188,7 @@
     if (ui.tab === 'portfolio') return portfolio(S, ui);
     if (ui.tab === 'alerts') return alerts(S, ui);
     if (ui.tab === 'setups') return setups(S, ui);
+    if (ui.tab === 'alerts') markFeedSeen();
     if (ui.tab === 'money') return money(S, ui);
     if (ui.tab === 'funds') return fundsView(S, ui);
     if (ui.tab === 'bot') return today(S, ui);

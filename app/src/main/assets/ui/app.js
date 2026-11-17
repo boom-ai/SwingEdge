@@ -961,6 +961,7 @@
       case 'opt-calc': ui.opt = ui.opt || { calc: {} }; optRead(); paintSheet(true); break;
       case 'index-open': ui.index = ui.index || {}; openSheet('index', {}, true); loadIndex(ui.index.sel || ''); break;
       case 'index-pick': loadIndex(id); break;
+      case 'guide-done': ui.guideDone = true; try { localStorage.setItem('se.guide', '1'); } catch (e) {} render(); break;
       case 'short-toggle': ui.showShort = !ui.showShort; render(); break;
       case 'fullcards': ui.fullCards = !ui.fullCards; try { localStorage.setItem('se.fullCards', ui.fullCards ? '1' : '0'); } catch (e) {} render(); break;
       case 'money-seg': if (ui.money) { ui.money.seg = id; render(); } break;
@@ -1084,7 +1085,7 @@
   setInterval(function () { if (!document.hidden) render(); }, 30000);   // keeps "3 min ago" fresh; no-op when nothing changed
 
   /* ---------- boot ---------- */
-  try { ui.fullCards = localStorage.getItem('se.fullCards') === '1'; } catch (e) {}
+  try { ui.fullCards = localStorage.getItem('se.fullCards') === '1'; ui.guideDone = localStorage.getItem('se.guide') === '1' || /(^|[?&])(sheet|scenario)=/.test(location.search); } catch (e) {}
   pull();
   if (ui.tab === 'money') loadMoney(false);
   if (ui.tab === 'funds') loadFunds(false);

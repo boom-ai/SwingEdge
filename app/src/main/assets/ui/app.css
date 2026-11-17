@@ -1257,3 +1257,8 @@ svg .ads0 { stop-color: #F28B82; stop-opacity: .34; } svg .ads1 { stop-color: #F
 svg .audot { fill: var(--green); } svg .addot { fill: var(--red); }
 svg .startln { stroke: #9AA0A6; stroke-width: 1; stroke-dasharray: 2 5; opacity: .7; }
 svg .grid { stroke: #2A2B2E; } svg .ax { fill: #9AA0A6; }
+.iconbtn.bell { position: relative; }
+.iconbtn.bell.on svg { color: var(--blue); }
+.iconbtn .bdg { position: absolute; top: 4px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--red); color: #1b1b1b; font: 700 10px/16px var(--sans); font-style: normal; text-align: center; }
+.cfhint { line-height: 1.45; } .cfhint b { color: var(--text); font-weight: 500; }
+.guide { border: 1px solid rgba(168,199,250,.25) !important; }

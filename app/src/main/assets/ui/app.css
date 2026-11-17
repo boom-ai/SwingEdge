@@ -1191,3 +1191,69 @@ svg.chart .xd { fill: var(--text); stroke: var(--bg); stroke-width: 1.5; }
 .qb:active { background: var(--raised); }
 .ofrm { padding: 12px 14px; border-color: var(--line-2); }
 .lnk.dn { color: var(--red); text-decoration-color: rgba(255, 111, 111, .4); }
+
+/* ================= Theme: Google Finance–style dark ================= */
+:root {
+  --bg: #131314; --surface: #1E1F20; --raised: #28292A; --well: #1A1B1C;
+  --line: #2E2F31; --line-2: #3C4043;
+  --text: #E3E3E3; --text-2: #C4C7C5; --muted: #9AA0A6;
+  --green: #81C995; --green-bg: rgba(129, 201, 149, .16);
+  --red: #F28B82; --red-bg: rgba(242, 139, 130, .16);
+  --amber: #FDD663; --amber-bg: rgba(253, 214, 99, .14);
+  --blue: #A8C7FA; --blue-bg: rgba(168, 199, 250, .14);
+  --ink: #0E2A17;
+  --sans: "Google Sans Text", "Google Sans", "Product Sans", Roboto, "Noto Sans", system-ui, sans-serif;
+  --cond: "Google Sans", "Product Sans", Roboto, "Noto Sans", system-ui, sans-serif;
+  --r: 20px; --r-s: 12px;
+}
+body { font-family: var(--sans); letter-spacing: .005em; }
+.num { font-family: var(--cond); letter-spacing: 0; }
+/* top bar: quiet, wide title */
+#top, .topbar, header { background: var(--bg) !important; border-bottom: 0 !important; }
+/* cards: flat tonal surfaces, no hard borders */
+.card { background: var(--surface); border: 0 !important; border-radius: var(--r); box-shadow: none; }
+.card.mv, .card.bt { background: transparent; border-radius: 0; }
+.srow, .btt td { border-color: var(--line) !important; }
+/* section headings like "Overview" */
+.sec h2 { font: 500 18px/1.3 var(--sans); letter-spacing: 0; text-transform: none; color: var(--text); }
+.skh { font: 500 17px/1.3 var(--sans); text-transform: none; letter-spacing: 0; }
+.sec .cnt { background: var(--raised); color: var(--text-2); border-radius: 10px; }
+/* tables: label left, value right, airy rows */
+.btt th { color: var(--muted); font: 400 12.5px var(--sans); text-transform: none; letter-spacing: 0; }
+.btt td { padding: 11px 8px; font-size: 14px; }
+.ht td { padding: 9px 6px; } .ht th { font-weight: 400; }
+/* pills: period tabs, chips, segmented controls */
+.rchip { background: transparent; border: 0 !important; border-radius: 12px; color: var(--text-2); padding: 0 14px; min-height: 36px; }
+.rchip.on { background: #2D2F31; color: var(--text); }
+.rchip span { font: 500 14px var(--sans); }
+/* buttons: rounded tonal */
+.btn { border-radius: 999px !important; font-family: var(--sans); font-weight: 500; letter-spacing: 0; }
+.btn.ghost, .btn.sm.ghost { background: var(--surface); border: 0 !important; }
+/* inputs: Google-style rounded search field */
+input, select, textarea { border-radius: 14px !important; background: var(--surface) !important; border: 1px solid var(--line-2) !important; }
+/* bottom nav: active tab underline accent */
+#tabbar, .tabbar { background: var(--bg) !important; border-top: 1px solid var(--line) !important; }
+.tab.on, .tab[aria-current="page"] { color: var(--text) !important; }
+.tab.on svg, .tab[aria-current="page"] svg { color: var(--blue) !important; }
+/* big price like the quote header */
+.fhead .big, .vbig, .wkn { font-family: var(--cond); font-weight: 400; letter-spacing: -.01em; }
+.vbig { font-size: 30px; font-weight: 500; }
+.wkn { font-size: 32px; }
+/* status chips */
+.vb, .ldot, .fsc, .tag { border-radius: 8px; font-family: var(--sans); }
+.ldot.on { background: rgba(129, 201, 149, .16); }
+/* hints: plain secondary text */
+.hint .t { color: var(--muted); }
+.warnbox { background: rgba(253, 214, 99, .08); border-radius: var(--r); }
+/* sheet */
+.sheet, #sheet .panel { background: #1B1B1C !important; border-radius: 28px 28px 0 0 !important; }
+.rchip.on { background: transparent; }
+.rchip span { background: none !important; border: 0 !important; color: var(--text-2); padding: 7px 14px; border-radius: 12px; }
+.rchip.on span { background: #2D2F31 !important; color: var(--text) !important; }
+svg .au { fill: none; stroke: var(--green); stroke-width: 2; stroke-linejoin: round; }
+svg .ad { fill: none; stroke: var(--red); stroke-width: 2; stroke-linejoin: round; }
+svg .aus0 { stop-color: #81C995; stop-opacity: .38; } svg .aus1 { stop-color: #81C995; stop-opacity: 0; }
+svg .ads0 { stop-color: #F28B82; stop-opacity: .34; } svg .ads1 { stop-color: #F28B82; stop-opacity: 0; }
+svg .audot { fill: var(--green); } svg .addot { fill: var(--red); }
+svg .startln { stroke: #9AA0A6; stroke-width: 1; stroke-dasharray: 2 5; opacity: .7; }
+svg .grid { stroke: #2A2B2E; } svg .ax { fill: #9AA0A6; }

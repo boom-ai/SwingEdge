@@ -10,7 +10,7 @@
   var CM = root.CM, SE = root.SE;
   if (!CM) return;
 
-  var COL = { bg: '#0E141B', grid: '#18232F', axis: '#7F8EA0', text: '#E9EEF4', up: '#3FD68F', dn: '#FF6F6F', line: '#CFE5FF', cross: '#A9B6C4', panel: 'rgba(14,20,27,.88)' };
+  var COL = { bg: '#131314', grid: '#2A2B2E', axis: '#9AA0A6', text: '#E3E3E3', up: '#81C995', dn: '#F28B82', line: '#81C995', cross: '#9AA0A6', panel: 'rgba(30,31,32,.92)' };
   var EMA_COL = { 10: '#F2B441', 20: '#FF8F6B', 50: '#6BB3FF', 100: '#4DD0E1', 200: '#C58BFF' };
   var EMA_KEYS = [200, 100, 50, 20, 10];                      // draw order: slowest first
   var LV = {
@@ -240,14 +240,22 @@
           ctx.fill();
         }
       } else {
-        ctx.strokeStyle = COL.line; ctx.lineWidth = 1.5; ctx.beginPath();
+        var c0 = 0, c1 = 0; for (i = Math.max(0, i0); i <= Math.min(n - 1, i1); i++) if (st.C[i] > 0) { if (!c0) c0 = st.C[i]; c1 = st.C[i]; }
+        var lineCol = c1 >= c0 ? COL.up : COL.dn;
+        ctx.strokeStyle = lineCol; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.beginPath();
         var op = false, fx = 0, lx = 0;
         for (i = Math.max(0, i0 - 1); i <= Math.min(n - 1, i1 + 1); i++) {
           if (st.C[i] > 0) { lx = G.l + (i + 0.5 - v.s) * step; var cy = Y(st.C[i]); if (op) ctx.lineTo(lx, cy); else { ctx.moveTo(lx, cy); fx = lx; op = true; } }
           else op = false;
         }
         ctx.stroke();
-        if (lx > fx) { ctx.lineTo(lx, pb); ctx.lineTo(fx, pb); ctx.closePath(); ctx.fillStyle = 'rgba(207,229,255,.06)'; ctx.fill(); }
+        if (lx > fx) {
+          ctx.lineTo(lx, pb); ctx.lineTo(fx, pb); ctx.closePath();
+          var gr = ctx.createLinearGradient(0, G.t || 0, 0, pb);
+          gr.addColorStop(0, c1 >= c0 ? 'rgba(129,201,149,.34)' : 'rgba(242,139,130,.30)'); gr.addColorStop(1, 'rgba(19,19,20,0)');
+          ctx.fillStyle = gr; ctx.fill();
+          if (c0 > 0) { var py = Y(c0); ctx.save(); ctx.strokeStyle = 'rgba(154,160,166,.55)'; ctx.lineWidth = 1; ctx.setLineDash([2, 6]); ctx.beginPath(); ctx.moveTo(G.l, Math.round(py) + 0.5); ctx.lineTo(G.r, Math.round(py) + 0.5); ctx.stroke(); ctx.restore(); }
+        }
       }
       ctx.restore();
 
@@ -257,7 +265,7 @@
         var vh = G.vb - G.vt, vw = Math.max(1, Math.min(14, step * 0.7));
         ctx.strokeStyle = COL.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(G.l, Math.round(G.vb) + 0.5); ctx.lineTo(G.r, Math.round(G.vb) + 0.5); ctx.stroke();
         for (var vp = 0; vp < 2; vp++) {
-          ctx.fillStyle = vp === 0 ? 'rgba(63,214,143,.55)' : 'rgba(255,111,111,.55)'; ctx.beginPath();
+          ctx.fillStyle = vp === 0 ? 'rgba(129,201,149,.55)' : 'rgba(242,139,130,.55)'; ctx.beginPath();
           for (i = i0; i <= i1; i++) {
             if (!(st.V[i] > 0) || !(maxV > 0)) continue;
             var upv = st.C[i] >= (st.O[i] > 0 ? st.O[i] : st.C[i]); if (upv !== (vp === 0)) continue;

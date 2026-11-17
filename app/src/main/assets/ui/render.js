@@ -1696,7 +1696,7 @@
     emaKeys.forEach(function (k) { var a = nums(res['ema' + k]), lastv = a.length ? a[Math.min(a.length, n) - 1] : 0; if (lastv > 0 && lastv > mn - span2 * 0.25 && lastv < mx + span2 * 0.25) { if (lastv < mn) mn = lastv; if (lastv > mx) mx = lastv; } });
     var pad = (mx - mn) * 0.06; mn -= pad; mx += pad;
     var X = function (k) { return L + (k + 0.5) * pw / n; }, Y = function (v) { return Tp + (mx - v) / (mx - mn) * ph; };
-    var lineMode = !!o && n > 300;
+    var area = !!(o && o.area), lineMode = !!o && (n > 300 || area);
     var bw = Math.max(o ? 0.7 : 1, Math.min(5, pw / n * 0.62));
     var g = '<defs><clipPath id="cclip"><rect x="' + L + '" y="' + Tp + '" width="' + pw + '" height="' + ph + '"/></clipPath></defs>';
     for (i = 0; i <= 3; i++) {
@@ -1727,7 +1727,18 @@
       cl += line(x200.length ? x200 : m200, 'ma200') + line(x50.length ? x50 : m50, 'ma50') + line(nums(res.ema20), 'ema20') + line(nums(res.ema10), 'ema10');
     }
     var cs = '';
-    if (lineMode) cs += line(c.slice(0, n), 'cls');
+    if (area) {
+      var f0 = 0, fl = 0, k0 = -1, k1 = -1;
+      for (i = 0; i < n; i++) if (c[i] > 0) { if (k0 < 0) { k0 = i; f0 = c[i]; } k1 = i; fl = c[i]; }
+      var upd = fl >= f0, ac = upd ? 'au' : 'ad';
+      if (k0 >= 0 && k1 > k0) {
+        var pts2 = []; for (i = k0; i <= k1; i++) if (c[i] > 0) pts2.push(X(i).toFixed(1) + ',' + Y(c[i]).toFixed(1));
+        cs += '<defs><linearGradient id="agr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="' + ac + 's0"/><stop offset="1" class="' + ac + 's1"/></linearGradient></defs>' +
+          '<polygon fill="url(#agr)" points="' + X(k0).toFixed(1) + ',' + (Tp + ph).toFixed(1) + ' ' + pts2.join(' ') + ' ' + X(k1).toFixed(1) + ',' + (Tp + ph).toFixed(1) + '"/>' +
+          '<line x1="' + L + '" x2="' + (Wd - R) + '" y1="' + Y(f0).toFixed(1) + '" y2="' + Y(f0).toFixed(1) + '" class="startln"/>' +
+          '<polyline class="' + ac + '" points="' + pts2.join(' ') + '"/><circle cx="' + X(k1).toFixed(1) + '" cy="' + Y(fl).toFixed(1) + '" r="4" class="' + ac + 'dot"/>';
+      }
+    } else if (lineMode) cs += line(c.slice(0, n), 'cls');
     else for (i = 0; i < n; i++) {
       if (!(c[i] > 0)) continue;
       var up = c[i] >= op[i], x = X(i), y1 = Y(Math.max(op[i], c[i])), y2 = Y(Math.min(op[i], c[i]));
@@ -1864,7 +1875,7 @@
     if (N(lv.resistance) > 0) lvls.push({ k: 'res', t: 'Resistance', v: lv.resistance });
     if (N(lv.trailStop) > 0) lvls.push({ k: 'stop', t: 'Trail stop', v: lv.trailStop });
     var body;
-    if (res) body = chartSvg(res, { emas: on, vol: true, levels: lvls }) + '<button type="button" class="xpand" data-c="chartfull" aria-label="Expand the chart to full screen">' + ic('expand') + '</button>';
+    if (res) body = chartSvg(res, O(ui).fullCards === true ? { emas: on, vol: true, levels: lvls } : { emas: {}, vol: true, levels: [], area: true }) + '<button type="button" class="xpand" data-c="chartfull" aria-label="Expand the chart to full screen">' + ic('expand') + '</button>';
     else if (T(st.chartErr).trim()) body = '<div class="cerr">' + ic('warn') + '<span>' + esc(T(st.chartErr).trim()) + '</span>' + btn('chart-retry', null, 'Retry', 'sm') + '</div>';
     else body = '<div class="skel chartsk"></div>';
     var ema = EMAS.map(function (k) {

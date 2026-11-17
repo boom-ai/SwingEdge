@@ -1437,8 +1437,8 @@
     var long = N(f.r5y) !== null ? '5Y ' + pcF(f.r5y) : '3Y ' + pcF(f.r3y);
     return '<button type="button" class="srow frow" data-c="fund" data-id="' + esc(T(f.code)) + '">' +
       '<div class="fr1">' + scoreChip(f.score) + '<b class="fnm">' + esc(fname(f.name)) + '</b></div>' +
-      '<div class="fr3"><span class="mut">' + tx(f.sub, '') + (N(f.rollBeat) !== null ? ' · beat category ' + Math.round(N(f.rollBeat)) + '% of the time' : '') + '</span></div>' +
-      '<div class="fr3"><span class="num ' + tone(f.r1y) + '">1Y ' + pcF(f.r1y) + '</span><span class="num ' + tone(f.r3y) + '">3Y ' + pcF(f.r3y) + '</span><span class="num">' + long + '</span><span class="sp"></span><span class="num down">' + (N(f.mdd) !== null ? 'worst ' + Math.round(N(f.mdd)) + '%' : '') + '</span></div></button>';
+      '<div class="fr3"><span class="mut wrapn">' + tx(f.sub, '') + (N(f.rollBeat) !== null ? ' · beat category ' + Math.round(N(f.rollBeat)) + '% of the time' : '') + '</span></div>' +
+      '<div class="fr3"><span class="num ' + tone(f.r1y) + '">1Y ' + pcF(f.r1y) + '</span><span class="num ' + tone(f.r3y) + '">3Y ' + pcF(f.r3y) + '</span><span class="num">' + long + '</span>' + (N(f.mdd) !== null ? '<span class="num down fwst">Worst fall ' + Math.round(N(f.mdd)) + '%</span>' : '') + '</div></button>';
   }
   function fundsView(S, ui) {
     var m = O(ui.funds), r = O(m.res);
@@ -1612,11 +1612,11 @@
     if (N(x.to20) > 0) sub.push(croreTxt(x.to20) + '/day');
     var right = o.net5 ? crSigned(x.net5) : crSigned(x.net20);
     return '<button type="button" class="srow frow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
-      '<div class="fr1"><b>' + tx(x.sym) + '</b>' + (T(x.label) === 'BUY' && sc !== null && sc >= 0 ? tag('buy', 'BUY ' + Math.round(sc)) : sc !== null && sc >= 0 ? '<span class="mut num sc">score ' + Math.round(sc) + '</span>' : '') +
-      '<span class="sp"></span><span class="num">' + px(x.close) + '</span><span class="num ' + tone(x.r20) + ' r20">' + pc(x.r20, true, true) + '</span></div>' +
-      '<div class="fr2"><span class="nm">' + tx(x.name, '') + '</span></div>' +
-      '<div class="fr3"><span class="mut">' + sub.join(' · ') + '</span><span class="sp"></span><span class="num ' + tone(o.net5 ? x.net5 : x.net20) + '">' + right + '</span>' +
-      (mi !== null && mi >= 0 ? '<span class="mi" title="money-in percentile">' + Math.round(mi) + '</span>' : '') + '</div></button>';
+      '<div class="fr1"><b class="wrapn">' + tx(x.sym) + '</b><span class="sp"></span><span class="num">' + px(x.close) + '</span><span class="num ' + tone(x.r20) + ' r20">' + pc(x.r20, true, true) + '</span></div>' +
+      '<div class="fr2"><span class="nm wrapn">' + tx(x.name, '') + '</span></div>' +
+      '<div class="fr3">' + (T(x.label) === 'BUY' && sc !== null && sc >= 0 ? tag('buy', 'BUY ' + Math.round(sc)) : sc !== null && sc >= 0 ? '<span class="mut num sc">score ' + Math.round(sc) + '</span>' : '') +
+      '<span class="num ' + tone(o.net5 ? x.net5 : x.net20) + '">' + (N(o.net5 ? x.net5 : x.net20) < 0 ? 'Out ' : 'In ') + right + '</span>' + (mi !== null && mi >= 0 ? '<span class="mi" title="money-in percentile">' + Math.round(mi) + '</span>' : '') + '</div>' +
+      '<div class="fr3"><span class="mut wrapn">' + sub.join(' · ') + '</span></div></button>';
   }
   function holderRow(x, k) {
     x = O(x);
@@ -1627,8 +1627,8 @@
       return '<span class="hch ' + (v > 0 ? 'up' : v < 0 ? 'down' : 'flat') + (i === k ? ' key' : '') + '">' + names[i] + ' ' + (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2) + ' → ' + (N(nw[i]) || 0).toFixed(1) + '%</span>';
     }).join('');
     return '<button type="button" class="srow frow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
-      '<div class="fr1"><b>' + tx(x.sym) + '</b><span class="sp"></span><span class="num">' + px(x.close) + '</span></div>' +
-      '<div class="fr2"><span class="nm">' + tx(x.name, '') + '</span></div>' +
+      '<div class="fr1"><b class="wrapn">' + tx(x.sym) + '</b><span class="sp"></span><span class="num">' + px(x.close) + '</span></div>' +
+      '<div class="fr2"><span class="nm wrapn">' + tx(x.name, '') + '</span></div>' +
       '<div class="hchips">' + chips + '</div>' +
       '<div class="fr3"><span class="mut">' + esc(qName(x.qdate)) + ' vs ' + esc(qName(x.pqdate)) + ' · filed ' + esc(isoDate(x.filed)) + '</span></div></button>';
   }
@@ -1653,9 +1653,9 @@
       var f = N(x.flowPct) || 0, rank = N(x.rank);
       var tops = A(x.top).map(function (t) { return esc(T(O(t).sym)); }).join(', ');
       return '<button type="button" class="srow secrow" data-c="sector" data-id="' + esc(T(x.name)) + '">' +
-        '<div class="fr1"><span class="rk num">' + rank + '</span><b>' + tx(x.name) + '</b><span class="sp"></span><span class="num ' + tone(f) + '">' + crSigned(x.net20) + '</span>' + ic('chev') + '</div>' +
-        '<div class="fr1">' + heat(f, max) + '<span class="num ' + tone(f) + ' fp">' + (f > 0 ? '+' : '') + f.toFixed(1) + '%</span></div>' +
-        '<div class="fr3"><span class="mut">' + (N(x.n) || 0) + ' stocks · ' + Math.round(N(x.breadth) || 0) + '% with money in · 20d ' + pc(x.r20, true, true) + (tops ? ' · ' + tops : '') + '</span></div></button>';
+        '<div class="fr1"><span class="rk num">' + rank + '</span><b class="wrapn">' + tx(x.name) + '</b><span class="sp"></span>' + ic('chev') + '</div>' +
+        '<div class="fr1">' + heat(f, max) + '<span class="num ' + tone(f) + ' fnet">' + (f >= 0 ? 'In ' : 'Out ') + crSigned(x.net20) + '</span><span class="num ' + tone(f) + ' fp">' + (f > 0 ? '+' : '') + f.toFixed(1) + '%</span></div>' +
+        '<div class="fr3"><span class="mut wrapn">' + (N(x.n) || 0) + ' stocks · ' + Math.round(N(x.breadth) || 0) + '% with money in · 20d ' + pc(x.r20, true, true) + (tops ? ' · ' + tops : '') + '</span></div></button>';
     }).join('') + '</div>' +
       '<div class="hint hintpad">' + ic('info') + '<span class="t">Net money = value of delivered shares on up days minus down days (₹ crore, 20 sessions). The % is that as a share of the sector’s normal trading. Tap a sector for its industries and stocks.</span></div>';
     // 2. picks
@@ -1688,8 +1688,8 @@
       h += '<div class="sec"><h2>Bulk & block buys</h2><span class="cnt">' + dl.length + '</span></div><div class="card mv">' + dl.slice(0, 25).map(function (x) {
         x = O(x);
         return '<button type="button" class="srow frow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
-          '<div class="fr1"><b>' + tx(x.sym) + '</b>' + tag('neutral', T(x.kind)) + '<span class="sp"></span><span class="num up">' + croreTxt(x.valueCr) + '</span></div>' +
-          '<div class="fr2"><span class="nm">' + tx(x.client) + '</span></div>' +
+          '<div class="fr1"><b class="wrapn">' + tx(x.sym) + '</b>' + tag('neutral', T(x.kind)) + '<span class="sp"></span><span class="num up">' + croreTxt(x.valueCr) + '</span></div>' +
+          '<div class="fr2"><span class="nm wrapn">' + tx(x.client) + '</span></div>' +
           '<div class="fr3"><span class="mut">' + esc(isoDate(x.date)) + ' · ' + grp(String(Math.round(N(x.qty) || 0))) + ' shares at ' + px(x.price) + '</span></div></button>';
       }).join('') + '</div>';
     }

@@ -1,0 +1,16 @@
+name: probe
+on: workflow_dispatch
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA='Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
+          for i in 1 2 3 4 5 6; do curl -s -o /tmp/a -w "nocookie allIndices %{http_code} %{size_download} %{time_total}\n" -H "User-Agent: $UA" -H "Accept: application/json" https://www.nseindia.com/api/allIndices; done
+          curl -s -o /tmp/a -w "nocookie chain %{http_code} %{size_download}\n" -L -H "User-Agent: $UA" "https://www.nseindia.com/api/option-chain-contract-info?symbol=NIFTY"
+          curl -s -c /tmp/c -o /dev/null -w "warmup %{http_code}\n" -H "User-Agent: $UA" https://www.nseindia.com/option-chain
+          for i in 1 2 3; do curl -s -b /tmp/c -c /tmp/c -o /tmp/a -w "cookie allIndices %{http_code} %{size_download} %{time_total}\n" -H "User-Agent: $UA" -H "Accept: application/json" -H "Referer: https://www.nseindia.com/option-chain" https://www.nseindia.com/api/allIndices; done
+          head -c 300 /tmp/a; echo
+          curl -s -o /tmp/y -w "yahoo nsei %{http_code}\n" -H "User-Agent: $UA" "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1d&interval=1m"; python3 -c "import json;m=json.load(open('/tmp/y'))['chart']['result'][0]['meta'];print(m.get('regularMarketPrice'),m.get('regularMarketTime'),m.get('chartPreviousClose'))"
+          curl -s -o /tmp/y -w "yahoo 5m %{http_code} %{size_download}\n" -H "User-Agent: $UA" "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEBANK?range=1d&interval=5m"
+          date -u

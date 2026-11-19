@@ -352,3 +352,35 @@ object V16Tests {
         T.check(cv.containsKey("pcr") && cv.containsKey("maxPain"), "chain carries PCR and max pain")
     }
 }
+
+
+object V17Tests {
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v17-learning-filter" to ::f)
+    fun f() {
+        val up = DoubleArray(30) { 100.0 + it }; val dn = DoubleArray(30) { 130.0 - it }
+        T.check(FnoLab.rsi(up, 14, 29) > 95 && FnoLab.rsi(dn, 14, 29) < 5, "RSI extremes")
+        T.check(Math.abs(FnoLab.rsi(DoubleArray(30) { if (it % 2 == 0) 100.0 else 101.0 }, 14, 29) - 50) < 10, "RSI choppy ~50")
+        val day = java.time.LocalDate.of(2026, 11, 18).toEpochDay().toInt()
+        // RSI bounce: fall then a turn up
+        val cl = (0 until 25).map { if (it < 24) 25400.0 - it * 12 else 25400.0 - 23 * 12 + 100.0 }
+        val b = FnoLab.parseBars(V15Tests.bars(day, 25400.0, cl))!!
+        val m = b.min[b.n - 1] + 6
+        val sg = FnoLab.signalsAll("NIFTY", b, m, emptySet())
+        T.check(sg.any { it.strat.startsWith("RSI#") && it.side == "CE" }, "RSI bounce fires a call: ${sg.map { it.strat }}")
+        // features are mirrored for puts
+        val fc = FnoLab.features(b, m, "CE", 14.0); val fp = FnoLab.features(b, m, "PE", 14.0)
+        T.eq(fc.size, FnoLab.NF, "feature count"); T.check(Math.abs(fc[3] + fp[3]) < 1e-9 && fc[4] == fp[4], "directional features mirror, others equal")
+        // learning: winners have feature[3] high, losers low -> weight on it becomes positive and the filter separates them
+        val lb = LabBook()
+        repeat(80) { i -> val win = i % 2 == 0; val feats = listOf(1.0, 0.0, 0.0, if (win) 1.5 else -1.5, 0.0, 0.0, 0.0, 0.0)
+            val t = LabTrade("t$i", "ORB#1", "NIFTY", "x", 1, "CE", 65, 100.0, 0, day, bids = arrayListOf(if (win) 140.0 else 70.0), feats = feats, p = FnoLab.predict(lb.w, feats)); lb.open.add(t); FnoLab.close(lb, t) }
+        T.check(lb.w[3] > 0.5, "learned that moving with the trade helps: ${lb.w[3]}")
+        T.check(FnoLab.predict(lb.w, listOf(1.0, 0.0, 0.0, 1.5, 0.0, 0.0, 0.0, 0.0)) > 0.7 && FnoLab.predict(lb.w, listOf(1.0, 0.0, 0.0, -1.5, 0.0, 0.0, 0.0, 0.0)) < 0.3, "separates winners from losers")
+        T.check(lb.gate > 0, "cut-off raised once it would have saved money: ${lb.gate}")
+        T.check((FnoLab.filterView(lb)["learned"] as List<*>).isNotEmpty(), "explains what it learned")
+        T.check(Math.abs(LabBook.from(Json.parseObject(Json.stringify(lb.toMap()))).w[3] - lb.w[3]) < 1e-3, "model persists")
+        // with no edge in the features the gate stays open
+        val lb2 = LabBook(); repeat(60) { i -> val t = LabTrade("u$i", "ORB#1", "NIFTY", "x", 1, "CE", 65, 100.0, 0, day, bids = arrayListOf(if (i % 2 == 0) 140.0 else 70.0), feats = listOf(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), p = 0.5); lb2.open.add(t); FnoLab.close(lb2, t) }
+        T.eq(lb2.gate, 0.0, "no false filtering without a pattern")
+    }
+}

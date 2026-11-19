@@ -1537,8 +1537,12 @@
     if (!ss.length) return '';
     var sc = O(L.scan), les = A(L.lessons).filter(function (x) { return typeof x === 'string'; });
     var h = '<h3 class="skh">Self-learning lab</h3><div class="mut sm2" style="margin-bottom:6px">' + (N(rec.n) || 0) + ' calls closed · ' + (N(rec.wins) || 0) + ' won · net ' + rsS(rec.total) + ' per lot. ' +
-      'Each rule runs ' + 3 + ' thresholds side by side on paper (' + (N(L.shadowToday) || 0) + ' test trades today); the one with the best results becomes the champion whose trades you see. After every trade, 12 stop/target pairs are replayed on the same prices and the best pair is used next time.</div>' +
+      'Each of 8 rules (incl. RSI bounce) runs 3 thresholds side by side on paper (' + (N(L.shadowToday) || 0) + ' test trades today); the one with the best results becomes the champion whose trades you see. After every trade, 12 stop/target pairs are replayed on the same prices and the best pair is used next time.</div>' +
       (N(sc.at) ? '<div class="mut sm2" style="margin-bottom:8px">Last scan ' + hm(sc.at) + (T(sc.info) ? ' · ' + esc(T(sc.info)) : '') + (N(sc.nseFail) > N(sc.nseOk) ? ' · <span class="down">NSE not answering</span>' : N(sc.nseOk) ? ' · NSE ok ' + hm(sc.nseOk) : '') + '</div>' : '');
+    var fl = O(L.filter), lr = texts(fl.learned);
+    h += '<div class="card lessons"><div class="cb"><b>Self-learning filter</b><div class="sm2">' + (N(fl.trained) ? 'Trained on ' + N(fl.trained) + ' trades. It scores every new call on RSI, trend, distance from the average, time of day, VIX and the gap, and learns from each result which conditions win.' : 'Starts learning from the first closed trade: every call is scored on RSI, trend, distance from the average, time of day, VIX and the gap.') + '</div>' +
+      '<div class="sm2">' + (N(fl.gate) > 0 ? 'Now only shows calls with a ' + Math.round(N(fl.gate) * 100) + '%+ win chance. Skipped ' + (N(fl.skipped) || 0) + ' calls; together they made ' + rsS(fl.skippedPnl) + '.' : 'Filter opens after 30 scored trades, and only switches on if it would have saved money.') + '</div>' +
+      (lr.length ? '<div class="sm2">Learned so far: ' + lr.map(esc).join(' · ') + '</div>' : '') + '</div></div>';
     if (les.length) h += '<div class="card lessons"><div class="cb"><b>What it has learned</b>' + les.map(function (x) { return '<div class="sm2">• ' + esc(x) + '</div>'; }).join('') + '</div></div>';
     return h + tbl(['Rule', 'Trades', 'Avg/lot', 'Champion', 'Status'], ss.map(function (x) {
       var st = LSTAT[T(x.status)] || LSTAT.LEARNING;

@@ -2113,7 +2113,7 @@ class SwingApp(private val p: Platform) {
                 synchronized(labLock) {
                     val b = labLoad()
                     if (q != null && q.bid > 0 && t.bids.size < FnoLab.MAX_PATH) t.bids.add(q.bid)
-                    if (q != null) FnoLab.liveCheck(t, q.bid)?.let { hit -> if (t.champ && FnoLab.status(b, FnoLab.key(t)) == "WORKING") events.add(Pair("${t.sym} ${t.strike} ${t.side}: " + (if (hit == "STOP") "stop hit, exit now" else "target hit, book it"), "Bid ₹${Fno.r2(q.bid)} vs entry ₹${t.entry} (${FnoLab.stratName(t.strat)})")) }
+                    if (q != null) FnoLab.liveCheck(t, q.bid)?.let { hit -> if (t.champ && !t.gated && FnoLab.status(b, FnoLab.key(t)) == "WORKING") events.add(Pair("${t.sym} ${t.strike} ${t.side}: " + (if (hit == "STOP") "stop hit, exit now" else "target hit, book it"), "Bid ₹${Fno.r2(q.bid)} vs entry ₹${t.entry} (${FnoLab.stratName(t.strat)})")) }
                     if (t.day < day || m >= FnoLab.EXIT_MIN) FnoLab.close(b, t)
                 }
             }
@@ -2136,9 +2136,12 @@ class SwingApp(private val p: Platform) {
                         val key = sg.strat + "|" + sym; val (sp, tp) = FnoLab.bestExit(b, key)
                         b.seq++
                         val champ = FnoLab.champion(b, FnoLab.baseOf(sg.strat), sym) == sg.strat
-                        val t = LabTrade("L${b.seq}", sg.strat, sym, exp, k, sg.side, Fno.LOT[sym] ?: 0, q.ask, now, day, sg.why, sp, tp, arrayListOf(q.bid), spot = c.spot, champ = champ)
+                        val vix = (gIdx?.second ?: emptyList()).firstOrNull { it["sym"] == "INDIAVIX" }?.get("last") as? Double
+                        val fe = FnoLab.features(bars, m, sg.side, vix); val pw = FnoLab.predict(b.w, fe)
+                        val gated = champ && b.gate > 0 && pw < b.gate
+                        val t = LabTrade("L${b.seq}", sg.strat, sym, exp, k, sg.side, Fno.LOT[sym] ?: 0, q.ask, now, day, sg.why + (if (b.trained >= 10) " · win chance " + Math.round(pw * 100) + "%" else ""), sp, tp, arrayListOf(q.bid), spot = c.spot, champ = champ, feats = fe, p = pw, gated = gated)
                         b.open.add(t)
-                        if (champ && FnoLab.status(b, key) == "WORKING") events.add(Pair("BUY $sym $k ${sg.side} ≤ ₹${Fno.r2(q.ask * 1.02)}", "${FnoLab.stratName(sg.strat)}: ${sg.why}. Stop ₹${Fno.r2(q.ask * (1 - sp / 100))}" + (if (tp > 0) ", target ₹${Fno.r2(q.ask * (1 + tp / 100))}" else "") + ", exit by 3:15 pm."))
+                        if (champ && !gated && FnoLab.status(b, key) == "WORKING") events.add(Pair("BUY $sym $k ${sg.side} ≤ ₹${Fno.r2(q.ask * 1.02)}", "${FnoLab.stratName(sg.strat)}: ${sg.why}. Stop ₹${Fno.r2(q.ask * (1 - sp / 100))}" + (if (tp > 0) ", target ₹${Fno.r2(q.ask * (1 + tp / 100))}" else "") + ", exit by 3:15 pm."))
                     }
                 }
             }

@@ -384,3 +384,42 @@ object V17Tests {
         T.eq(lb2.gate, 0.0, "no false filtering without a pattern")
     }
 }
+
+
+object V18Tests {
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v18-whole-market" to ::w)
+    fun w() {
+        val csv = "UNDERLYING ,SYMBOL ,NOV-26 ,DEC-26\nNIFTY 50 ,NIFTY ,65 ,65\nRELIANCE INDUSTRIES LTD ,RELIANCE ,500 ,500\nMAHINDRA & MAHINDRA LTD ,M&M ,200 ,200\nFIN ,FINNIFTY ,60 ,60\n"
+        T.eq(FnoUniverse.parseLots(csv), mapOf("NIFTY" to 65, "RELIANCE" to 500, "M&M" to 200, "FINNIFTY" to 60), "lots file parsed")
+        T.eq(FnoUniverse.contractId("RELIANCE", "23-Nov-2026", 1360.0, "CE"), "RELIANCE26NOV1360CE", "monthly contract id")
+        T.eq(FnoUniverse.contractId("IDEA", "29-Dec-2026", 12.5, "PE"), "IDEA26DEC12.5PE", "decimal strike id")
+        T.check(FnoUniverse.isMonthly("23-Nov-2026", listOf("17-Nov-2026", "23-Nov-2026", "01-Dec-2026")) && !FnoUniverse.isMonthly("17-Nov-2026", listOf("17-Nov-2026", "23-Nov-2026")), "monthly = last expiry of the month")
+        T.check(FnoUniverse.quoteBody(listOf("RELIANCE", "FINNIFTY")).contains("\"indexSymbolList\":[\"FINNIFTY\"]"), "indices go in the index list")
+        val se = FnoUniverse.Series(prev = 100.0); se.sample(9 * 60 + 16, 101.0); se.sample(9 * 60 + 18, 103.0); se.sample(9 * 60 + 21, 99.0)
+        val bb = se.toBars()!!
+        T.eq(bb.n, 2, "5-min buckets"); T.eq(bb.h[0], 103.0, "bucket high"); T.eq(bb.c[0], 103.0, "bucket close")
+        // integration: a stock breakout becomes a paper call on its monthly option
+        val day = java.time.LocalDate.of(2026, 11, 18).toEpochDay().toInt()
+        val p = FakePlatform.standard(); p.setTime(day, 9 * 60 + 41)
+        val H = "https://www.nseindia.com"
+        p.served[FnoUniverse.LOTS_URL] = csv
+        p.served[Fno.infoUrl(H, "RELIANCE")] = "{\"expiryDates\":[\"23-Nov-2026\",\"29-Dec-2026\"],\"strikePrice\":[\"1340\",\"1350\",\"1360\",\"1370\"]}"
+        p.served[Yahoo.tickerUrl(Params.YAHOO_HOST_1, "RELIANCE.NS", "1d", "5m")] = V15Tests.bars(day, 1340.0, listOf(1345.0, 1348.0, 1346.0, 1366.0, 1367.0))
+        p.posted[Groww.INDEX_URL] = "{\"exchangeAggRespMap\":{\"NSE\":{\"priceLivePointsMap\":{\"RELIANCE\":{\"ltp\":1362.0,\"close\":1340.0,\"open\":1345.0,\"dayChangePerc\":1.64}},\"indexLivePointsMap\":{}}}}"
+        p.posted[Groww.PRICES_URL] = "{\"RELIANCE26NOV1360CE\":{\"ltp\":18.5,\"lastTradeTime\":1795067564}}"
+        val app = SwingApp(p)
+        T.eq(app.fnoLabStep(), "ok", "step ok")
+        val v = Json.parseObject(app.action("fnoLab", "{}"))!!
+        val td = v.list("today").map { it.asObj() }
+        T.check(td.any { it.str("sym") == "RELIANCE" && it.str("side") == "CE" && it.int("strike") == 1360 && Math.abs(it.num("entry") - 18.69) < 0.02 }, "RELIANCE call on its monthly option at live price + 1% slippage: $td")
+        T.check(v.list("universe").size >= 4, "universe listed"); T.check(v.obj("movers").list("up").isNotEmpty(), "movers listed")
+        p.posted[Groww.PRICES_URL] = "{\"RELIANCE26NOV1360CE\":{\"ltp\":30.0,\"lastTradeTime\":1795067600}}"
+        p.setTime(day, 10 * 60); app.fnoLabStep()
+        p.setTime(day, 15 * 60 + 16); app.fnoLabStep()
+        val c = Json.parseObject(app.action("fnoLab", "{}"))!!.list("today").map { it.asObj() }.first { it.str("sym") == "RELIANCE" }
+        T.check(c.str("status") == "TARGET" && c.num("pnl") > 0, "followed live and closed at target: $c")
+        p.served[Fno.chainUrl(H, "RELIANCE", "23-Nov-2026")] = V12Tests.chainJson(1362.0, 20.0, 21.0)
+        val ch = Json.parseObject(app.action("fno", "{\"sym\":\"RELIANCE\"}"))!!
+        T.eq(ch.obj("chain").str("sym"), "RELIANCE", "option chain opens for a stock")
+    }
+}

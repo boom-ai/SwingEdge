@@ -1325,3 +1325,12 @@ tr.spotr td span { position: absolute; left: 50%; transform: translate(-50%, -50
 .stepper .iconbtn { width: 44px; height: 40px; font-size: 22px; } .stepper span { font-size: 14px; }
 .qk { margin: 0 0 6px; }
 .pnlh { display: flex; justify-content: space-between; align-items: baseline; margin: 12px 2px 0; } .pnlh b { font: 600 22px/1 var(--cond); }
+/* v22: whole-market F&O */
+.symgo { display: flex; gap: 8px; align-items: center; margin: 4px 0 10px; }
+.symgo input { flex: 1; min-width: 0; height: 40px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--raised); color: var(--text); padding: 0 12px; font: 500 14px var(--sans); text-transform: uppercase; }
+.mvcols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.mvcols > div { background: var(--surface, #1E1F20); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.mvr { display: flex; justify-content: space-between; width: 100%; padding: 9px 10px; background: none; border: 0; border-top: 1px solid var(--line); color: var(--text); font-size: 13px; }
+.mvr:first-child { border-top: 0; } .mvr b { font-weight: 600; overflow-wrap: anywhere; text-align: left; }
+.mvr b { white-space: normal; overflow: visible; text-overflow: clip; flex: 1; min-width: 0; font-size: 12.5px; }
+.mvr span { flex: none; margin-left: 6px; }

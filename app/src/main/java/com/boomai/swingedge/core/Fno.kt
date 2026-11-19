@@ -57,15 +57,17 @@ class FnoEvent(val title: String, val body: String)
 
 object Fno {
     const val START_CASH = 100000.0
-    val LOT = mapOf("NIFTY" to 65, "BANKNIFTY" to 30)
+    /** Lot sizes; NIFTY/BANKNIFTY built in, every other F&O underlying added from NSE's fo_mktlots.csv at runtime. */
+    val LOT: MutableMap<String, Int> = java.util.concurrent.ConcurrentHashMap(mapOf("NIFTY" to 65, "BANKNIFTY" to 30))
+    val INDICES = setOf("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50")
     val HOSTS = listOf("https://www.nseindia.in", "https://www.nseindia.com")   // .com 301-redirects to .in
     const val MAX_ORDERS_KEPT = 300
     const val STALE_MS = 90_000L          // never fill on a quote older than this
 
     fun r2(x: Double) = Math.rint(x * 100) / 100
 
-    fun infoUrl(host: String, sym: String) = "$host/api/option-chain-contract-info?symbol=$sym"
-    fun chainUrl(host: String, sym: String, expiry: String) = "$host/api/option-chain-v3?type=Indices&symbol=$sym&expiry=$expiry"
+    fun infoUrl(host: String, sym: String) = "$host/api/option-chain-contract-info?symbol=${java.net.URLEncoder.encode(sym, "UTF-8")}"
+    fun chainUrl(host: String, sym: String, expiry: String) = "$host/api/option-chain-v3?type=${if (INDICES.contains(sym)) "Indices" else "Equity"}&symbol=${java.net.URLEncoder.encode(sym, "UTF-8")}&expiry=$expiry"
 
     fun parseExpiries(text: String?): List<String> = try {
         (Json.parseObject(text ?: "") ?: emptyMap()).list("expiryDates").mapNotNull { it as? String }
@@ -118,7 +120,7 @@ object Fno {
         val sym = a.str("sym").uppercase(); val side = a.str("side").uppercase(); val strike = a.int("strike"); val expiry = a.str("expiry")
         val buy = a.bool("buy"); val lots = a.int("lots"); val type = a.str("type").uppercase().ifEmpty { "MARKET" }
         val limit = a.num("limit", 0.0); val sl = a.num("sl", 0.0); val tgt = a.num("tgt", 0.0)
-        val lot = LOT[sym] ?: return err("Only NIFTY and BANKNIFTY")
+        val lot = LOT[sym] ?: return err("Not an F&O symbol (lot size unknown yet)")
         if (side != "CE" && side != "PE") return err("Pick CE or PE")
         if (lots !in 1..50) return err("Lots must be 1 to 50")
         if (type != "MARKET" && type != "LIMIT") return err("Order type must be MARKET or LIMIT")

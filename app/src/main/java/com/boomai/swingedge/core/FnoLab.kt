@@ -21,17 +21,17 @@ class LabTrade(var id: String = "", var strat: String = "", var sym: String = ""
                var lot: Int = 0, var entry: Double = 0.0, var at: Long = 0, var day: Int = 0, var why: String = "", var stopPct: Double = 30.0,
                var tgtPct: Double = 50.0, var bids: ArrayList<Double> = ArrayList(), var status: String = "OPEN", var exitPx: Double = 0.0,
                var pnl: Double = 0.0, var spot: Double = 0.0, var liveHit: String = "", var champ: Boolean = true,
-               var feats: List<Double> = emptyList(), var p: Double = -1.0, var gated: Boolean = false) {
+               var feats: List<Double> = emptyList(), var p: Double = -1.0, var gated: Boolean = false, var cid: String = "") {
     val qty get() = lot
     fun toMap(): Map<String, Any?> = linkedMapOf("id" to id, "strat" to strat, "sym" to sym, "expiry" to expiry, "strike" to strike, "side" to side,
         "lot" to lot, "entry" to entry, "at" to at, "day" to day, "why" to why, "stopPct" to stopPct, "tgtPct" to tgtPct, "bids" to bids.toList(),
-        "status" to status, "exitPx" to exitPx, "pnl" to pnl, "spot" to spot, "liveHit" to liveHit, "champ" to champ, "feats" to feats, "p" to p, "gated" to gated)
+        "status" to status, "exitPx" to exitPx, "pnl" to pnl, "spot" to spot, "liveHit" to liveHit, "champ" to champ, "feats" to feats, "p" to p, "gated" to gated, "cid" to cid)
     companion object {
         fun from(m: Map<String, Any?>) = LabTrade(m.str("id"), m.str("strat"), m.str("sym"), m.str("expiry"), m.int("strike"), m.str("side"), m.int("lot"),
             m.num("entry", 0.0), m.long("at"), m.int("day"), m.str("why"), m.num("stopPct", 30.0), m.num("tgtPct", 50.0),
             ArrayList(m.list("bids").mapNotNull { (it as? Number)?.toDouble() }.take(FnoLab.MAX_PATH)), m.str("status").ifEmpty { "OPEN" },
             m.num("exitPx", 0.0), m.num("pnl", 0.0), m.num("spot", 0.0), m.str("liveHit"), m["champ"] != false,
-            m.list("feats").mapNotNull { (it as? Number)?.toDouble() }, m.num("p", -1.0), m["gated"] == true)
+            m.list("feats").mapNotNull { (it as? Number)?.toDouble() }, m.num("p", -1.0), m["gated"] == true, m.str("cid"))
     }
 }
 
@@ -201,9 +201,10 @@ object FnoLab {
     }
 
     /** Signals for every variant that would fire now. Variant ids in LabSignal.strat (e.g. "ORB#0"). */
-    fun signalsAll(sym: String, bars: IntraBars, m: Int, fired: Set<String>, expiryToday: Boolean = false): List<LabSignal> {
+    fun signalsAll(sym: String, bars: IntraBars, m: Int, fired: Set<String>, expiryToday: Boolean = false, scale: Double = 1.0): List<LabSignal> {
         val out = ArrayList<LabSignal>()
-        for (v in allVids(sym)) if (!fired.contains(v)) for (sg in signals(sym, bars, m, emptySet(), expiryToday, mapOf(baseOf(v) to paramOf(v)))) if (sg.strat == baseOf(v)) out.add(LabSignal(v, sg.side, sg.why))
+        for (v in allVids(sym)) if (!fired.contains(v)) { val b = baseOf(v); val pr = if (b == "RSI" || b == "EXPIRY") paramOf(v) else paramOf(v) * scale
+            for (sg in signals(sym, bars, m, emptySet(), expiryToday, mapOf(b to pr))) if (sg.strat == b) out.add(LabSignal(v, sg.side, sg.why)) }
         return out
     }
 

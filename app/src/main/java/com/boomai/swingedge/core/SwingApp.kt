@@ -2003,10 +2003,13 @@ class SwingApp(private val p: Platform) {
     private fun liveOverlay(b: FnoChain, now: Long): FnoChain? {
         val iso = java.time.LocalDate.ofEpochDay(Fno.expDay(b.expiry).toLong()).toString()
         val ik = b.sym + "|" + iso
-        val ids = growwIds[ik]?.takeIf { now - it.first < 30 * 60_000L && it.second.isNotEmpty() }?.second
+        val monthly = FnoUniverse.isMonthly(b.expiry, b.expiries)
+        val ids = if (monthly) b.strikes.associateWith { k -> Pair(FnoUniverse.contractId(b.sym, b.expiry, k.toDouble(), "CE") ?: "", FnoUniverse.contractId(b.sym, b.expiry, k.toDouble(), "PE") ?: "") }
+            else growwIds[ik]?.takeIf { now - it.first < 30 * 60_000L && it.second.isNotEmpty() }?.second
             ?: Groww.parseIds(try { p.httpGetAll(listOf(Groww.chainUrl(b.sym, iso))).firstOrNull() } catch (t: Throwable) { null }).also { if (it.isNotEmpty()) growwIds[ik] = Pair(now, it) }
         if (ids.isEmpty()) return null
-        val spotLive = growwIndices().firstOrNull { it["sym"] == b.sym }?.get("last") as? Double
+        val spotLive = if (b.sym == "NIFTY" || b.sym == "BANKNIFTY" || b.sym == "FINNIFTY" || b.sym == "MIDCPNIFTY") growwIndices().firstOrNull { it["sym"] == b.sym }?.get("last") as? Double
+            else FnoUniverse.parseQuotes(try { p.httpPost(Groww.INDEX_URL, FnoUniverse.quoteBody(listOf(b.sym))) } catch (t: Throwable) { null })[b.sym]?.ltp
         val spot = spotLive ?: b.spot
         val near = b.strikes.sortedBy { Math.abs(it - spot) }.take(14).filter { ids.containsKey(it) }
         val want = near.flatMap { listOf(ids[it]!!.first, ids[it]!!.second) }
@@ -2031,6 +2034,7 @@ class SwingApp(private val p: Platform) {
     private fun fnoNotify(ev: List<FnoEvent>) { for ((k, e) in ev.withIndex()) try { p.notify("sell", 7300 + ((e.title.hashCode() + k) and 0xff), e.title, e.body) } catch (t: Throwable) {} }
 
     private fun fnoAction(name: String, a: Map<String, Any?>): Map<String, Any?> {
+        if (Fno.LOT.size < 5) try { uniLots() } catch (t: Throwable) {}
         val sym = a.str("sym").uppercase().ifEmpty { "NIFTY" }.let { if (Fno.LOT.containsKey(it)) it else "NIFTY" }
         if (name == "fnoReset") synchronized(fnoLock) { val b = FnoBook(); fnoBook = b; fnoSave(b); return fnoView(b, null, "") }
         val exps = fnoExpiries(sym)
@@ -2074,7 +2078,12 @@ class SwingApp(private val p: Platform) {
             v["views"] = FnoLab.INDEX.keys.mapNotNull { sym ->
                 val live = tk?.mapNotNull { it as? Map<*, *> }?.firstOrNull { it["sym"] == sym }?.get("last") as? Double
                 FnoLab.marketView(sym, labBars[sym]?.second, live, Clock.minuteOfDay(p.now())) }
-            v["scan"] = linkedMapOf("at" to labStepAt, "info" to labLast, "liveOk" to liveOkAt, "nseOk" to nseOkAt, "nseFail" to nseFailAt, "variants" to FnoLab.allVids("NIFTY").size + FnoLab.allVids("BANKNIFTY").size)
+            val uq = uniQuotes
+            val stocks = uq.filter { !FnoUniverse.isIndex(it.key) && it.key != "NIFTY" && it.key != "BANKNIFTY" }
+            fun mv(e: Map.Entry<String, FnoUniverse.Q>) = linkedMapOf("sym" to e.key, "ltp" to e.value.ltp, "pct" to Fno.r2(e.value.pct), "lot" to Fno.LOT[e.key])
+            v["movers"] = linkedMapOf("up" to stocks.entries.sortedByDescending { it.value.pct }.take(6).map { mv(it) }, "down" to stocks.entries.sortedBy { it.value.pct }.take(6).map { mv(it) })
+            v["universe"] = Fno.LOT.keys.sorted()
+            v["scan"] = linkedMapOf("watching" to (2 + uniSeries.count { it.value.day == Clock.epochDay(p.now()) }), "at" to labStepAt, "info" to labLast, "liveOk" to liveOkAt, "nseOk" to nseOkAt, "nseFail" to nseFailAt, "variants" to FnoLab.allVids("NIFTY").size + FnoLab.allVids("BANKNIFTY").size)
             v
         }
     }
@@ -2096,6 +2105,134 @@ class SwingApp(private val p: Platform) {
     }
 
     /** Background (every minute from the live watch, 9:15–15:30): fire new calls, follow open ones, close at 15:15 and learn. */
+    // ---------------------------------------------------------------- whole-market F&O (all underlyings)
+    private val uniSeries = java.util.concurrent.ConcurrentHashMap<String, FnoUniverse.Series>()
+    private val uniInfo = java.util.concurrent.ConcurrentHashMap<String, Triple<Int, List<String>, List<Double>>>()
+    @Volatile private var uniLotsDay = -1
+    @Volatile var uniQuotes: Map<String, FnoUniverse.Q> = emptyMap()
+    @Volatile private var uniQuotesAt = 0L
+
+    /** Lot sizes for every F&O underlying (NSE file, fetched once a day, kept on disk). */
+    private fun uniLots(): List<String> {
+        val day = Clock.epochDay(p.now())
+        if (uniLotsDay != day) {
+            var txt = try { p.httpGetAll(listOf(FnoUniverse.LOTS_URL)).firstOrNull() } catch (t: Throwable) { null }
+            var lots = FnoUniverse.parseLots(txt)
+            if (lots.size >= 3) { try { p.write("fo_lots.csv", txt!!) } catch (t: Throwable) {}; uniLotsDay = day }
+            else { txt = try { p.read("fo_lots.csv") } catch (t: Throwable) { null }; lots = FnoUniverse.parseLots(txt); if (lots.isNotEmpty() && Fno.LOT.size < 3) uniLotsDay = -2 }
+            for ((k, v) in lots) Fno.LOT[k] = v
+        }
+        return Fno.LOT.keys.sorted()
+    }
+    private fun uniFetch(syms: List<String>): Map<String, FnoUniverse.Q> {
+        val out = HashMap<String, FnoUniverse.Q>()
+        for (ch in syms.chunked(80)) out.putAll(FnoUniverse.parseQuotes(try { p.httpPost(Groww.INDEX_URL, FnoUniverse.quoteBody(ch)) } catch (t: Throwable) { null }))
+        return out
+    }
+    /** All F&O underlyings with live price and day change (for the movers list and the stock picker). */
+    private fun uniLive(maxAge: Long): Map<String, FnoUniverse.Q> {
+        val now = p.now()
+        if (now - uniQuotesAt > maxAge) { val q = uniFetch(uniLots()); if (q.isNotEmpty()) { uniQuotes = q; uniQuotesAt = now } }
+        return uniQuotes
+    }
+    private fun uniContract(sym: String): Triple<Int, List<String>, List<Double>>? {
+        val day = Clock.epochDay(p.now())
+        uniInfo[sym]?.let { if (it.first == day) return it }
+        val o = Json.parseObject(fnoGet { Fno.infoUrl(it, sym) } ?: return null) ?: return null
+        val ex = o.list("expiryDates").mapNotNull { it as? String }
+        val ks = o.list("strikePrice").mapNotNull { (it as? String)?.toDoubleOrNull() ?: (it as? Number)?.toDouble() }.sorted()
+        if (ex.isEmpty() || ks.isEmpty()) return null
+        return Triple(day, ex, ks).also { uniInfo[sym] = it }
+    }
+
+    /** Every minute: live samples for all underlyings -> 5-min bars -> the same rules (thresholds scaled for stocks) -> paper calls. */
+    private fun uniStep(now: Long, day: Int, m: Int, events: MutableList<Pair<String, String>>) {
+        val syms = uniLots().filter { it != "NIFTY" && it != "BANKNIFTY" }
+        if (syms.isEmpty()) return
+        val q = uniLive(0L)
+        for ((s0, v) in q) {
+            if (s0 == "NIFTY" || s0 == "BANKNIFTY") continue
+            val se = uniSeries.getOrPut(s0) { FnoUniverse.Series() }
+            if (se.day != day) { se.day = day; se.bars.clear(); se.filled = false }
+            se.prev = v.prev; se.open = v.open; se.sample(m, v.ltp)
+        }
+        // started late: back-fill a few symbols per minute from Yahoo 5-min bars
+        if (m > 9 * 60 + 25) {
+            val need = uniSeries.entries.filter { it.value.day == day && !it.value.filled }.map { it.key }.take(15)
+            if (need.isNotEmpty()) {
+                val res = httpAll(need.map { Yahoo.tickerUrl(Params.YAHOO_HOST_1, FnoUniverse.yahooSym(it), "1d", "5m") })
+                need.forEachIndexed { i, s0 -> val se = uniSeries[s0] ?: return@forEachIndexed; FnoLab.parseBars(res.getOrNull(i))?.let { se.fill(it) } ?: run { se.filled = true } }
+            }
+        }
+        // follow open whole-market trades in one batch
+        val openU = synchronized(labLock) { labLoad().open.filter { it.cid.isNotEmpty() } }
+        if (openU.isNotEmpty()) {
+            val px = HashMap<String, Triple<Double, Long, Double>>()
+            for (ch in openU.map { it.cid }.distinct().chunked(80)) px.putAll(Groww.parsePrices(try { p.httpPost(Groww.PRICES_URL, Json.stringify(ch)) } catch (t: Throwable) { null }))
+            synchronized(labLock) {
+                val b = labLoad()
+                for (t in openU) {
+                    val l = px[t.cid]?.first
+                    val slip = if (FnoUniverse.isIndex(t.sym)) 0.005 else 0.01
+                    if (l != null && t.bids.size < FnoLab.MAX_PATH) { val bid = Fno.r2(l * (1 - slip)); t.bids.add(bid)
+                        FnoLab.liveCheck(t, bid)?.let { hit -> if (t.champ && !t.gated && FnoLab.status(b, FnoLab.key(t)) == "WORKING") events.add(Pair("${t.sym} ${FnoUniverse.strikeText(t.strike.toDouble())} ${t.side}: " + (if (hit == "STOP") "stop hit, exit now" else "target hit, book it"), "${FnoLab.stratName(t.strat)}")) } }
+                    if (t.day < day || m >= FnoLab.EXIT_MIN) FnoLab.close(b, t)
+                }
+            }
+        }
+        if (m !in (9 * 60 + 20)..(14 * 60 + 30)) return
+        // new calls
+        data class Cand(val sym: String, val sg: LabSignal, val champ: Boolean, val bars: IntraBars, val spot: Double)
+        val cands = ArrayList<Cand>()
+        synchronized(labLock) {
+            val b = labLoad()
+            if (b.open.count { it.cid.isNotEmpty() } >= 150) return
+            for ((s0, se) in uniSeries) {
+                if (se.day != day) continue
+                val bars = se.toBars() ?: continue
+                if (bars.n < 3) continue
+                val fired = b.fired.filter { it.value == day && it.key.endsWith("|$s0") }.keys.map { it.substringBefore("|") }.toSet()
+                val scale = if (FnoUniverse.isIndex(s0)) 1.0 else 2.0
+                for (sg in FnoLab.signalsAll(s0, bars, m, fired, false, scale)) cands.add(Cand(s0, sg, FnoLab.champion(b, FnoLab.baseOf(sg.strat), s0) == sg.strat, bars, q[s0]?.ltp ?: bars.last))
+            }
+        }
+        val pick = cands.sortedWith(compareByDescending<Cand> { it.champ }.thenBy { it.sym }).take(12)
+        if (pick.isEmpty()) return
+        data class Plan(val c: Cand, val exp: String, val k: Double, val cid: String)
+        val plans = pick.mapNotNull { cd ->
+            val info = uniContract(cd.sym) ?: return@mapNotNull null
+            val exp = info.second.firstOrNull { Fno.expDay(it) - day >= 2 } ?: return@mapNotNull null
+            if (!FnoUniverse.isMonthly(exp, info.second)) return@mapNotNull null
+            val k = info.third.minByOrNull { Math.abs(it - cd.spot) } ?: return@mapNotNull null
+            val cid = FnoUniverse.contractId(cd.sym, exp, k, cd.sg.side) ?: return@mapNotNull null
+            Plan(cd, exp, k, cid)
+        }
+        if (plans.isEmpty()) return
+        val px = Groww.parsePrices(try { p.httpPost(Groww.PRICES_URL, Json.stringify(plans.map { it.cid })) } catch (t: Throwable) { null })
+        val vix = (gIdx?.second ?: emptyList()).firstOrNull { it["sym"] == "INDIAVIX" }?.get("last") as? Double
+        synchronized(labLock) {
+            val b = labLoad()
+            for (pl in plans) {
+                val l = px[pl.cid]?.first ?: continue
+                if (l < 1.0) continue
+                val sym = pl.c.sym; val sg = pl.c.sg
+                b.fired["${sg.strat}|$sym"] = day
+                val key = sg.strat + "|" + sym; val (sp, tp) = FnoLab.bestExit(b, key)
+                val slip = if (FnoUniverse.isIndex(sym)) 0.005 else 0.01
+                val entry = Fno.r2(l * (1 + slip))
+                val fe = FnoLab.features(pl.c.bars, m, sg.side, vix); val pw = FnoLab.predict(b.w, fe)
+                val gated = pl.c.champ && b.gate > 0 && pw < b.gate
+                b.seq++
+                val t = LabTrade("L${b.seq}", sg.strat, sym, pl.exp, Math.round(pl.k).toInt(), sg.side, Fno.LOT[sym] ?: 0, entry, now, day,
+                    sg.why + (if (b.trained >= 10) " · win chance " + Math.round(pw * 100) + "%" else ""), sp, tp, arrayListOf(Fno.r2(l * (1 - slip))),
+                    spot = pl.c.spot, champ = pl.c.champ, feats = fe, p = pw, gated = gated, cid = pl.cid)
+                b.open.add(t)
+                if (pl.c.champ && !gated && FnoLab.status(b, key) == "WORKING")
+                    events.add(Pair("BUY $sym ${FnoUniverse.strikeText(pl.k)} ${sg.side} ≤ ₹${Fno.r2(entry * 1.02)}", "${FnoLab.stratName(sg.strat)}: ${sg.why}. Stop ₹${Fno.r2(entry * (1 - sp / 100))}, exit by 3:15 pm."))
+            }
+        }
+    }
+
     private val labRunning = java.util.concurrent.atomic.AtomicBoolean(false)
     fun fnoLabStep(): String {
         if (!labRunning.compareAndSet(false, true)) return "busy"
@@ -2108,7 +2245,8 @@ class SwingApp(private val p: Platform) {
             // 1) follow open trades on the live chain
             val open = synchronized(labLock) { labLoad().open.map { it } }
             for (t in open) {
-                val c = if (t.day == day) fnoChain(t.sym, t.expiry, 30_000L) else null
+                if (t.cid.isNotEmpty() && t.day == day && m < FnoLab.EXIT_MIN) continue   // whole-market trades are followed in one batch below
+                val c = if (t.day == day && t.cid.isEmpty()) fnoChain(t.sym, t.expiry, 30_000L) else null
                 val q = c?.quote(t.strike, t.side)
                 synchronized(labLock) {
                     val b = labLoad()
@@ -2145,6 +2283,7 @@ class SwingApp(private val p: Platform) {
                     }
                 }
             }
+            try { uniStep(now, day, m, events) } catch (t: Throwable) { log("fno universe: $t") }
             synchronized(labLock) { labSave(labLoad()) }
             for ((k, e) in events.withIndex()) try { p.notify("buy", 7500 + ((e.first.hashCode() + k) and 0xff), e.first, e.second) } catch (t: Throwable) {}
             "ok"

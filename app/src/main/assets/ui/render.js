@@ -1421,7 +1421,9 @@
     var f = O(ui.fno), r = O(f.res), c = O(r.chain), acc = O(r.account), foot = btn('sheet-close', null, 'Close', '');
     var sym = T(f.sym) || 'NIFTY';
     var top = '<div id="fno-tk">' + liveTicker(ui, true, S) + '</div><div id="fno-calls">' + labCalls(S, ui) + '</div>';
-    var h = '<h3 class="skh">Paper trading · option chain</h3><div class="ixc">' + ['NIFTY', 'BANKNIFTY'].map(function (k) { return '<button type="button" class="rchip' + (k === sym ? ' on' : '') + '" data-c="fno-sym" data-id="' + k + '"><span>' + k + '</span></button>'; }).join('') + '</div>';
+    var uni = texts(O(ui.lab).universe), idxs = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'];
+    var h = '<h3 class="skh">Paper trading · option chain</h3><div class="ixc">' + idxs.concat(idxs.indexOf(sym) < 0 ? [sym] : []).map(function (k) { return '<button type="button" class="rchip' + (k === sym ? ' on' : '') + '" data-c="fno-sym" data-id="' + esc(k) + '"><span>' + esc(k) + '</span></button>'; }).join('') + '</div>' +
+      '<div class="symgo"><input name="fsym" list="fnouni" placeholder="Any F&amp;O stock, e.g. RELIANCE" autocapitalize="characters" autocomplete="off"><datalist id="fnouni">' + uni.slice(0, 260).map(function (u) { return '<option value="' + esc(u) + '">'; }).join('') + '</datalist>' + btn('fno-symgo', null, 'Open chain', 'sm', {}) + '</div>';
     if (!isObj(f.res)) return shell('F&O live', top + '<div id="fno-main">' + h + skCard('Live chain', 6) + '</div><div id="fno-learn">' + labLearn(ui) + '</div>', foot);
     var live = r.live === true;
     h += '<div class="card fhead"><div class="fr1"><b class="big">' + esc(sym) + ' ' + f1(c.spot) + '</b><span class="sp"></span><span class="ldot ' + (live ? 'on' : 'off') + '">' + (live ? 'LIVE' : 'NO PRICE') + '</span></div>' +
@@ -1516,11 +1518,16 @@
   }
   function kfmt(v) { var x = N(v); if (x === null) return DASH; return x >= 1e7 ? (x / 1e7).toFixed(1) + 'Cr' : x >= 1e5 ? (x / 1e5).toFixed(1) + 'L' : x >= 1e3 ? (x / 1e3).toFixed(1) + 'K' : String(Math.round(x)); }
   function f0n(v) { var x = N(v); return x === null ? DASH : Math.round(x).toLocaleString('en-IN'); }
+  function movers(ui) {
+    var mv = O(O(ui.lab).movers), up = A(mv.up), dn = A(mv.down); if (!up.length && !dn.length) return '';
+    var col = function (l) { return l.map(function (x) { return '<button type="button" class="mvr" data-c="fno-sym" data-id="' + esc(T(x.sym)) + '"><b>' + esc(T(x.sym)) + '</b><span class="num ' + tone(x.pct) + '">' + pc(x.pct, true) + '</span></button>'; }).join(''); };
+    return '<div class="sec"><h2>F&amp;O stocks moving now</h2></div><div class="mvcols"><div>' + col(up) + '</div><div>' + col(dn) + '</div></div>';
+  }
   function labCalls(S, ui) {
-    var L = O(ui.lab), td = A(L.today), cap = N(O(S.settings).capital) || 0;
-    var h = marketViews(ui) + '<div class="sec"><h2>Today’s F&amp;O calls</h2><span class="cnt">' + td.length + '</span></div>';
+    var L = O(ui.lab), all = A(L.today), cap = N(O(S.settings).capital) || 0, td = all.slice(0, 20);
+    var h = marketViews(ui) + movers(ui) + '<div class="sec"><h2>Today’s F&amp;O calls</h2><span class="cnt">' + all.length + '</span></div>' + (all.length > 20 ? '<div class="mut sm2">Newest 20 shown.</div>' : '');
     if (!L.ok) return h + '<div class="hint hintpad"><span class="t">Loading calls…</span></div>';
-    if (!td.length) return h + '<div class="hint hintpad">' + ic('clock') + '<span class="t">No call yet today. Seven rules watch Nifty and Bank Nifty from 9:20 am to 2:30 pm; a call appears here the moment one triggers (and on your phone once that rule has proven itself).</span></div>';
+    if (!td.length) return h + '<div class="hint hintpad">' + ic('clock') + '<span class="t">No call yet today. Eight rules watch every F&amp;O index and stock from 9:20 am to 2:30 pm; a call appears here the moment one triggers (and on your phone once that rule has proven itself).</span></div>';
     return h + td.map(function (x) {
       var st = LSTAT[T(x.stratStatus)] || LSTAT.LEARNING, open = T(x.status) === 'OPEN', pnl = N(x.pnl), hit = T(x.liveHit);
       var stTxt = open ? (hit === 'TARGET' ? 'Target hit, book it' : hit === 'STOP' ? 'Stop hit, exit' : 'Open') : T(x.status) === 'TARGET' ? 'Closed at target' : T(x.status) === 'STOP' ? 'Stopped out' : 'Closed 3:15 pm';
@@ -1538,7 +1545,7 @@
     var sc = O(L.scan), les = A(L.lessons).filter(function (x) { return typeof x === 'string'; });
     var h = '<h3 class="skh">Self-learning lab</h3><div class="mut sm2" style="margin-bottom:6px">' + (N(rec.n) || 0) + ' calls closed · ' + (N(rec.wins) || 0) + ' won · net ' + rsS(rec.total) + ' per lot. ' +
       'Each of 8 rules (incl. RSI bounce) runs 3 thresholds side by side on paper (' + (N(L.shadowToday) || 0) + ' test trades today); the one with the best results becomes the champion whose trades you see. After every trade, 12 stop/target pairs are replayed on the same prices and the best pair is used next time.</div>' +
-      (N(sc.at) ? '<div class="mut sm2" style="margin-bottom:8px">Last scan ' + hm(sc.at) + (T(sc.info) ? ' · ' + esc(T(sc.info)) : '') + (N(sc.nseFail) > N(sc.nseOk) ? ' · <span class="down">NSE not answering</span>' : N(sc.nseOk) ? ' · NSE ok ' + hm(sc.nseOk) : '') + '</div>' : '');
+      (N(sc.at) ? '<div class="mut sm2" style="margin-bottom:8px">Watching ' + (N(sc.watching) || 2) + ' F&amp;O underlyings · last scan ' + hm(sc.at) + (T(sc.info) ? ' · ' + esc(T(sc.info)) : '') + (N(sc.nseFail) > N(sc.nseOk) ? ' · <span class="down">NSE not answering</span>' : N(sc.nseOk) ? ' · NSE ok ' + hm(sc.nseOk) : '') + '</div>' : '');
     var fl = O(L.filter), lr = texts(fl.learned);
     h += '<div class="card lessons"><div class="cb"><b>Self-learning filter</b><div class="sm2">' + (N(fl.trained) ? 'Trained on ' + N(fl.trained) + ' trades. It scores every new call on RSI, trend, distance from the average, time of day, VIX and the gap, and learns from each result which conditions win.' : 'Starts learning from the first closed trade: every call is scored on RSI, trend, distance from the average, time of day, VIX and the gap.') + '</div>' +
       '<div class="sm2">' + (N(fl.gate) > 0 ? 'Now only shows calls with a ' + Math.round(N(fl.gate) * 100) + '%+ win chance. Skipped ' + (N(fl.skipped) || 0) + ' calls; together they made ' + rsS(fl.skippedPnl) + '.' : 'Filter opens after 30 scored trades, and only switches on if it would have saved money.') + '</div>' +

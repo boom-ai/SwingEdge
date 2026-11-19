@@ -1037,6 +1037,9 @@
       case 'tab': setTab(id); if (id === 'money') loadMoney(false); if (id === 'funds') loadFunds(false); break;
       case 'money-refresh': loadMoney(true); break;
       case 'fno-open': ui.fno = ui.fno || { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); fnoPoll(true); break;
+      case 'fno-symgo': (function () { var inp = elSheet.querySelector('input[name="fsym"]'), v = inp ? String(inp.value || '').trim().toUpperCase() : ''; if (!v) return;
+        var uni = SE.A(ui.lab && ui.lab.universe); if (uni.length && uni.indexOf(v) < 0) { toast(v + ' has no F&O contracts', 'err'); return; }
+        ui.fno.sym = v; ui.fno.exp = ''; ui.fno.form = null; ui.fno.res = null; paintSheet(true); fnoLoad(); })(); break;
       case 'fno-sym': ui.fno.sym = id; ui.fno.exp = ''; ui.fno.form = null; ui.fno.res = null; paintSheet(true); fnoLoad(); break;
       case 'fno-exp': ui.fno.exp = id; ui.fno.form = null; fnoLoad(); break;
       case 'fno-pick': var pk = String(id).split(':'); ui.fno.form = { side: pk[0], strike: +pk[1], buy: true, lots: 1, type: 'MARKET' }; paintSheet(true); break;

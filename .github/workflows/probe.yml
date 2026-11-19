@@ -6,19 +6,13 @@ jobs:
     steps:
       - run: |
           UA='Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          B="https://groww.in/v1/api/stocks_data/v1/accord_points/exchange/NSE/segment/CASH/latest_indices_ohlc"
-          for s in BANKNIFTY FINNIFTY NIFTYMIDSELECT MIDCPNIFTY INDIAVIX NIFTYIT; do echo "$s $(curl -s -w ' [%{http_code}]' -H "User-Agent: $UA" $B/$s | head -c 140)"; done
-          curl -s -w " [%{http_code}]\n" -H "User-Agent: $UA" "https://groww.in/v1/api/stocks_data/v1/accord_points/exchange/BSE/segment/CASH/latest_indices_ohlc/1" | head -c 200; echo
-          curl -s -o /tmp/g -H "User-Agent: $UA" "https://groww.in/v1/api/option_chain_service/v1/option_chain/nifty?expiry=2026-11-23"
-          python3 - <<'PY'
-          import json
-          d=json.load(open('/tmp/g'))
-          print('TOP',list(d.keys()), list(d['optionChain'].keys()))
-          oc=d['optionChain']; print('meta', {k:v for k,v in oc.items() if k!='optionChains'})
-          rows=oc['optionChains']; print('n',len(rows), list(rows[0].keys()))
-          r=[x for x in rows if x.get('callOption',{}).get('strikePrice')==2530000]
-          print(json.dumps(r[0])[:1500] if r else 'no 25300')
-          PY
-          curl -s -w " [%{http_code}]\n" -H "User-Agent: $UA" "https://groww.in/v1/api/option_chain_service/v1/option_chain/nifty/expiries" | head -c 300; echo
-          curl -s -w " [%{http_code}]\n" -H "User-Agent: $UA" "https://groww.in/v1/api/fno/v1/derivatives/nifty/contracts" | head -c 300; echo
-          for i in $(seq 1 8); do T=$(date -u +%H:%M:%S); curl -s -H "User-Agent: $UA" "https://groww.in/v1/api/option_chain_service/v1/option_chain/nifty?expiry=2026-11-23" | python3 -c "import json,sys;d=json.load(sys.stdin);r=[x for x in d['optionChain']['optionChains'] if x['callOption']['strikePrice']==2530000][0]['callOption'];print('$T',r.get('ltp'),r.get('bidPrice'),r.get('askPrice'))"; sleep 1; done
+          C=NIFTY26NOV25300CE
+          for u in "https://groww.in/v1/api/stocks_fo_data/v1/tr_live_prices/exchange/NSE/segment/FNO/$C/latest" \
+                   "https://groww.in/v1/api/stocks_fo_data/v1/tr_live_book/exchange/NSE/segment/FNO/$C/latest" \
+                   "https://groww.in/v1/api/stocks_data/v1/tr_live_book/exchange/NSE/segment/FNO/$C/latest" \
+                   "https://groww.in/v1/api/stocks_fo_data/v1/accord_points/exchange/NSE/segment/FNO/$C/latest_prices_ohlc"; do
+            echo "U $u"; curl -s -w " [%{http_code}]" -H "User-Agent: $UA" "$u" | head -c 700; echo
+          done
+          echo "POST"; curl -s -w " [%{http_code}]" -H "User-Agent: $UA" -H "Content-Type: application/json" -X POST -d '["NIFTY","BANKNIFTY","INDIAVIX"]' "https://groww.in/v1/api/stocks_data/v1/accord_points/exchange/NSE/segment/CASH/latest_indices_ohlc_batch" | head -c 300; echo
+          echo "POST2"; curl -s -w " [%{http_code}]" -H "User-Agent: $UA" -H "Content-Type: application/json" -X POST -d '{"exchangeAggReqMap":{"NSE":{"priceSymbolList":[],"indexSymbolList":["NIFTY","BANKNIFTY","INDIAVIX","FINNIFTY","MIDCPNIFTY"]}}}' "https://groww.in/v1/api/stocks_data/v1/tr_live_delayed/segment/CASH/latest_aggregated" | head -c 600; echo
+          echo "POST3"; curl -s -w " [%{http_code}]" -H "User-Agent: $UA" -H "Content-Type: application/json" -X POST -d "[\"$C\",\"NIFTY26NOV25300PE\"]" "https://groww.in/v1/api/stocks_fo_data/v1/tr_live_prices/exchange/NSE/segment/FNO/latest_prices_batch" | head -c 600; echo

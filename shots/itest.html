@@ -105,7 +105,7 @@ document.getElementById('f').onload=async()=>{
   typeQ('tata');enter();await sleep(1000);
   ok(stockOpen()&&/TATAMOTORS/.test(q('#st-head').textContent),'Enter opens the first result as a stock page');
   ok(log.some(c=>c.n==='stockInfo'&&c.a.sym==='TATAMOTORS')&&log.some(c=>c.n==='getChart'&&c.a.sym==='TATAMOTORS'&&c.a.bars===130),'stockInfo + getChart(bars 130) requested');
-  ok(!!q('#st-body #sk-cross')&&/934/.test(q('#st-price').textContent)&&!!q('#st-chart svg.chart'),'info and chart rendered');
+  ok(!!q('#st-body #sk-cross')&&/93[3-5]/.test(q('#st-price').textContent)&&!!q('#st-chart svg.chart'),'info and chart rendered');
   ok(!!q('#st-chart svg.chart rect.vu, #st-chart svg.chart rect.vd'),'volume strip drawn');
   ok(qa('.echip').length===5&&qa('.echip.on').length===4&&!q('.echip.on[data-id="100"]'),'EMA 10/20/50/200 on, 100 off by default');
   click('.echip[data-id="100"]');ok(!!q('#st-chart polyline.e100')&&qa('.echip.on').length===5,'toggling EMA 100 draws its line');

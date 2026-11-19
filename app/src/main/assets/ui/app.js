@@ -1096,6 +1096,7 @@
       case 'remove': openSheet('remove', { id: id }); break;
       case 'add': openSheet('add'); break;
       case 'paste': openSheet('paste'); break;
+      case 'feed-all': ui.feedAll = !ui.feedAll; render(true); break;
       case 'clearfeed': openSheet('clearfeed'); break;
       case 'track': if (!(sheet && sheet.kind === 'track')) openSheet('track', {}, true); break;
       case 'replay': act('replayTrack', {}, 'replayTrack'); repaintTrack(); break;

@@ -704,8 +704,8 @@
       out += '<div class="px"><div class="ltp">' + px(h.ltp) + '</div><div class="ltpl num ' + tone(h.dayChgPct) + '">' + pc(h.dayChgPct, true, true) + ' today</div></div></div>';
       if (T(h.headline).trim()) out += '<div class="headline">' + esc(T(h.headline).trim()) + '</div>';
       out += '<div class="lv"><div class="w2"><div class="k">P&amp;L <span class="num ' + tone(h.pnlPct) + '">' + pc(h.pnlPct, true) + '</span></div><div class="v ' + tone(h.pnlRs) + '">' + rs(h.pnlRs, true) + '</div></div>' +
-        '<div><div class="k">Stop</div><div class="v">' + pxBare(h.stop) + '</div></div>' +
-        '<div><div class="k">Book at</div><div class="v">' + pxBare(h.bookAt) + '</div></div></div>';
+        (N(h.stop) > 0 ? '<div><div class="k">Stop</div><div class="v">' + pxBare(h.stop) + '</div></div>' : '') +
+        (N(h.bookAt) > 0 ? '<div><div class="k">Book at</div><div class="v">' + pxBare(h.bookAt) + '</div></div>' : '') + '</div>';
     }
     var rb = nodata ? '' : reasonsBlock('hold:' + sym, h.reasons, ui, 'Why');
     out += '<div class="foot">' + (rb ? rb.split('</button>')[0] + '</button>' : '<span class="more"></span>') +
@@ -774,8 +774,11 @@
   /* ---------- Alerts + strategies ---------- */
   var KIND = { buy: ['buy', 'up', 'Buy'], sell: ['sell', 'down', 'Sell'], warn: ['warn', 'warn', 'Warning'], brief: ['brief', 'sun', 'Brief'], info: ['info', 'info', 'Info'] };
   function feed(S, ui) {
-    var f = A(S.feed).slice(0, 100), now = ui.now;
+    var all = A(S.feed).slice(0, 100), now = ui.now;
+    var sys = all.filter(function (x) { return /^(info|brief)$/i.test(T(x.kind)); }).length;
+    var f = ui.feedAll === true ? all : all.filter(function (x) { return !/^(info|brief)$/i.test(T(x.kind)); });
     var h = '<div class="sec"><h2>Alerts</h2><span class="cnt">' + f.length + '</span><span class="sp"></span>' +
+      (sys ? '<button type="button" class="linkbtn" data-c="feed-all">' + (ui.feedAll === true ? 'Hide system' : 'System (' + sys + ')') + '</button>' : '') +
       (f.length ? '<button type="button" class="linkbtn" data-c="clearfeed"' + (pend(ui, 'clearFeed') ? ' disabled' : '') + '>Clear all</button>' : '') + '</div>';
     if (!f.length) {
       return h + '<div class="empty"><div class="ei">' + ic('alerts') + '</div><h3>No alerts yet</h3>' +
@@ -1238,13 +1241,13 @@
       var p = N(x.entryHigh);
       buys.push({ sym: x.sym, name: x.name, px: p, qty: slot > 0 ? Math.floor(slot / p) : 0, days: '≤' + (N(x.horizonDays) || 120), tgt: x.t2 || x.t1, sl: x.stop, trail: true });
     });
-    h += '<div class="sec" id="first-buy"><h2>Buy</h2><span class="cnt">' + buys.length + '</span></div>';
+    h += '<div class="sec" id="first-buy"><h2>Buy</h2><span class="cnt">' + buys.length + '</span><span class="sp"></span><span class="mut sm2">hold up to ' + (N((A(S.ideas)[0] || {}).horizonDays) || 120) + ' days</span></div>';
     var gateShut = S.marketGate === false;
-    h += buys.length ? tbl(['Stock', 'Buy ≤', 'Qty', 'Days', 'Target', 'Stop'], buys.map(function (b) {
-      return '<tr>' + cell(b.sym, b.name) + '<td>' + pq(b.px) + '</td><td>' + (b.qty || DASH) + '</td><td><b>' + b.days + '</b></td><td class="up">' + pq(b.tgt) + '</td><td class="down">' + pq(b.sl) + (b.trail ? '↑' : '') + '</td></tr>';
+    h += buys.length ? tbl(['Stock', 'Buy ≤', 'Qty', 'Target / Stop'], buys.map(function (b) {
+      return '<tr>' + cell(b.sym, b.name) + '<td>' + pq(b.px) + '</td><td>' + (b.qty || DASH) + '</td><td class="ts2"><span class="up">' + pq(b.tgt) + '</span><span class="down">' + pq(b.sl) + (b.trail ? '↑' : '') + '</span></td></tr>';
     })) : '<div class="hint hintpad"><span class="t">' + (gateShut ? 'No new buys: market is below its 200-day average.' : 'Nothing to buy.') + '</span></div>';
-    if (buys.some(function (b) { return b.trail; })) h += '<div class="hint hintpad"><span class="t">↑ Stop moves up: highest close − 5 × ATR.</span></div>';
-    if (shortN) h += '<div class="btns hintpad">' + btn('short-toggle', null, ui.showShort === true ? 'Hide 6-day calls' : 'Show ' + shortN + ' six-day calls (lose money after costs in tests)', 'sm ghost', {}) + '</div>';
+    if (buys.some(function (b) { return b.trail; })) h += '<div class="mut sm2 hintpad">↑ The stop rises as the price rises.</div>';
+    if (shortN) h += '<div class="btns hintpad">' + btn('short-toggle', null, ui.showShort === true ? 'Hide quick ideas' : shortN + ' quick ideas (paper only)', 'sm ghost', {}) + '</div>';
     return h;
   }
   /* ---------- Bot: plain tables ---------- */
@@ -1315,8 +1318,8 @@
     var long = N(f.r5y) !== null ? '5Y ' + pcF(f.r5y) : '3Y ' + pcF(f.r3y);
     return '<button type="button" class="srow frow" data-c="fund" data-id="' + esc(T(f.code)) + '">' +
       '<div class="fr1">' + scoreChip(f.score) + '<b class="fnm">' + esc(fname(f.name)) + '</b></div>' +
-      '<div class="fr3"><span class="mut">' + tx(f.sub, '') + (N(f.rollBeat) !== null ? ' · beat category ' + Math.round(N(f.rollBeat)) + '% of the time' : '') + '</span></div>' +
-      '<div class="fr3"><span class="num ' + tone(f.r1y) + '">1Y ' + pcF(f.r1y) + '</span><span class="num ' + tone(f.r3y) + '">3Y ' + pcF(f.r3y) + '</span><span class="num">' + long + '</span><span class="sp"></span><span class="num down">' + (N(f.mdd) !== null ? 'worst ' + Math.round(N(f.mdd)) + '%' : '') + '</span></div></button>';
+      '<div class="fr3"><span class="mut wrapn">' + tx(f.sub, '') + (N(f.rollBeat) !== null ? ' · beat category ' + Math.round(N(f.rollBeat)) + '% of the time' : '') + '</span></div>' +
+      '<div class="fr3"><span class="num ' + tone(f.r1y) + '">1Y ' + pcF(f.r1y) + '</span><span class="num ' + tone(f.r3y) + '">3Y ' + pcF(f.r3y) + '</span><span class="num">' + long + '</span>' + (N(f.mdd) !== null ? '<span class="num down fwst">Worst fall ' + Math.round(N(f.mdd)) + '%</span>' : '') + '</div></button>';
   }
   function fundsView(S, ui) {
     var m = O(ui.funds), r = O(m.res);
@@ -1451,9 +1454,11 @@
     }
     // positions
     var ps = A(r.positions);
-    if (ps.length) h += '<div class="pnlh"><span>Open P&amp;L</span><b class="num ' + tone(acc.unrealized) + '">' + rsS(acc.unrealized) + '</b></div><h3 class="skh">Positions</h3>' + tbl(['Contract', 'Qty · avg', 'LTP', 'P&L', ''], ps.map(function (x) {
-      return '<tr><td><b>' + esc(T(x.sym).replace('BANKNIFTY', 'BNF')) + ' ' + (N(x.strike) || 0) + ' ' + esc(T(x.side)) + '</b><br><span class="mut">SL ' + (N(x.sl) > 0 ? f1(x.sl) : DASH) + ' · T ' + (N(x.tgt) > 0 ? f1(x.tgt) : DASH) + '</span></td><td>' + (N(x.qty) || 0) + '<br><span class="mut">' + f1(x.avg) + '</span></td><td>' + f1(x.bid) + '</td><td class="' + tone(x.pnl) + '"><b>' + rsS(x.pnl) +
-        '</b></td><td><button type="button" class="lnk dn" data-c="fno-exit" data-id="' + esc(T(x.id)) + '">Exit</button></td></tr>'; }));
+    if (ps.length) h += '<div class="pnlh"><span>Open P&amp;L</span><b class="num ' + tone(acc.unrealized) + '">' + rsS(acc.unrealized) + '</b></div><h3 class="skh">Positions</h3><div class="card mv">' + ps.map(function (x) {
+      return '<div class="posr"><div class="pl"><b>' + esc(T(x.sym)) + ' ' + (N(x.strike) || 0) + ' ' + esc(T(x.side)) + '</b><span class="mut">' + (N(x.qty) || 0) + ' qty · avg ' + f1(x.avg) + ' · SL ' + (N(x.sl) > 0 ? f1(x.sl) : DASH) + ' · T ' + (N(x.tgt) > 0 ? f1(x.tgt) : DASH) + '</span></div>' +
+        '<div class="pr"><b class="num ' + tone(x.pnl) + '">' + rsS(x.pnl) + '</b><span class="mut">LTP ' + f1(x.bid) + '</span></div><button type="button" class="lnk dn" data-c="fno-exit" data-id="' + esc(T(x.id)) + '">Exit</button></div>';
+    }).join('') + '</div>';
+
     var open = A(r.orders).filter(function (o) { return T(o.status) === 'OPEN'; });
     if (open.length) h += '<h3 class="skh">Open orders</h3>' + tbl(['Order', 'Lots', 'Limit', ''], open.map(function (o) {
       return '<tr><td>' + (o.buy ? 'BUY ' : 'SELL ') + esc(T(o.sym).replace('BANKNIFTY', 'BNF')) + ' ' + (N(o.strike) || 0) + ' ' + esc(T(o.side)) + '</td><td>' + (N(o.lots) || 0) + '</td><td>' + f1(o.limit) + '</td><td><button type="button" class="lnk dn" data-c="fno-cancel" data-id="' + esc(T(o.id)) + '">Cancel</button></td></tr>'; }));
@@ -1506,7 +1511,7 @@
     if (!t.length) return '<div class="ltk' + (big ? ' big' : '') + '"><span class="ltl"><i></i>LIVE</span><span class="mut">Connecting to NSE…</span></div>';
     return '<div class="ltk' + (big ? ' big' : '') + '"><span class="ltl' + lb[0] + '"><i></i>' + lb[1] + '</span><div class="lts">' + t.map(tickTile).join('') + '</div></div>';
   }
-  var LSTAT = { WORKING: ['buy', 'Working'], LEARNING: ['neutral', 'Learning'], UNPROVEN: ['neutral', 'Unproven'], FAILING: ['sell', 'Failing'] };
+  var LSTAT = { WORKING: ['buy', 'Proven'], LEARNING: ['neutral', 'Paper · learning'], UNPROVEN: ['neutral', 'Paper · unproven'], FAILING: ['sell', 'Paper · losing'] };
   var BIAS = { BULLISH: ['buy', 'Bullish', 'Calls only'], BEARISH: ['sell', 'Bearish', 'Puts only'], SIDEWAYS: ['neutral', 'Sideways', 'Wait'] };
   function marketViews(ui) {
     var vs = A(O(ui.lab).views); if (!vs.length) return '';
@@ -1514,8 +1519,8 @@
       var b = BIAS[T(v.bias)] || BIAS.SIDEWAYS;
       return '<div class="card mvc ' + b[0] + '"><div class="cb"><div class="fr1"><b>' + esc(T(v.sym)) + '</b><span class="sp"></span>' + tag(b[0], b[1]) + '</div>' +
         '<div class="mvp">' + esc(T(v.plan)) + '</div>' +
-        '<div class="mvl"><span>Open <b>' + f0n(v.open) + '</b></span><span>High <b>' + f0n(v.dayHigh) + '</b></span><span>Low <b>' + f0n(v.dayLow) + '</b></span>' + (N(v.orHigh) ? '<span>9:30 range <b>' + f0n(v.orLow) + '–' + f0n(v.orHigh) + '</b></span>' : '') + '</div>' +
-        '<div class="mut sm2">' + texts(v.why).map(esc).join(' · ') + '</div></div></div>';
+
+        '</div></div>';
     }).join('') + '</div>';
   }
   function kfmt(v) { var x = N(v); if (x === null) return DASH; return x >= 1e7 ? (x / 1e7).toFixed(1) + 'Cr' : x >= 1e5 ? (x / 1e5).toFixed(1) + 'L' : x >= 1e3 ? (x / 1e3).toFixed(1) + 'K' : String(Math.round(x)); }
@@ -1592,11 +1597,11 @@
     if (N(x.to20) > 0) sub.push(croreTxt(x.to20) + '/day');
     var right = o.net5 ? crSigned(x.net5) : crSigned(x.net20);
     return '<button type="button" class="srow frow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
-      '<div class="fr1"><b>' + tx(x.sym) + '</b>' + (T(x.label) === 'BUY' && sc !== null && sc >= 0 ? tag('buy', 'BUY ' + Math.round(sc)) : sc !== null && sc >= 0 ? '<span class="mut num sc">score ' + Math.round(sc) + '</span>' : '') +
-      '<span class="sp"></span><span class="num">' + px(x.close) + '</span><span class="num ' + tone(x.r20) + ' r20">' + pc(x.r20, true, true) + '</span></div>' +
-      '<div class="fr2"><span class="nm">' + tx(x.name, '') + '</span></div>' +
-      '<div class="fr3"><span class="mut">' + sub.join(' · ') + '</span><span class="sp"></span><span class="num ' + tone(o.net5 ? x.net5 : x.net20) + '">' + right + '</span>' +
-      (mi !== null && mi >= 0 ? '<span class="mi" title="money-in percentile">' + Math.round(mi) + '</span>' : '') + '</div></button>';
+      '<div class="fr1"><b class="wrapn">' + tx(x.sym) + '</b><span class="sp"></span><span class="num">' + px(x.close) + '</span><span class="num ' + tone(x.r20) + ' r20">' + pc(x.r20, true, true) + '</span></div>' +
+      '<div class="fr2"><span class="nm wrapn">' + tx(x.name, '') + '</span></div>' +
+      '<div class="fr3">' + (T(x.label) === 'BUY' && sc !== null && sc >= 0 ? tag('buy', 'BUY ' + Math.round(sc)) : sc !== null && sc >= 0 ? '<span class="mut num sc">score ' + Math.round(sc) + '</span>' : '') +
+      '<span class="num ' + tone(o.net5 ? x.net5 : x.net20) + '">' + (N(o.net5 ? x.net5 : x.net20) < 0 ? 'Out ' : 'In ') + right + '</span>' + (mi !== null && mi >= 0 ? '<span class="mi" title="money-in percentile">' + Math.round(mi) + '</span>' : '') + '</div>' +
+      '<div class="fr3"><span class="mut wrapn">' + sub.join(' · ') + '</span></div></button>';
   }
   function holderRow(x, k) {
     x = O(x);
@@ -1607,8 +1612,8 @@
       return '<span class="hch ' + (v > 0 ? 'up' : v < 0 ? 'down' : 'flat') + (i === k ? ' key' : '') + '">' + names[i] + ' ' + (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2) + ' → ' + (N(nw[i]) || 0).toFixed(1) + '%</span>';
     }).join('');
     return '<button type="button" class="srow frow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
-      '<div class="fr1"><b>' + tx(x.sym) + '</b><span class="sp"></span><span class="num">' + px(x.close) + '</span></div>' +
-      '<div class="fr2"><span class="nm">' + tx(x.name, '') + '</span></div>' +
+      '<div class="fr1"><b class="wrapn">' + tx(x.sym) + '</b><span class="sp"></span><span class="num">' + px(x.close) + '</span></div>' +
+      '<div class="fr2"><span class="nm wrapn">' + tx(x.name, '') + '</span></div>' +
       '<div class="hchips">' + chips + '</div>' +
       '<div class="fr3"><span class="mut">' + esc(qName(x.qdate)) + ' vs ' + esc(qName(x.pqdate)) + ' · filed ' + esc(isoDate(x.filed)) + '</span></div></button>';
   }
@@ -1633,9 +1638,9 @@
       var f = N(x.flowPct) || 0, rank = N(x.rank);
       var tops = A(x.top).map(function (t) { return esc(T(O(t).sym)); }).join(', ');
       return '<button type="button" class="srow secrow" data-c="sector" data-id="' + esc(T(x.name)) + '">' +
-        '<div class="fr1"><span class="rk num">' + rank + '</span><b>' + tx(x.name) + '</b><span class="sp"></span><span class="num ' + tone(f) + '">' + crSigned(x.net20) + '</span>' + ic('chev') + '</div>' +
-        '<div class="fr1">' + heat(f, max) + '<span class="num ' + tone(f) + ' fp">' + (f > 0 ? '+' : '') + f.toFixed(1) + '%</span></div>' +
-        '<div class="fr3"><span class="mut">' + (N(x.n) || 0) + ' stocks · ' + Math.round(N(x.breadth) || 0) + '% with money in · 20d ' + pc(x.r20, true, true) + (tops ? ' · ' + tops : '') + '</span></div></button>';
+        '<div class="fr1"><span class="rk num">' + rank + '</span><b class="wrapn">' + tx(x.name) + '</b><span class="sp"></span>' + ic('chev') + '</div>' +
+        '<div class="fr1">' + heat(f, max) + '<span class="num ' + tone(f) + ' fnet">' + (f >= 0 ? 'In ' : 'Out ') + crSigned(x.net20) + '</span><span class="num ' + tone(f) + ' fp">' + (f > 0 ? '+' : '') + f.toFixed(1) + '%</span></div>' +
+        '<div class="fr3"><span class="mut wrapn">' + (N(x.n) || 0) + ' stocks · ' + Math.round(N(x.breadth) || 0) + '% with money in · 20d ' + pc(x.r20, true, true) + (tops ? ' · ' + tops : '') + '</span></div></button>';
     }).join('') + '</div>' +
       '<div class="hint hintpad">' + ic('info') + '<span class="t">Net money = value of delivered shares on up days minus down days (₹ crore, 20 sessions). The % is that as a share of the sector’s normal trading. Tap a sector for its industries and stocks.</span></div>';
     // 2. picks
@@ -1668,8 +1673,8 @@
       h += '<div class="sec"><h2>Bulk & block buys</h2><span class="cnt">' + dl.length + '</span></div><div class="card mv">' + dl.slice(0, 25).map(function (x) {
         x = O(x);
         return '<button type="button" class="srow frow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
-          '<div class="fr1"><b>' + tx(x.sym) + '</b>' + tag('neutral', T(x.kind)) + '<span class="sp"></span><span class="num up">' + croreTxt(x.valueCr) + '</span></div>' +
-          '<div class="fr2"><span class="nm">' + tx(x.client) + '</span></div>' +
+          '<div class="fr1"><b class="wrapn">' + tx(x.sym) + '</b>' + tag('neutral', T(x.kind)) + '<span class="sp"></span><span class="num up">' + croreTxt(x.valueCr) + '</span></div>' +
+          '<div class="fr2"><span class="nm wrapn">' + tx(x.client) + '</span></div>' +
           '<div class="fr3"><span class="mut">' + esc(isoDate(x.date)) + ' · ' + grp(String(Math.round(N(x.qty) || 0))) + ' shares at ' + px(x.price) + '</span></div></button>';
       }).join('') + '</div>';
     }

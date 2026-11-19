@@ -2070,7 +2070,10 @@ class SwingApp(private val p: Platform) {
     @Volatile private var labLast = ""
     private fun labView(): Map<String, Any?> {
         // the app is open: run the lab here too, so calls appear even if the phone stopped the background watch
-        if (p.now() - labStepAt > 50_000L) fnoLabStep()
+        if (p.now() - labStepAt > 50_000L && !labRunning.get()) {
+            if (p is SyncPlatform) fnoLabStep()                       // tests: run inline
+            else Thread({ try { fnoLabStep() } catch (t: Throwable) {} }, "fno-lab").apply { isDaemon = true }.start()   // app: never block the screen
+        }
         return synchronized(labLock) {
             val b = labLoad(); val v = LinkedHashMap(FnoLab.view(b, Clock.epochDay(p.now()), capital(), fnoChains))
             v["ticker"] = fnoTickerList(); v["at"] = p.now()

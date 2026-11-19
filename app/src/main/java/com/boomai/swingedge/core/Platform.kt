@@ -18,3 +18,7 @@ interface Platform {
     fun asset(name: String): String?
     fun log(msg: String)
 }
+
+
+/** Marker for platforms (tests) where background work must run inline so results are deterministic. */
+interface SyncPlatform

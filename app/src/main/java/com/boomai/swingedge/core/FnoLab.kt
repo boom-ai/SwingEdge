@@ -300,6 +300,8 @@ object FnoLab {
         val st = b.stats.getOrPut(key(t)) { LinkedHashMap() }
         for (s in STOPS) for (g in TGTS) st.getOrPut(vkey(s, g)) { VarStat() }.add(net(t.entry, replay(t.entry, path, s, g).first, t.qty))
         st.getOrPut("live") { VarStat() }.add(t.pnl)
+        // the path has taught every exit pair; keep only the last price so the saved book stays small
+        if (t.bids.size > 1) { val lastBid = t.bids.last(); t.bids.clear(); t.bids.add(lastBid) }
         b.open.remove(t); b.closed.add(0, t)
         while (b.closed.size > MAX_CLOSED) b.closed.removeAt(b.closed.size - 1)
         learn(b, t)

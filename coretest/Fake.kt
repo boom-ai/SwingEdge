@@ -1,5 +1,6 @@
 package com.boomai.swingedge.coretest
 
+import com.boomai.swingedge.core.SyncPlatform
 import com.boomai.swingedge.core.Clock
 import com.boomai.swingedge.core.Platform
 import java.util.Random
@@ -210,7 +211,7 @@ class FakeYahoo {
     }
 }
 
-class FakePlatform : Platform {
+class FakePlatform : Platform, SyncPlatform {
     var nowMs = 0L
     val files = HashMap<String, String>()
     val notes = ArrayList<Note>()

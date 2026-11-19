@@ -295,7 +295,7 @@ object FnoLab {
         val orIdx = (0 until bars.n).filter { bars.min[it] < 9 * 60 + 30 }
         val orh = orIdx.maxOfOrNull { bars.h[it] }; val orl = orIdx.minOfOrNull { bars.l[it] }
         val dh = (0 until bars.n).maxOf { bars.h[it] }; val dl = (0 until bars.n).minOf { bars.l[it] }
-        val e = if (bars.n >= 20) ema(bars.c, 20, bars.n - 1) else last
+        val e = ema(bars.c, 20, bars.n - 1)
         val mv = (last - open) / open * 100; val day = (last - prev) / prev * 100
         val up = last > open && last > e; val dn = last < open && last < e
         val bias = if (up && mv >= 0.15) "BULLISH" else if (dn && mv <= -0.15) "BEARISH" else "SIDEWAYS"

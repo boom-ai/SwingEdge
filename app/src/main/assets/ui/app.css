@@ -1299,3 +1299,29 @@ button.fstrip { display: block; width: 100%; text-align: left; color: inherit; p
 .ltl { min-width: 56px; }
 .vcol { font-size: 11.5px; line-height: 1.45; white-space: nowrap; }
 .lessons { margin-bottom: 10px; } .lessons .cb { padding: 10px 12px; }
+/* v21: Kite-style chain, market view, order ticket */
+.mvg { display: grid; gap: 8px; margin-bottom: 6px; }
+.mvc .cb { padding: 12px; } .mvc.buy { border-left: 3px solid var(--green); } .mvc.sell { border-left: 3px solid var(--red); } .mvc.neutral { border-left: 3px solid var(--line-2); }
+.mvp { font-weight: 600; font-size: 14.5px; line-height: 1.4; margin: 6px 0; }
+.mvl { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--text-2); margin-bottom: 4px; } .mvl b { color: var(--text); font-weight: 600; }
+.chs { display: flex; gap: 14px; font-size: 12.5px; color: var(--text-2); margin: 0 2px 6px; } .chs b { color: var(--text); }
+table.chain2 { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+table.chain2 th { font-size: 11px; color: var(--muted); font-weight: 600; padding: 6px 2px; text-align: center; }
+table.chain2 td { padding: 0; text-align: center; border-top: 1px solid var(--line); height: 40px; }
+table.chain2 td.k { font-weight: 700; background: var(--raised); }
+table.chain2 tr.atm td.k { color: var(--blue); }
+table.chain2 td.itm { background: rgba(253, 214, 99, .07); }
+.qb2 { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: none; border: 0; color: var(--text); padding: 2px; }
+.qb2 b { font: 600 13.5px/1.2 var(--cond); } .qb2 span { font-size: 10.5px; }
+.qb2.fup { animation: qfu 1s ease-out; } .qb2.fdn { animation: qfd 1s ease-out; }
+.oic { position: relative; font-size: 11px; color: var(--text-2); }
+.oic i { position: absolute; top: 30%; bottom: 30%; opacity: .35; border-radius: 2px; }
+.oic.ce i { right: 2px; background: var(--red); } .oic.pe i { left: 2px; background: var(--green); }
+.oic span { position: relative; }
+tr.spotr td { height: 0; border-top: 2px solid var(--blue); position: relative; }
+tr.spotr td span { position: absolute; left: 50%; transform: translate(-50%, -50%); background: var(--blue); color: #062e6f; font: 700 11px/1 var(--sans); padding: 3px 8px; border-radius: 10px; }
+.ofq { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--text-2); margin: 8px 0; } .ofq b { color: var(--text); }
+.stepper { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line-2); border-radius: 12px; padding: 4px; margin: 6px 0 10px; }
+.stepper .iconbtn { width: 44px; height: 40px; font-size: 22px; } .stepper span { font-size: 14px; }
+.qk { margin: 0 0 6px; }
+.pnlh { display: flex; justify-content: space-between; align-items: baseline; margin: 12px 2px 0; } .pnlh b { font: 600 22px/1 var(--cond); }

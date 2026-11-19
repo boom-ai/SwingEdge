@@ -1436,31 +1436,43 @@
     if (T(fm.side)) {
       h += '<div class="card ofrm"><b>' + (fm.buy === false ? 'SELL ' : 'BUY ') + esc(sym) + ' ' + (N(fm.strike) || 0) + ' ' + esc(T(fm.side)) + '</b> <span class="mut">' + esc(T(c.expiry)) + '</span>' +
         '<div class="ixc">' + ['MARKET', 'LIMIT'].map(function (k) { return '<button type="button" class="rchip' + ((T(fm.type) || 'MARKET') === k ? ' on' : '') + '" data-c="fno-type" data-id="' + k + '"><span>' + k + '</span></button>'; }).join('') + '</div>' +
-        field('flots', 'Lots', String(N(fm.lots) || 1), {}) + ((T(fm.type) === 'LIMIT') ? field('flimit', 'Limit price', N(fm.limit) ? String(fm.limit) : '', { pre: '₹' }) : '') +
-        (fm.buy === false ? '' : field('fsl', 'Stop-loss (premium)', N(fm.sl) ? String(fm.sl) : '', { pre: '₹', ph: 'optional' }) + field('ftgt', 'Target (premium)', N(fm.tgt) ? String(fm.tgt) : '', { pre: '₹', ph: 'optional' })) +
+        (function () { var rw = A(c.rows).filter(function (x) { return N(x.k) === N(fm.strike); })[0], q = O(O(rw)[T(fm.side) === 'CE' ? 'ce' : 'pe']), lot = N(c.lot) || 0, ln = N(fm.lots) || 1;
+          return '<div class="ofq"><span>LTP <b>₹' + f1(q.ltp) + '</b></span><span>Bid <b>' + f1(q.bid) + '</b></span><span>Ask <b>' + f1(q.ask) + '</b></span><span>Cost <b>' + rsB((N(q.ask) || 0) * lot * ln) + '</b></span></div>' +
+            '<div class="stepper"><button type="button" class="iconbtn" data-c="fno-lots" data-id="-1" aria-label="Fewer lots">−</button><span><b>' + ln + '</b> lot' + (ln > 1 ? 's' : '') + ' · ' + (lot * ln) + ' qty</span><button type="button" class="iconbtn" data-c="fno-lots" data-id="1" aria-label="More lots">+</button></div>' +
+            '<input type="hidden" name="flots" value="' + ln + '">'; })() +
+        ((T(fm.type) === 'LIMIT') ? field('flimit', 'Limit price', N(fm.limit) ? String(fm.limit) : '', { pre: '₹' }) : '') +
+        (fm.buy === false ? '' : '<div class="ixc qk">' + [['sl', 20], ['sl', 30], ['tg', 30], ['tg', 50], ['tg', 100]].map(function (z) { return '<button type="button" class="rchip" data-c="fno-quick" data-id="' + z[0] + ':' + z[1] + '"><span>' + (z[0] === 'sl' ? 'SL −' : 'Tgt +') + z[1] + '%</span></button>'; }).join('') + '</div>' +
+          field('fsl', 'Stop-loss (premium)', N(fm.sl) ? String(fm.sl) : '', { pre: '₹', ph: 'optional' }) + field('ftgt', 'Target (premium)', N(fm.tgt) ? String(fm.tgt) : '', { pre: '₹', ph: 'optional' })) +
         '<div class="btns">' + btn('fno-place', null, (fm.buy === false ? 'Sell' : 'Buy') + ' (paper)', fm.buy === false ? 'danger' : '', {}) + btn('fno-cancelform', null, 'Cancel', 'ghost', {}) + '</div></div>';
     }
     // positions
     var ps = A(r.positions);
-    if (ps.length) h += '<h3 class="skh">Positions</h3>' + tbl(['Contract', 'Qty', 'Avg', 'Bid', 'P&L', 'SL', 'Tgt', ''], ps.map(function (x) {
-      return '<tr><td><b>' + esc(T(x.sym).replace('BANKNIFTY', 'BNF')) + ' ' + (N(x.strike) || 0) + ' ' + esc(T(x.side)) + '</b></td><td>' + (N(x.qty) || 0) + '</td><td>' + f1(x.avg) + '</td><td>' + f1(x.bid) + '</td><td class="' + tone(x.pnl) + '">' + rsS(x.pnl) +
-        '</td><td class="down">' + (N(x.sl) > 0 ? f1(x.sl) : DASH) + '</td><td class="up">' + (N(x.tgt) > 0 ? f1(x.tgt) : DASH) + '</td><td><button type="button" class="lnk dn" data-c="fno-exit" data-id="' + esc(T(x.id)) + '">Exit</button></td></tr>'; }));
+    if (ps.length) h += '<div class="pnlh"><span>Open P&amp;L</span><b class="num ' + tone(acc.unrealized) + '">' + rsS(acc.unrealized) + '</b></div><h3 class="skh">Positions</h3>' + tbl(['Contract', 'Qty · avg', 'LTP', 'P&L', ''], ps.map(function (x) {
+      return '<tr><td><b>' + esc(T(x.sym).replace('BANKNIFTY', 'BNF')) + ' ' + (N(x.strike) || 0) + ' ' + esc(T(x.side)) + '</b><br><span class="mut">SL ' + (N(x.sl) > 0 ? f1(x.sl) : DASH) + ' · T ' + (N(x.tgt) > 0 ? f1(x.tgt) : DASH) + '</span></td><td>' + (N(x.qty) || 0) + '<br><span class="mut">' + f1(x.avg) + '</span></td><td>' + f1(x.bid) + '</td><td class="' + tone(x.pnl) + '"><b>' + rsS(x.pnl) +
+        '</b></td><td><button type="button" class="lnk dn" data-c="fno-exit" data-id="' + esc(T(x.id)) + '">Exit</button></td></tr>'; }));
     var open = A(r.orders).filter(function (o) { return T(o.status) === 'OPEN'; });
     if (open.length) h += '<h3 class="skh">Open orders</h3>' + tbl(['Order', 'Lots', 'Limit', ''], open.map(function (o) {
       return '<tr><td>' + (o.buy ? 'BUY ' : 'SELL ') + esc(T(o.sym).replace('BANKNIFTY', 'BNF')) + ' ' + (N(o.strike) || 0) + ' ' + esc(T(o.side)) + '</td><td>' + (N(o.lots) || 0) + '</td><td>' + f1(o.limit) + '</td><td><button type="button" class="lnk dn" data-c="fno-cancel" data-id="' + esc(T(o.id)) + '">Cancel</button></td></tr>'; }));
-    // chain: tap a bid/ask to trade
-    var rows = A(c.rows);
-    if (rows.length) h += '<h3 class="skh">Option chain · tap a price to buy</h3><div class="card bt"><table class="btt chain"><tr><th>CE bid</th><th>CE ask</th><th class="k">Strike</th><th>PE bid</th><th>PE ask</th></tr>' + rows.map(function (x) {
-      var ce = O(x.ce), pe = O(x.pe), k = N(x.k) || 0, atm = k === N(c.atm);
-      var pv = O(O(f.prev)[String(k)]);
-      var cellf = function (q, side, v, fld) { var old = N(O(pv[side])[fld]), cur = N(v), fl = old !== null && cur !== null && cur !== old ? (cur > old ? ' fup' : ' fdn') : '';
-        return '<td><button type="button" class="qb' + fl + '" data-c="fno-pick" data-id="' + side + ':' + k + '">' + f1(v) + '</button></td>'; };
-      return '<tr class="' + (atm ? 'atm' : '') + '">' + cellf(ce, 'CE', ce.bid, 'bid') + cellf(ce, 'CE', ce.ask, 'ask') + '<td class="k"><b>' + k + '</b></td>' + cellf(pe, 'PE', pe.bid, 'bid') + cellf(pe, 'PE', pe.ask, 'ask') + '</tr>';
-    }).join('') + '</table></div>';
+    // chain: OI | CE LTP | strike | PE LTP | OI — tap a price to trade
+    var rows = A(c.rows), spot = N(c.spot) || 0, mo = N(c.maxOi) || 0;
+    if (rows.length) {
+      h += '<h3 class="skh">Option chain · tap a price to buy</h3><div class="chs"><span>PCR <b>' + (N(c.pcr) !== null ? N(c.pcr).toFixed(2) : DASH) + '</b></span><span>Max pain <b>' + (N(c.maxPain) || DASH) + '</b></span><span>ATM IV <b>' + (N(c.atmIv) ? N(c.atmIv).toFixed(1) + '%' : DASH) + '</b></span></div>' +
+        '<div class="card bt"><table class="btt chain2"><tr><th>OI</th><th>CALL</th><th class="k">Strike</th><th>PUT</th><th>OI</th></tr>';
+      var spotDone = false;
+      rows.forEach(function (x) {
+        var ce = O(x.ce), pe = O(x.pe), k = N(x.k) || 0, atm = k === N(c.atm), pv = O(O(f.prev)[String(k)]);
+        if (!spotDone && k > spot) { spotDone = true; h += '<tr class="spotr"><td colspan="5"><span>' + esc(sym) + ' ' + f1(spot) + '</span></td></tr>'; }
+        var oi = function (q, side) { var w = mo > 0 ? Math.round((N(q.oi) || 0) / mo * 100) : 0; return '<td class="oic ' + side + '"><i style="width:' + w + '%"></i><span>' + kfmt(q.oi) + '</span></td>'; };
+        var lt = function (q, side, itm) { var old = N(O(pv[side.toUpperCase()]).ltp), cur = N(q.ltp), fl = old !== null && cur !== null && cur !== old ? (cur > old ? ' fup' : ' fdn') : '', ch = N(q.chg);
+          return '<td class="' + (itm ? 'itm' : '') + '"><button type="button" class="qb2' + fl + '" data-c="fno-pick" data-id="' + side.toUpperCase() + ':' + k + '"><b>' + f1(q.ltp) + '</b><span class="' + tone(ch) + '">' + (ch !== null ? (ch > 0 ? '+' : '') + ch.toFixed(1) : '') + '</span></button></td>'; };
+        h += '<tr class="' + (atm ? 'atm' : '') + '">' + oi(ce, 'ce') + lt(ce, 'ce', k < spot) + '<td class="k"><b>' + k + '</b></td>' + lt(pe, 'pe', k > spot) + oi(pe, 'pe') + '</tr>';
+      });
+      h += '</table></div>';
+    }
     var done = A(r.orders).filter(function (o) { return T(o.status) !== 'OPEN'; }).slice(0, 15);
     if (done.length) h += '<h3 class="skh">Order history</h3>' + tbl(['Time', 'Order', 'Price', 'P&L'], done.map(function (o) {
       return '<tr><td>' + dShort(o.at) + '</td><td>' + esc(T(o.status) === 'FILLED' ? (o.buy ? 'BUY ' : 'SELL ') : T(o.status) + ' ') + (N(o.lots) || 0) + '× ' + (N(o.strike) || 0) + ' ' + esc(T(o.side)) + (T(o.note) ? ' · ' + esc(T(o.note)) : '') + '</td><td>' + f1(o.fillPx) + '</td><td class="' + tone(o.pnl) + '">' + (o.buy ? DASH : rsS(o.pnl)) + '</td></tr>'; }));
-    h += '<div class="hint hintpad"><span class="t">Paper money. Prices from NSE’s live option chain, refreshed every 3 s while this screen is open, and every 10 s in the background while you hold positions (stops and targets keep working). Buys fill at the ask, sells at the bid, with full charges.</span></div>' +
+    h += '<div class="hint hintpad"><span class="t">Paper money. Prices tick every second while this screen is open (live last-traded prices; bid/ask estimated from NSE’s spread), and every 10 s in the background while you hold positions, so stops and targets keep working. Buys fill at the ask, sells at the bid, with full charges.</span></div>' +
       '<div class="btns hintpad">' + btn('fno-reset', null, 'Reset to ₹1,00,000', 'sm ghost', {}) + '</div>';
     return shell('F&O live', top + '<div id="fno-main">' + h + '</div><div id="fno-learn">' + labLearn(ui) + '</div>', foot);
   }
@@ -1491,9 +1503,22 @@
     return '<div class="ltk' + (big ? ' big' : '') + '"><span class="ltl' + lb[0] + '"><i></i>' + lb[1] + '</span><div class="lts">' + t.map(tickTile).join('') + '</div></div>';
   }
   var LSTAT = { WORKING: ['buy', 'Working'], LEARNING: ['neutral', 'Learning'], UNPROVEN: ['neutral', 'Unproven'], FAILING: ['sell', 'Failing'] };
+  var BIAS = { BULLISH: ['buy', 'Bullish', 'Calls only'], BEARISH: ['sell', 'Bearish', 'Puts only'], SIDEWAYS: ['neutral', 'Sideways', 'Wait'] };
+  function marketViews(ui) {
+    var vs = A(O(ui.lab).views); if (!vs.length) return '';
+    return '<div class="sec"><h2>Right now</h2></div><div class="mvg">' + vs.map(function (v) {
+      var b = BIAS[T(v.bias)] || BIAS.SIDEWAYS;
+      return '<div class="card mvc ' + b[0] + '"><div class="cb"><div class="fr1"><b>' + esc(T(v.sym)) + '</b><span class="sp"></span>' + tag(b[0], b[1]) + '</div>' +
+        '<div class="mvp">' + esc(T(v.plan)) + '</div>' +
+        '<div class="mvl"><span>Open <b>' + f0n(v.open) + '</b></span><span>High <b>' + f0n(v.dayHigh) + '</b></span><span>Low <b>' + f0n(v.dayLow) + '</b></span>' + (N(v.orHigh) ? '<span>9:30 range <b>' + f0n(v.orLow) + '–' + f0n(v.orHigh) + '</b></span>' : '') + '</div>' +
+        '<div class="mut sm2">' + texts(v.why).map(esc).join(' · ') + '</div></div></div>';
+    }).join('') + '</div>';
+  }
+  function kfmt(v) { var x = N(v); if (x === null) return DASH; return x >= 1e7 ? (x / 1e7).toFixed(1) + 'Cr' : x >= 1e5 ? (x / 1e5).toFixed(1) + 'L' : x >= 1e3 ? (x / 1e3).toFixed(1) + 'K' : String(Math.round(x)); }
+  function f0n(v) { var x = N(v); return x === null ? DASH : Math.round(x).toLocaleString('en-IN'); }
   function labCalls(S, ui) {
     var L = O(ui.lab), td = A(L.today), cap = N(O(S.settings).capital) || 0;
-    var h = '<div class="sec"><h2>Today’s F&amp;O calls</h2><span class="cnt">' + td.length + '</span></div>';
+    var h = marketViews(ui) + '<div class="sec"><h2>Today’s F&amp;O calls</h2><span class="cnt">' + td.length + '</span></div>';
     if (!L.ok) return h + '<div class="hint hintpad"><span class="t">Loading calls…</span></div>';
     if (!td.length) return h + '<div class="hint hintpad">' + ic('clock') + '<span class="t">No call yet today. Seven rules watch Nifty and Bank Nifty from 9:20 am to 2:30 pm; a call appears here the moment one triggers (and on your phone once that rule has proven itself).</span></div>';
     return h + td.map(function (x) {

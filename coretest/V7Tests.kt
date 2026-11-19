@@ -340,5 +340,15 @@ object V16Tests {
         p.posted.clear()
         val r2 = Json.parseObject(app.action("fno", "{\"sym\":\"NIFTY\",\"expiry\":\"23-Nov-2026\"}"))!!
         T.check(r2.obj("chain").list("rows").isNotEmpty(), "falls back to NSE when the live feed is down")
+        // live stock quotes + market view
+        p.posted[Groww.INDEX_URL] = """{"exchangeAggRespMap":{"NSE":{"priceLivePointsMap":{"M&M":{"ltp":3507.3,"close":3359.1,"dayChange":148.2,"dayChangePerc":4.41,"tsInMillis":1795070709}},"indexLivePointsMap":{}}}}"""
+        val lq = Json.parseObject(app.action("liveQuotes", """{"syms":["m&m","BAD SYM!"]}"""))!!
+        T.eq(((lq["quotes"] as Map<*, *>)["M&M"] as Map<*, *>)["ltp"], 3507.3, "live stock price in one batch")
+        val bars = FnoLab.parseBars(V15Tests.bars(day, 25390.0, listOf(25400.0, 25410.0, 25405.0, 25460.0)))
+        val mv = FnoLab.marketView("NIFTY", bars, 25470.0, 10 * 60)!!
+        T.eq(mv["bias"], "BULLISH", "above open, range and average = bullish"); T.check((mv["plan"] as String).startsWith("Calls only"), "plain plan")
+        T.eq(FnoLab.marketView("NIFTY", bars, 25470.0, 14 * 60 + 40)!!["plan"].toString().startsWith("No new trades"), true, "after 2:30 no new trades")
+        val cv = Fno.chainView(Fno.parseChain("NIFTY", "23-Nov-2026", V12Tests.chainJson(25450.0, 100.0, 101.0), 0L))!!
+        T.check(cv.containsKey("pcr") && cv.containsKey("maxPain"), "chain carries PCR and max pain")
     }
 }

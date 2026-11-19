@@ -1,8 +1,0 @@
-name: probe
-on: workflow_dispatch
-jobs:
-  p:
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          curl -s -H "User-Agent: Mozilla/5.0 (Linux; Android 14) Chrome/124.0 Mobile" -H "Content-Type: application/json" -X POST -d '{"exchangeAggReqMap":{"NSE":{"priceSymbolList":["RELIANCE","TCS","M&M","BAJAJ-AUTO"],"indexSymbolList":[]}}}' "https://groww.in/v1/api/stocks_data/v1/tr_live_delayed/segment/CASH/latest_aggregated" | head -c 1500; echo

@@ -89,6 +89,7 @@
     } catch (e) { ok = false; }
     if (!ok && lastJson === null) showErr('Could not read app data yet. Retrying.');
     else if (ok && !renderFailed) elErr.hidden = true;
+    applyLive();
     readDevice();
     syncStock();
     if (sheet && sheet.kind === 'chartfull') cfMeta();
@@ -166,6 +167,7 @@
       if (name === 'moneyFlow') { onMoney(res, ok, err); return; }
       if (name === 'flowSector') { onSector(res, ok, err); return; }
       if (name === 'fnoTicker' || name === 'fnoLab') { onLive(name, res, ok); return; }
+      if (name === 'liveQuotes') { onStockLive(res, ok); return; }
       if (name.indexOf('fno') === 0) { fnoBusy = false; ui.fno = ui.fno || { sym: 'NIFTY' }; if (ok) { var pq = {}; SE.A(ui.fno.res && ui.fno.res.chain && ui.fno.res.chain.rows).forEach(function (x) { pq[String(x.k)] = { CE: x.ce || {}, PE: x.pe || {} }; }); ui.fno.prev = pq; ui.fno.res = res; var ce = SE.T(res && res.chain && res.chain.expiry); if (ce) ui.fno.exp = ce; } else ui.fno.res = ui.fno.res || { ok: true, error: err }; if (sheet && sheet.kind === 'fno' && !(name === 'fno' && ui.fno.form)) { if (document.getElementById('fno-main') && name === 'fno') fnoParts(['main']); else paintSheet(true); } return; }
       if (name === 'options') { ui.opt = ui.opt || { calc: {} }; if (ok) ui.opt.res = res; if (sheet && sheet.kind === 'opt') paintSheet(true); return; }
       if (name === 'indexView') { var im = ui.index || (ui.index = {}); im.loading = false; if (ok) { im.res = res; im.sel = SE.T(res && res.index); } else im.err = err; if (sheet && sheet.kind === 'index') paintSheet(true); return; }
@@ -566,6 +568,46 @@
     } catch (e) { tickBusy = 0; }
   }
   setInterval(liveLoop, 1000);
+  /* ---------- live stock prices everywhere: one batch call every 2 s for the stocks on screen ---------- */
+  ui.live = {};
+  var liveAt = 0, liveBusy = 0;
+  function liveSyms() {
+    var out = [], add = function (x) { var y = SE.T(x && x.sym).trim().toUpperCase(); if (y && out.indexOf(y) < 0) out.push(y); };
+    if (ui.stock && sheet && sheet.kind === 'stock') add(ui.stock);
+    var keys = ui.tab === 'portfolio' ? ['holdings'] : ui.tab === 'trades' ? ['trades', 'signals'] : ui.tab === 'setups' ? ['myWatch', 'ideas', 'watch'] : ['holdings', 'trades', 'signals', 'ideas', 'myWatch'];
+    keys.forEach(function (k) { SE.A(S && S[k]).forEach(add); });
+    return out.slice(0, 80);
+  }
+  function stockLiveTick() {
+    try {
+      if (document.hidden || !S || S.marketOpen !== true) return;
+      if (sheet && sheet.kind !== 'stock') return;
+      var t = Date.now(); if (t - liveAt < 2000 || (liveBusy && t - liveBusy < 6000)) return;
+      var syms = liveSyms(); if (!syms.length) return;
+      liveAt = t; liveBusy = t; bridge().action('liveQuotes', JSON.stringify({ syms: syms }));
+    } catch (e) { liveBusy = 0; }
+  }
+  setInterval(stockLiveTick, 500);
+  function applyLive() {
+    var L = ui.live, now = Date.now(); if (!S || !L) return;
+    var put = function (x, kind) {
+      if (!x || typeof x !== 'object') return; var q = L[SE.T(x.sym).toUpperCase()]; if (!q || !(q.ltp > 0) || now - q.got > 120000) return;
+      x.ltp = q.ltp; if (typeof q.pct === 'number') x.dayChgPct = q.pct; x.live = true;
+      var qty = Number(x.qty) || 0;
+      if (kind === 'holdings' && qty > 0 && Number(x.avg) > 0) { x.valueRs = q.ltp * qty; x.pnlRs = (q.ltp - x.avg) * qty; x.pnlPct = (q.ltp / x.avg - 1) * 100; }
+      if (kind === 'trades' && qty > 0 && Number(x.entry) > 0 && x.status === 'OPEN') { x.pnlRs = (q.ltp - x.entry) * qty; x.pnlPct = (q.ltp / x.entry - 1) * 100; }
+    };
+    ['myWatch', 'ideas', 'watch', 'holdings', 'trades', 'signals'].forEach(function (k) { if (Array.isArray(S[k])) S[k].forEach(function (x) { put(x, k); }); });
+    var st = ui.stock; if (st && st.info) { var q = L[st.sym]; if (q && q.ltp > 0 && now - q.got < 120000) { st.info.ltp = q.ltp; if (typeof q.pct === 'number') st.info.dayChgPct = q.pct; st.info.live = true; } }
+  }
+  function onStockLive(res, ok) {
+    liveBusy = 0; if (!ok || !res || typeof res.quotes !== 'object') return;
+    var g = Date.now(), changed = false;
+    Object.keys(res.quotes).forEach(function (k) { var q = res.quotes[k]; if (q && q.ltp > 0) { var o = ui.live[k]; if (!o || o.ltp !== q.ltp) changed = true; q.got = g; ui.live[k] = q; } });
+    if (!changed) return;
+    applyLive();
+    if (sheet && sheet.kind === 'stock') { try { paintStock(['price']); } catch (e) {} } else if (!sheet) render(true);
+  }
   function fnoPoll(on) {
     if (fnoTimer) { clearInterval(fnoTimer); fnoTimer = null; }
     if (on) fnoTimer = setInterval(function () {
@@ -998,6 +1040,10 @@
       case 'fno-sym': ui.fno.sym = id; ui.fno.exp = ''; ui.fno.form = null; ui.fno.res = null; paintSheet(true); fnoLoad(); break;
       case 'fno-exp': ui.fno.exp = id; ui.fno.form = null; fnoLoad(); break;
       case 'fno-pick': var pk = String(id).split(':'); ui.fno.form = { side: pk[0], strike: +pk[1], buy: true, lots: 1, type: 'MARKET' }; paintSheet(true); break;
+      case 'fno-lots': fnoReadForm(); ui.fno.form.lots = Math.max(1, Math.min(50, (ui.fno.form.lots || 1) + (+id || 0))); paintSheet(true); break;
+      case 'fno-quick': (function () { fnoReadForm(); var fm = ui.fno.form, pr = String(id).split(':'), pct = +pr[1] / 100;
+        var rw = SE.A(ui.fno.res && ui.fno.res.chain && ui.fno.res.chain.rows).filter(function (x) { return +x.k === +fm.strike; })[0], q = rw ? (fm.side === 'CE' ? rw.ce : rw.pe) : null, px = q && (q.ask || q.ltp);
+        if (!px) return; if (pr[0] === 'sl') fm.sl = Math.round(px * (1 - pct) * 20) / 20; else fm.tgt = Math.round(px * (1 + pct) * 20) / 20; paintSheet(true); })(); break;
       case 'fno-type': fnoReadForm(); ui.fno.form.type = id; paintSheet(true); break;
       case 'fno-cancelform': ui.fno.form = null; paintSheet(true); break;
       case 'fno-place': if (fnoReadForm()) { var fm = ui.fno.form; fnoSend('fnoOrder', { strike: fm.strike, side: fm.side, buy: fm.buy !== false, lots: fm.lots, type: fm.type || 'MARKET', limit: fm.limit || 0, sl: fm.sl || 0, tgt: fm.tgt || 0 }); ui.fno.form = null; } break;

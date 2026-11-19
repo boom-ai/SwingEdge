@@ -54,7 +54,7 @@ document.getElementById('f').onload=async()=>{
   click('[data-c="skip"][data-id="sg-2"]');ok(q('[data-c="skip"][data-id="sg-2"]').disabled,'skip disabled in flight');await sleep(800);ok(qa('#view .card.k-buy').length===1,'skipped');
   // close trade
   click('[data-c="tab"][data-id="trades"]');ok(qa('#view .track').length===5,'5 open trades: '+qa('#view .track').length);
-  click('[data-c="close"][data-id="tr-1"]');ok(q('[name=price]').value==='6198.5','close prefilled ltp');click('#sheet-root [data-c="submit"]');await sleep(800);
+  click('[data-c="close"][data-id="tr-1"]');ok(Math.abs(+q('[name=price]').value-6198.5)<20,'close prefilled with the (live) price');click('#sheet-root [data-c="submit"]');await sleep(800);
   ok(st().trades.find(t=>t.id==='tr-1').status==='CLOSED','trade closed');ok(/Trade closed/.test(toasts()),'toast '+toasts());
   // portfolio add: validation, error from app, success
   click('[data-c="tab"][data-id="portfolio"]');click('[data-c="add"]');

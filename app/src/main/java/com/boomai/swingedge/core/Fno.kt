@@ -246,14 +246,19 @@ object Fno {
     }
 
     /** chain around ATM for the screen */
-    fun chainView(c: FnoChain?, width: Int = 12): Map<String, Any?>? {
+    fun chainView(c: FnoChain?, width: Int = 8): Map<String, Any?>? {
         if (c == null) return null
         val atm = c.strikes.minByOrNull { Math.abs(it - c.spot) } ?: return null
         val i = c.strikes.indexOf(atm)
         val ks = c.strikes.subList(maxOf(0, i - width), minOf(c.strikes.size, i + width + 1))
         fun qm(x: FnoQuote?) = if (x == null) null else linkedMapOf("ltp" to x.ltp, "bid" to x.bid, "ask" to x.ask, "iv" to x.iv, "oi" to x.oi, "chg" to x.chg)
+        val ceOi = c.strikes.sumOf { c.ce[it]?.oi ?: 0.0 }; val peOi = c.strikes.sumOf { c.pe[it]?.oi ?: 0.0 }
+        val pain = c.strikes.minByOrNull { k -> c.strikes.sumOf { s -> (c.ce[s]?.oi ?: 0.0) * maxOf(0, k - s) + (c.pe[s]?.oi ?: 0.0) * maxOf(0, s - k) } }
+        val ivs = listOfNotNull(c.ce[atm]?.iv, c.pe[atm]?.iv).filter { it > 0 }
+        val maxOi = ks.maxOfOrNull { maxOf(c.ce[it]?.oi ?: 0.0, c.pe[it]?.oi ?: 0.0) } ?: 0.0
         return linkedMapOf("sym" to c.sym, "expiry" to c.expiry, "spot" to c.spot, "ts" to c.ts, "fetchedAt" to c.fetchedAt, "atm" to atm,
-            "expiries" to c.expiries.take(6), "lot" to (LOT[c.sym] ?: 0),
+            "expiries" to c.expiries.take(6), "lot" to (LOT[c.sym] ?: 0), "pcr" to (if (ceOi > 0) r2(peOi / ceOi) else null), "maxPain" to pain,
+            "atmIv" to (if (ivs.isNotEmpty()) r2(ivs.average()) else null), "maxOi" to maxOi,
             "rows" to ks.map { k -> linkedMapOf("k" to k, "ce" to qm(c.ce[k]), "pe" to qm(c.pe[k])) })
     }
 }

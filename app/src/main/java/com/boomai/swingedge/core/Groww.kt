@@ -29,6 +29,22 @@ object Groww {
         }
     } catch (t: Throwable) { emptyList() }
 
+    /** Stock batch (priceLivePointsMap) -> SYM -> {ltp, chg, pct, ts}. */
+    fun parseStocks(text: String?): Map<String, Map<String, Any?>> = try {
+        val m = ((((Json.parseObject(text ?: "")?.get("exchangeAggRespMap") as? Map<*, *>)?.get("NSE") as? Map<*, *>)?.get("priceLivePointsMap")) as? Map<*, *>) ?: emptyMap<Any, Any>()
+        val out = LinkedHashMap<String, Map<String, Any?>>()
+        for ((k, v) in m) {
+            val r = v as? Map<*, *> ?: continue
+            val l = num(r["ltp"]) ?: num(r["value"]) ?: continue
+            if (l <= 0) continue
+            val close = num(r["close"])
+            val chg = num(r["dayChange"]) ?: if (close != null && close > 0) l - close else 0.0
+            val pct = num(r["dayChangePerc"]) ?: if (close != null && close > 0) (l - close) / close * 100 else 0.0
+            out[k.toString()] = linkedMapOf("ltp" to l, "chg" to Fno.r2(chg), "pct" to Fno.r2(pct), "ts" to ((num(r["tsInMillis"]) ?: 0.0) * 1000).toLong())
+        }
+        out
+    } catch (t: Throwable) { emptyMap() }
+
     /** Contract ids per strike from the chain: strike -> (CE id, PE id). Strikes come x100. */
     fun parseIds(text: String?): Map<Int, Pair<String, String>> = try {
         val rows = ((Json.parseObject(text ?: "")?.get("optionChain") as? Map<*, *>)?.get("optionChains") as? List<*>).orEmpty()

@@ -144,7 +144,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno")) return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1681,6 +1681,7 @@ class SwingApp(private val p: Platform) {
                 "fundInfo" -> Funds.info(fundData(false), a.str("code"))
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
                 "fnoLab" -> labView()
+                "liveQuotes" -> liveQuotes(a)
                 "fnoTicker" -> fnoTicker()
                 "fno", "fnoOrder", "fnoCancel", "fnoLevels", "fnoReset" -> fnoAction(name, a)
                 "options" -> synchronized(optLock) { Options.view(optLoad(), optSpots, optVix) }
@@ -1957,6 +1958,20 @@ class SwingApp(private val p: Platform) {
     @Volatile private var gIdx: Pair<Long, List<Map<String, Any?>>>? = null
     @Volatile var liveOkAt = 0L
 
+    private val lqCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Map<String, Any?>>>()
+    /** Live last prices for up to 80 NSE symbols in one call (Groww batch, ~1 s fresh). */
+    private fun liveQuotes(a: Map<String, Any?>): Map<String, Any?> {
+        val syms = (a["syms"] as? List<*>).orEmpty().mapNotNull { (it as? String)?.trim()?.uppercase() }.filter { it.matches(Regex("[A-Z0-9&\\-]{1,20}")) }.distinct().take(80)
+        val now = p.now(); val q = LinkedHashMap<String, Any?>()
+        val need = syms.filter { val c = lqCache[it]; c == null || now - c.first > 1500L }
+        if (need.isNotEmpty()) {
+            val body = Json.stringify(mapOf("exchangeAggReqMap" to mapOf("NSE" to mapOf("priceSymbolList" to need, "indexSymbolList" to emptyList<String>()))))
+            Groww.parseStocks(try { p.httpPost(Groww.INDEX_URL, body) } catch (t: Throwable) { null }).forEach { (k, v) -> lqCache[k] = Pair(now, v) }
+        }
+        for (s0 in syms) lqCache[s0]?.let { if (now - it.first < 60_000L) q[s0] = it.second }
+        return linkedMapOf("ok" to true, "at" to now, "quotes" to q)
+    }
+
     /** Live index levels (Groww batch, ~1 s fresh; cached 700 ms). */
     private fun growwIndices(): List<Map<String, Any?>> {
         val now = p.now(); gIdx?.let { if (now - it.first < 700L) return it.second }
@@ -2055,6 +2070,10 @@ class SwingApp(private val p: Platform) {
         return synchronized(labLock) {
             val b = labLoad(); val v = LinkedHashMap(FnoLab.view(b, Clock.epochDay(p.now()), capital(), fnoChains))
             v["ticker"] = fnoTickerList(); v["at"] = p.now()
+            val tk = v["ticker"] as? List<*>
+            v["views"] = FnoLab.INDEX.keys.mapNotNull { sym ->
+                val live = tk?.mapNotNull { it as? Map<*, *> }?.firstOrNull { it["sym"] == sym }?.get("last") as? Double
+                FnoLab.marketView(sym, labBars[sym]?.second, live, Clock.minuteOfDay(p.now())) }
             v["scan"] = linkedMapOf("at" to labStepAt, "info" to labLast, "liveOk" to liveOkAt, "nseOk" to nseOkAt, "nseFail" to nseFailAt, "variants" to FnoLab.allVids("NIFTY").size + FnoLab.allVids("BANKNIFTY").size)
             v
         }

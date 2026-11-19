@@ -288,6 +288,31 @@ object FnoLab {
             "strategies" to strats, "lessons" to lessons.take(6), "shadowToday" to shadowToday, "record" to linkedMapOf("n" to all.n, "wins" to all.wins, "total" to Fno.r2(all.sum), "avg" to Fno.r2(all.mean)))
     }
 
+    /** Plain-English read of the index right now, with the levels that would trigger the next call. */
+    fun marketView(sym: String, bars: IntraBars?, spot: Double?, m: Int): Map<String, Any?>? {
+        if (bars == null || bars.n == 0) return null
+        val last = spot ?: bars.last; val open = bars.open; val prev = bars.prevClose
+        val orIdx = (0 until bars.n).filter { bars.min[it] < 9 * 60 + 30 }
+        val orh = orIdx.maxOfOrNull { bars.h[it] }; val orl = orIdx.minOfOrNull { bars.l[it] }
+        val dh = (0 until bars.n).maxOf { bars.h[it] }; val dl = (0 until bars.n).minOf { bars.l[it] }
+        val e = if (bars.n >= 20) ema(bars.c, 20, bars.n - 1) else last
+        val mv = (last - open) / open * 100; val day = (last - prev) / prev * 100
+        val up = last > open && last > e; val dn = last < open && last < e
+        val bias = if (up && mv >= 0.15) "BULLISH" else if (dn && mv <= -0.15) "BEARISH" else "SIDEWAYS"
+        val why = ArrayList<String>()
+        why.add((if (mv >= 0) "Up " else "Down ") + f1(Math.abs(mv)) + "% from today's open (" + f1(day) + "% on the day)")
+        why.add(if (last > e) "Above its 20-bar average" else "Below its 20-bar average")
+        if (orh != null && orl != null) why.add(if (last > orh) "Broke above the 9:15–9:30 high" else if (last < orl) "Broke below the 9:15–9:30 low" else "Still inside the 9:15–9:30 range")
+        val plan = when {
+            m > 14 * 60 + 30 -> "No new trades after 2:30 pm. Exit open ones by 3:15 pm."
+            bias == "BULLISH" -> "Calls only. Buy a call on a 5-min close above " + f0(Math.max(dh, orh ?: dh)) + "; wrong if it falls below " + f0(Math.max(open, orl ?: open)) + "."
+            bias == "BEARISH" -> "Puts only. Buy a put on a 5-min close below " + f0(Math.min(dl, orl ?: dl)) + "; wrong if it rises above " + f0(Math.min(open, orh ?: open)) + "."
+            else -> "No clear side: wait. A call above " + f0(orh ?: dh) + " or a put below " + f0(orl ?: dl) + " (5-min close)."
+        }
+        return linkedMapOf("sym" to sym, "bias" to bias, "last" to last, "open" to open, "prevClose" to prev, "dayHigh" to dh, "dayLow" to dl,
+            "orHigh" to orh, "orLow" to orl, "ema20" to Fno.r2(e), "why" to why, "plan" to plan)
+    }
+
     /* ---------- live ticker (NSE allIndices) ---------- */
     val TICKER = listOf("NIFTY 50" to "Nifty 50", "NIFTY BANK" to "Bank Nifty", "NIFTY FINANCIAL SERVICES" to "Fin Nifty", "NIFTY MIDCAP SELECT" to "Midcap Nifty", "INDIA VIX" to "India VIX")
     fun parseIndices(text: String?): List<Map<String, Any?>> = try {

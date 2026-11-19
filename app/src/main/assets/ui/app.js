@@ -386,6 +386,7 @@
   elSheet.addEventListener('input', function (e) {
     var t = e.target; if (!t || !t.name) return;
     if (t.name === 'q') { onSearchInput(t.value); return; }
+    if (t.name === 'fsym') { fnoSuggest(t); return; }
     if (t.name === 'sym') {
       var up = t.value.toUpperCase().replace(/[^A-Z0-9&\-]/g, '');
       if (up !== t.value) { var pos = t.selectionStart; t.value = up; try { t.setSelectionRange(pos, pos); } catch (e2) { /* ignore */ } }
@@ -395,6 +396,7 @@
   });
   elSheet.addEventListener('submit', function (e) { e.preventDefault(); submitSheet(); });
   elSheet.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target && e.target.name === 'fsym') { e.preventDefault(); fnoSymGo(); return; }
     if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT') { e.preventDefault(); submitSheet(); }
   });
 
@@ -520,6 +522,25 @@
   var fnoTimer = null, fnoBusy = false;
   function fnoArgs(extra) { var a = { sym: ui.fno.sym || 'NIFTY', expiry: ui.fno.exp || '' }; for (var k in extra) a[k] = extra[k]; return a; }
   function fnoSend(name, extra) { if (fnoBusy && name === 'fno' && Date.now() - fnoBusy < 6000) return; fnoBusy = Date.now(); try { bridge().action(name, JSON.stringify(fnoArgs(extra || {}))); } catch (e) { fnoBusy = false; } }
+  function fnoUni() { var u = ui.lab && Array.isArray(ui.lab.universe) ? ui.lab.universe : []; return u.filter(function (x) { return typeof x === 'string'; }); }
+  function fnoMatches(q) {
+    q = String(q || '').trim().toUpperCase().replace(/[^A-Z0-9&\-]/g, ''); if (!q) return [];
+    var u = fnoUni(), a = u.filter(function (x) { return x.indexOf(q) === 0; }), b = u.filter(function (x) { return x.indexOf(q) > 0; });
+    return a.concat(b).slice(0, 14);
+  }
+  function fnoSuggest(inp) {
+    var up = inp.value.toUpperCase(); if (up !== inp.value) { var pos = inp.selectionStart; inp.value = up; try { inp.setSelectionRange(pos, pos); } catch (e) {} }
+    var box = document.getElementById('fno-sugg'); if (!box) return;
+    var m = fnoMatches(up);
+    box.innerHTML = !up.trim() ? '' : m.length ? m.map(function (x) { return '<button type="button" class="rchip" data-c="fno-sym" data-id="' + SE.esc(x) + '"><span>' + SE.esc(x) + '</span></button>'; }).join('')
+      : '<span class="mut sm2">' + (fnoUni().length ? 'No F&amp;O stock matches “' + SE.esc(up) + '”' : 'Loading the F&amp;O list… press Open to try ' + SE.esc(up)) + '</span>';
+  }
+  function fnoSymGo() {
+    var inp = elSheet.querySelector('input[name="fsym"]'), v = inp ? String(inp.value || '').trim().toUpperCase().replace(/[^A-Z0-9&\-]/g, '') : ''; if (!v) return;
+    var u = fnoUni(), m = fnoMatches(v);
+    if (u.length && u.indexOf(v) < 0) { if (m.length === 1) v = m[0]; else { toast(m.length ? 'Pick one from the list' : v + ' has no F&O contracts', 'err'); return; } }
+    ui.fno.sym = v; ui.fno.exp = ''; ui.fno.form = null; ui.fno.res = null; paintSheet(true); fnoLoad();
+  }
   function fnoLoad() { fnoSend('fno', {}); }
   /* ---------- live ticker + lab calls ---------- */
   ui.tick = { list: [], prev: {}, at: 0 }; ui.lab = {};
@@ -1037,9 +1058,7 @@
       case 'tab': setTab(id); if (id === 'money') loadMoney(false); if (id === 'funds') loadFunds(false); break;
       case 'money-refresh': loadMoney(true); break;
       case 'fno-open': ui.fno = ui.fno || { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); fnoPoll(true); break;
-      case 'fno-symgo': (function () { var inp = elSheet.querySelector('input[name="fsym"]'), v = inp ? String(inp.value || '').trim().toUpperCase() : ''; if (!v) return;
-        var uni = SE.A(ui.lab && ui.lab.universe); if (uni.length && uni.indexOf(v) < 0) { toast(v + ' has no F&O contracts', 'err'); return; }
-        ui.fno.sym = v; ui.fno.exp = ''; ui.fno.form = null; ui.fno.res = null; paintSheet(true); fnoLoad(); })(); break;
+      case 'fno-symgo': fnoSymGo(); break;
       case 'fno-sym': ui.fno.sym = id; ui.fno.exp = ''; ui.fno.form = null; ui.fno.res = null; paintSheet(true); fnoLoad(); break;
       case 'fno-exp': ui.fno.exp = id; ui.fno.form = null; fnoLoad(); break;
       case 'fno-pick': var pk = String(id).split(':'); ui.fno.form = { side: pk[0], strike: +pk[1], buy: true, lots: 1, type: 'MARKET' }; paintSheet(true); break;

@@ -2082,7 +2082,7 @@ class SwingApp(private val p: Platform) {
             val stocks = uq.filter { !FnoUniverse.isIndex(it.key) && it.key != "NIFTY" && it.key != "BANKNIFTY" }
             fun mv(e: Map.Entry<String, FnoUniverse.Q>) = linkedMapOf("sym" to e.key, "ltp" to e.value.ltp, "pct" to Fno.r2(e.value.pct), "lot" to Fno.LOT[e.key])
             v["movers"] = linkedMapOf("up" to stocks.entries.sortedByDescending { it.value.pct }.take(6).map { mv(it) }, "down" to stocks.entries.sortedBy { it.value.pct }.take(6).map { mv(it) })
-            v["universe"] = Fno.LOT.keys.sorted()
+            v["universe"] = try { uniLots() } catch (t: Throwable) { Fno.LOT.keys.sorted() }
             v["scan"] = linkedMapOf("watching" to (2 + uniSeries.count { it.value.day == Clock.epochDay(p.now()) }), "at" to labStepAt, "info" to labLast, "liveOk" to liveOkAt, "nseOk" to nseOkAt, "nseFail" to nseFailAt, "variants" to FnoLab.allVids("NIFTY").size + FnoLab.allVids("BANKNIFTY").size)
             v
         }

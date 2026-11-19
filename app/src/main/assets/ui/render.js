@@ -1421,9 +1421,11 @@
     var f = O(ui.fno), r = O(f.res), c = O(r.chain), acc = O(r.account), foot = btn('sheet-close', null, 'Close', '');
     var sym = T(f.sym) || 'NIFTY';
     var top = '<div id="fno-tk">' + liveTicker(ui, true, S) + '</div><div id="fno-calls">' + labCalls(S, ui) + '</div>';
-    var uni = texts(O(ui.lab).universe), idxs = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'];
-    var h = '<h3 class="skh">Paper trading · option chain</h3><div class="ixc">' + idxs.concat(idxs.indexOf(sym) < 0 ? [sym] : []).map(function (k) { return '<button type="button" class="rchip' + (k === sym ? ' on' : '') + '" data-c="fno-sym" data-id="' + esc(k) + '"><span>' + esc(k) + '</span></button>'; }).join('') + '</div>' +
-      '<div class="symgo"><input name="fsym" list="fnouni" placeholder="Any F&amp;O stock, e.g. RELIANCE" autocapitalize="characters" autocomplete="off"><datalist id="fnouni">' + uni.slice(0, 260).map(function (u) { return '<option value="' + esc(u) + '">'; }).join('') + '</datalist>' + btn('fno-symgo', null, 'Open chain', 'sm', {}) + '</div>';
+    var idxs = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'];
+    // picker lives outside the live-refreshed part, so typing is never wiped
+    top += '<div id="fno-pick"><h3 class="skh">Paper trading · option chain</h3><div class="ixc">' + idxs.concat(idxs.indexOf(sym) < 0 ? [sym] : []).map(function (k) { return '<button type="button" class="rchip' + (k === sym ? ' on' : '') + '" data-c="fno-sym" data-id="' + esc(k) + '"><span>' + esc(k) + '</span></button>'; }).join('') + '</div>' +
+      '<div class="symgo"><input name="fsym" type="search" inputmode="search" enterkeyhint="search" placeholder="Search any F&amp;O stock, e.g. RELIANCE" autocapitalize="characters" autocomplete="off" spellcheck="false">' + btn('fno-symgo', null, 'Open', 'sm', {}) + '</div><div id="fno-sugg" class="ixc"></div></div>';
+    var h = '';
     if (!isObj(f.res)) return shell('F&O live', top + '<div id="fno-main">' + h + skCard('Live chain', 6) + '</div><div id="fno-learn">' + labLearn(ui) + '</div>', foot);
     var live = r.live === true;
     h += '<div class="card fhead"><div class="fr1"><b class="big">' + esc(sym) + ' ' + f1(c.spot) + '</b><span class="sp"></span><span class="ldot ' + (live ? 'on' : 'off') + '">' + (live ? 'LIVE' : 'NO PRICE') + '</span></div>' +

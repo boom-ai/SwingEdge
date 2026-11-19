@@ -23,6 +23,11 @@ document.getElementById('f').onload=async()=>{
    ok(q('#sheet-root .sheet')===sec&&Math.abs(q('#sheet-root .sb').scrollTop-y)<3&&y>100,'F&O screen stays put while prices update (scroll '+q('#sheet-root .sb').scrollTop+'/'+y+')');
    ok(q('#sheet-root .lti')===tile&&/up|down|flat/.test(tile.className),'ticker tiles updated in place with up/down colour');
    ok(!!q('#sheet-root .lti.fup, #sheet-root .lti.fdn'),'ticker flashes on price change');}
+  {const fi=q('#sheet-root input[name="fsym"]');ok(!!fi,'F&O stock search box');fi.focus();fi.value='rel';fi.dispatchEvent(new Event('input',{bubbles:true}));
+   ok(/RELIANCE/.test(q('#fno-sugg').textContent),'typing shows matching F&O stocks');await sleep(2500);
+   ok(q('#sheet-root input[name="fsym"]')===fi&&fi.value==='REL','typed text survives the live refresh');
+   q('#fno-sugg [data-id="RELIANCE"]').click();await sleep(300);ok(!!q('#sheet-root .rchip.on[data-id="RELIANCE"]'),'tapping a match opens its chain');
+   q('#sheet-root [data-c="fno-sym"][data-id="NIFTY"]').click();await sleep(300);}
   w.history.back();await sleep(200);
   ok(qa('#view .card.k-buy').length===3,'3 buy cards');
   // order: exits, book half, sell, trim, buy

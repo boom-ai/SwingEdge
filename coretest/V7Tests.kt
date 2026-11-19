@@ -287,7 +287,8 @@ object V15Tests {
         T.eq(app.fnoLabStep(), "ok", "lab step runs")
         var v = Json.parseObject(app.action("fnoLab", "{}"))!!
         val td = v.list("today").map { it.asObj() }
-        T.check(td.size == 1 && td[0].str("strat") == "ORB" && td[0].str("side") == "CE" && td[0].int("strike") == 25450, "ORB call taken at ATM: $td")
+        T.check(td.size == 1 && td[0].str("strat") == "ORB#1" && td[0].str("side") == "CE" && td[0].int("strike") == 25450, "ORB champion call taken at ATM: $td")
+        T.eq(v.int("shadowToday"), 2, "the two challenger thresholds are paper-traded in the background")
         T.eq(td[0].num("entry"), 101.0, "entry at the live ask"); T.eq(td[0].str("expiry"), "23-Nov-2026", "skips the expiry that is today")
         T.eq(v.list("ticker").size, 2, "live ticker from NSE"); T.eq(v.list("ticker")[0].asObj().num("last"), 25460.5, "nifty last")
         p.setTime(day, 10 * 60); p.served[Fno.chainUrl(H, "NIFTY", "23-Nov-2026")] = V12Tests.chainJson(25480.0, 160.0, 161.0)
@@ -298,7 +299,12 @@ object V15Tests {
         val c = v.list("today")[0].asObj()
         T.check(c.str("status") == "TARGET" && c.num("pnl") > 0, "closed at target with a profit after charges: $c")
         T.eq(v.obj("record").int("n"), 1, "record counts it")
-        T.check(v.list("strategies").any { it.asObj().str("id") == "ORB" && it.asObj().int("n") == 1 }, "strategy learned from it")
+        T.check(v.list("strategies").any { it.asObj().str("id") == "ORB" && it.asObj().int("n") == 1 && it.asObj().int("tested") == 3 }, "strategy learned from all three variants")
+        // champion switches to the variant that has done best
+        val lb2 = LabBook(); repeat(6) { i -> val t = LabTrade("y$i", "ORB#0", "NIFTY", "x", 1, "CE", 65, 100.0, 0, day, bids = arrayListOf(150.0)); lb2.open.add(t); FnoLab.close(lb2, t) }
+        repeat(6) { i -> val t = LabTrade("z$i", "ORB#1", "NIFTY", "x", 1, "CE", 65, 100.0, 0, day, bids = arrayListOf(60.0)); lb2.open.add(t); FnoLab.close(lb2, t) }
+        T.eq(FnoLab.champion(lb2, "ORB", "NIFTY"), "ORB#0", "champion = best learned threshold")
+        T.eq(FnoLab.champion(LabBook(), "ORB", "NIFTY"), "ORB#1", "default champion = middle threshold")
         T.eq(Json.parseObject(app.action("fnoTicker", "{}"))!!.list("ticker").size, 2, "ticker action")
     }
 }

@@ -58,7 +58,7 @@ class FnoEvent(val title: String, val body: String)
 object Fno {
     const val START_CASH = 100000.0
     val LOT = mapOf("NIFTY" to 65, "BANKNIFTY" to 30)
-    val HOSTS = listOf("https://www.nseindia.com", "https://www.nseindia.in")
+    val HOSTS = listOf("https://www.nseindia.in", "https://www.nseindia.com")   // .com 301-redirects to .in
     const val MAX_ORDERS_KEPT = 300
     const val STALE_MS = 90_000L          // never fill on a quote older than this
 

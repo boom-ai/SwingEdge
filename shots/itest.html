@@ -18,7 +18,7 @@ document.getElementById('f').onload=async()=>{
   await sleep(2500);ok(qa('#view .fstrip .lti').length===5,'live ticker: Nifty, Bank Nifty, Fin Nifty, Midcap Nifty, VIX');
   click('#view .fstrip');await sleep(1500);
   ok(!!q('#sheet-root .fcall')&&/BUY CE/.test(q('#sheet-root .fcall').textContent)&&/Stop/.test(q('#sheet-root .fcall').textContent),'F&O live shows today\'s calls with buy/stop/target');
-  ok(!!q('#sheet-root .ltk.big .lti')&&/learned/.test(q('#sheet-root').textContent),'F&O live: big ticker + learning table');
+  ok(!!q('#sheet-root .ltk.big .lti')&&/Self-learning lab/.test(q('#sheet-root').textContent)&&/champion/i.test(q('#sheet-root').textContent),'F&O live: big ticker + self-learning lab with champion thresholds');
   {const sb=q('#sheet-root .sb'),sec=q('#sheet-root .sheet');sb.scrollTop=500;const y=sb.scrollTop;const tile=q('#sheet-root .lti');await sleep(5000);
    ok(q('#sheet-root .sheet')===sec&&Math.abs(q('#sheet-root .sb').scrollTop-y)<3&&y>100,'F&O screen stays put while prices update (scroll '+q('#sheet-root .sb').scrollTop+'/'+y+')');
    ok(q('#sheet-root .lti')===tile&&/up|down|flat/.test(tile.className),'ticker tiles updated in place with up/down colour');

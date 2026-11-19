@@ -1297,3 +1297,5 @@ button.fstrip { display: block; width: 100%; text-align: left; color: inherit; p
 @keyframes flu2 { 0% { background: rgba(129, 201, 149, .55); } 100% { background: rgba(129, 201, 149, .08); } }
 @keyframes fld2 { 0% { background: rgba(242, 139, 130, .55); } 100% { background: rgba(242, 139, 130, .08); } }
 .ltl { min-width: 56px; }
+.vcol { font-size: 11.5px; line-height: 1.45; white-space: nowrap; }
+.lessons { margin-bottom: 10px; } .lessons .cb { padding: 10px 12px; }

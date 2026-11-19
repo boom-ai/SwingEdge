@@ -236,7 +236,7 @@ class FakePlatform : Platform {
         }
         if (httpDelayMs > 0) Thread.sleep(httpDelayMs)
         if (offline) return urls.map { null }
-        return urls.map { u -> synchronized(served) { served[u] } ?: try { yahoo.respond(u, nowMs) } catch (t: Throwable) { null } }
+        return urls.map { u0 -> val u = u0.replace(Regex("[?&]_=\\d+$"), ""); synchronized(served) { served[u] } ?: try { yahoo.respond(u, nowMs) } catch (t: Throwable) { null } }
     }
     override fun read(name: String): String? = synchronized(files) { files[name] }
     override fun write(name: String, text: String) {

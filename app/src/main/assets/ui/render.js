@@ -1510,10 +1510,15 @@
   function labLearn(ui) {
     var L = O(ui.lab), ss = A(L.strategies), rec = O(L.record);
     if (!ss.length) return '';
-    var h = '<h3 class="skh">What the rules have learned</h3><div class="mut sm2" style="margin-bottom:6px">' + (N(rec.n) || 0) + ' paper trades · ' + (N(rec.wins) || 0) + ' won · net ' + rsS(rec.total) + ' per lot. After each trade every stop/target pair is replayed on the same prices, and the best one is used for the next call.</div>';
-    return h + tbl(['Rule', 'Trades', 'Avg/lot', 'Best exit', 'Status'], ss.map(function (x) {
+    var sc = O(L.scan), les = A(L.lessons).filter(function (x) { return typeof x === 'string'; });
+    var h = '<h3 class="skh">Self-learning lab</h3><div class="mut sm2" style="margin-bottom:6px">' + (N(rec.n) || 0) + ' calls closed · ' + (N(rec.wins) || 0) + ' won · net ' + rsS(rec.total) + ' per lot. ' +
+      'Each rule runs ' + 3 + ' thresholds side by side on paper (' + (N(L.shadowToday) || 0) + ' test trades today); the one with the best results becomes the champion whose trades you see. After every trade, 12 stop/target pairs are replayed on the same prices and the best pair is used next time.</div>' +
+      (N(sc.at) ? '<div class="mut sm2" style="margin-bottom:8px">Last scan ' + hm(sc.at) + (T(sc.info) ? ' · ' + esc(T(sc.info)) : '') + (N(sc.nseFail) > N(sc.nseOk) ? ' · <span class="down">NSE not answering</span>' : N(sc.nseOk) ? ' · NSE ok ' + hm(sc.nseOk) : '') + '</div>' : '');
+    if (les.length) h += '<div class="card lessons"><div class="cb"><b>What it has learned</b>' + les.map(function (x) { return '<div class="sm2">• ' + esc(x) + '</div>'; }).join('') + '</div></div>';
+    return h + tbl(['Rule', 'Trades', 'Avg/lot', 'Champion', 'Status'], ss.map(function (x) {
       var st = LSTAT[T(x.status)] || LSTAT.LEARNING;
-      return '<tr><td><b>' + esc(T(x.name)) + '</b><br><span class="mut">' + esc(T(x.sym)) + '</span></td><td>' + (N(x.n) || 0) + '</td><td class="' + tone(x.avg) + '">' + rsS(x.avg) + '</td><td>−' + (N(x.stopPct) || 0) + '% / ' + (N(x.tgtPct) ? '+' + N(x.tgtPct) + '%' : '3:15') + '</td><td>' + tag(st[0], st[1]) + '</td></tr>';
+      var vs = A(x.variants).map(function (v) { return (v.champ ? '<b>' : '') + esc(T(v.param)) + ' · ' + (N(v.n) || 0) + (N(v.n) ? ' · ' + rsS(v.avg) : '') + (v.champ ? '</b>' : ''); }).join('<br>');
+      return '<tr><td><b>' + esc(T(x.name)) + '</b><br><span class="mut">' + esc(T(x.sym)) + '</span></td><td>' + (N(x.n) || 0) + '<br><span class="mut">' + (N(x.tested) || 0) + ' tested</span></td><td class="' + tone(x.avg) + '">' + rsS(x.avg) + '</td><td class="vcol">' + vs + '<br><span class="mut">exit −' + (N(x.stopPct) || 0) + '% / ' + (N(x.tgtPct) ? '+' + N(x.tgtPct) + '%' : '3:15') + '</span></td><td>' + tag(st[0], st[1]) + '</td></tr>';
     })) + '<div class="hint hintpad"><span class="t">Working = 20+ trades with a positive average after charges (t ≥ 1.5). Only Working rules send phone alerts. Failing rules keep being tested in the background, and their calls stay labelled.</span></div>';
   }
   function fnoStrip(S, ui) {

@@ -20,16 +20,16 @@ class LabSignal(val strat: String, val side: String, val why: String)
 class LabTrade(var id: String = "", var strat: String = "", var sym: String = "", var expiry: String = "", var strike: Int = 0, var side: String = "",
                var lot: Int = 0, var entry: Double = 0.0, var at: Long = 0, var day: Int = 0, var why: String = "", var stopPct: Double = 30.0,
                var tgtPct: Double = 50.0, var bids: ArrayList<Double> = ArrayList(), var status: String = "OPEN", var exitPx: Double = 0.0,
-               var pnl: Double = 0.0, var spot: Double = 0.0, var liveHit: String = "") {
+               var pnl: Double = 0.0, var spot: Double = 0.0, var liveHit: String = "", var champ: Boolean = true) {
     val qty get() = lot
     fun toMap(): Map<String, Any?> = linkedMapOf("id" to id, "strat" to strat, "sym" to sym, "expiry" to expiry, "strike" to strike, "side" to side,
         "lot" to lot, "entry" to entry, "at" to at, "day" to day, "why" to why, "stopPct" to stopPct, "tgtPct" to tgtPct, "bids" to bids.toList(),
-        "status" to status, "exitPx" to exitPx, "pnl" to pnl, "spot" to spot, "liveHit" to liveHit)
+        "status" to status, "exitPx" to exitPx, "pnl" to pnl, "spot" to spot, "liveHit" to liveHit, "champ" to champ)
     companion object {
         fun from(m: Map<String, Any?>) = LabTrade(m.str("id"), m.str("strat"), m.str("sym"), m.str("expiry"), m.int("strike"), m.str("side"), m.int("lot"),
             m.num("entry", 0.0), m.long("at"), m.int("day"), m.str("why"), m.num("stopPct", 30.0), m.num("tgtPct", 50.0),
             ArrayList(m.list("bids").mapNotNull { (it as? Number)?.toDouble() }.take(FnoLab.MAX_PATH)), m.str("status").ifEmpty { "OPEN" },
-            m.num("exitPx", 0.0), m.num("pnl", 0.0), m.num("spot", 0.0), m.str("liveHit"))
+            m.num("exitPx", 0.0), m.num("pnl", 0.0), m.num("spot", 0.0), m.str("liveHit"), m["champ"] != false)
     }
 }
 
@@ -62,7 +62,7 @@ class LabBook(val open: MutableList<LabTrade> = ArrayList(), val closed: Mutable
 
 object FnoLab {
     const val MAX_PATH = 420
-    const val MAX_CLOSED = 300
+    const val MAX_CLOSED = 600
     const val EXIT_MIN = 15 * 60 + 15
     val STOPS = listOf(20.0, 30.0, 40.0)
     val TGTS = listOf(30.0, 50.0, 80.0, 0.0)       // 0 = no target, hold to 15:15
@@ -80,7 +80,7 @@ object FnoLab {
         Strat("GAPFADE", "Gap fade", "9:30–9:45: a 0.7%+ gap that has already given back ground from the open is faded."),
         Strat("EXPIRY", "Expiry-day breakout", "Nifty expiry day, 13:30–14:30: a 5-min close beyond the day's range so far buys in that direction."),
     )
-    fun stratName(id: String) = STRATS.firstOrNull { it.id == id }?.name ?: id
+    fun stratName(id: String) = STRATS.firstOrNull { it.id == baseOf(id) }?.name ?: id
     fun vkey(s: Double, t: Double) = "${s.toInt()}/${t.toInt()}"
 
     private fun num(v: Any?): Double? = when (v) { is Number -> v.toDouble(); is String -> v.replace(",", "").toDoubleOrNull(); else -> null }?.takeIf { !it.isNaN() && !it.isInfinite() }
@@ -114,7 +114,34 @@ object FnoLab {
     }
 
     /** Signals that would fire now (minute [m]) for one index, ignoring ones already fired today. Uses completed bars only. */
-    fun signals(sym: String, bars: IntraBars, m: Int, fired: Set<String>, expiryToday: Boolean = false): List<LabSignal> {
+    /** Challenger thresholds per rule: each variant is paper-traded in parallel; the best one (by learned average) is the champion whose trades are shown as calls. */
+    val VARIANTS: Map<String, List<Double>> = mapOf("ORB" to listOf(0.4, 0.6, 0.9), "FIRSTHR" to listOf(0.3, 0.4, 0.6), "TREND" to listOf(0.2, 0.3, 0.5),
+        "LATE" to listOf(0.4, 0.6, 0.8), "GAPDN" to listOf(0.3, 0.5, 0.8), "GAPFADE" to listOf(0.5, 0.7, 1.0), "EXPIRY" to listOf(0.0))
+    fun vid(strat: String, i: Int) = if ((VARIANTS[strat]?.size ?: 1) <= 1) strat else "$strat#$i"
+    fun baseOf(vid: String) = vid.substringBefore('#')
+    fun paramOf(vid: String): Double { val b = baseOf(vid); val i = vid.substringAfter('#', "1").toIntOrNull() ?: 1; val l = VARIANTS[b] ?: return 0.0; return l.getOrElse(i) { l[l.size / 2] } }
+    fun allVids(sym: String) = STRATS.filter { !((it.id == "GAPDN" || it.id == "EXPIRY") && sym != "NIFTY") }.flatMap { st -> (VARIANTS[st.id] ?: listOf(0.0)).indices.map { vid(st.id, it) } }
+    fun paramText(vid: String): String { val b = baseOf(vid); val v = paramOf(vid); return when (b) {
+        "ORB" -> "range ≤ ${f1(v)}%"; "FIRSTHR" -> "first hour ≥ ${f1(v)}%"; "TREND", "LATE" -> "move ≥ ${f1(v)}%"; "GAPDN", "GAPFADE" -> "gap ≥ ${f1(v)}%"; else -> "—" } }
+
+    /** Champion variant of [strat] on [sym]: best shrunk average of live results; the middle threshold until there is data. */
+    fun champion(b: LabBook, strat: String, sym: String): String {
+        val l = VARIANTS[strat] ?: return strat
+        if (l.size <= 1) return strat
+        var best = vid(strat, l.size / 2); var bv = 0.0
+        for (i in l.indices) { val v = b.stats[vid(strat, i) + "|" + sym]?.get("live") ?: continue; if (v.n < 5) continue; val sc = v.sum / (v.n + 5); if (sc > bv) { bv = sc; best = vid(strat, i) } }
+        return best
+    }
+
+    /** Signals for every variant that would fire now. Variant ids in LabSignal.strat (e.g. "ORB#0"). */
+    fun signalsAll(sym: String, bars: IntraBars, m: Int, fired: Set<String>, expiryToday: Boolean = false): List<LabSignal> {
+        val out = ArrayList<LabSignal>()
+        for (v in allVids(sym)) if (!fired.contains(v)) for (sg in signals(sym, bars, m, emptySet(), expiryToday, mapOf(baseOf(v) to paramOf(v)))) if (sg.strat == baseOf(v)) out.add(LabSignal(v, sg.side, sg.why))
+        return out
+    }
+
+    fun signals(sym: String, bars: IntraBars, m: Int, fired: Set<String>, expiryToday: Boolean = false, prm: Map<String, Double> = emptyMap()): List<LabSignal> {
+        fun pv(id: String, d: Double) = prm[id] ?: d
         val out = ArrayList<LabSignal>()
         // completed bars: a 5-min bar starting at minute x is complete at x+5
         val done = (0 until bars.n).filter { bars.min[it] + 5 <= m }
@@ -126,7 +153,7 @@ object FnoLab {
             val orIdx = (0 until bars.n).filter { bars.min[it] < 9 * 60 + 30 }
             if (orIdx.size >= 3) {
                 val hi = orIdx.maxOf { bars.h[it] }; val lo = orIdx.minOf { bars.l[it] }
-                if (bars.min[li] >= 9 * 60 + 30 && (hi - lo) / open * 100 <= 0.6) {
+                if (bars.min[li] >= 9 * 60 + 30 && (hi - lo) / open * 100 <= pv("ORB", 0.6)) {
                     if (last > hi) out.add(LabSignal("ORB", "CE", "5-min close ${f0(last)} above the 9:15–9:30 high ${f0(hi)}"))
                     else if (last < lo) out.add(LabSignal("ORB", "PE", "5-min close ${f0(last)} below the 9:15–9:30 low ${f0(lo)}"))
                 }
@@ -138,24 +165,24 @@ object FnoLab {
                 val r = (bars.c[fh.last()] - open) / open * 100
                 val hiP = (0 until li).maxOf { bars.h[it] }; val loP = (0 until li).minOf { bars.l[it] }
                 run {
-                    if (r >= 0.4 && bars.h[li] >= hiP) out.add(LabSignal("FIRSTHR", "CE", "First hour up ${f1(r)}% and a new intraday high"))
-                    else if (r <= -0.4 && bars.l[li] <= loP) out.add(LabSignal("FIRSTHR", "PE", "First hour down ${f1(-r)}% and a new intraday low"))
+                    if (r >= pv("FIRSTHR", 0.4) && bars.h[li] >= hiP) out.add(LabSignal("FIRSTHR", "CE", "First hour up ${f1(r)}% and a new intraday high"))
+                    else if (r <= -pv("FIRSTHR", 0.4) && bars.l[li] <= loP) out.add(LabSignal("FIRSTHR", "PE", "First hour down ${f1(-r)}% and a new intraday low"))
                 }
             }
         }
-        if (f("GAPDN") && sym == "NIFTY" && m in (9 * 60 + 20)..(9 * 60 + 35) && gap <= -0.5) out.add(LabSignal("GAPDN", "CE", "Opened ${f1(gap)}% below yesterday's close"))
-        if (f("GAPFADE") && m in (9 * 60 + 30)..(9 * 60 + 45) && Math.abs(gap) >= 0.7) {
+        if (f("GAPDN") && sym == "NIFTY" && m in (9 * 60 + 20)..(9 * 60 + 35) && gap <= -pv("GAPDN", 0.5)) out.add(LabSignal("GAPDN", "CE", "Opened ${f1(gap)}% below yesterday's close"))
+        if (f("GAPFADE") && m in (9 * 60 + 30)..(9 * 60 + 45) && Math.abs(gap) >= pv("GAPFADE", 0.7)) {
             if (gap > 0 && last < open) out.add(LabSignal("GAPFADE", "PE", "Gap up ${f1(gap)}% is failing: now below the open"))
             else if (gap < 0 && last > open) out.add(LabSignal("GAPFADE", "CE", "Gap down ${f1(-gap)}% is failing: now above the open"))
         }
         if (f("TREND") && m in (10 * 60 + 30)..(13 * 60 + 30) && li >= 22) {
             val e = ema(bars.c, 20, li); val e3 = ema(bars.c, 20, li - 3)
-            if (move >= 0.3 && last > e && e > e3) out.add(LabSignal("TREND", "CE", "Up ${f1(move)}% from the open, above a rising 20-bar average"))
-            else if (move <= -0.3 && last < e && e < e3) out.add(LabSignal("TREND", "PE", "Down ${f1(-move)}% from the open, below a falling 20-bar average"))
+            if (move >= pv("TREND", 0.3) && last > e && e > e3) out.add(LabSignal("TREND", "CE", "Up ${f1(move)}% from the open, above a rising 20-bar average"))
+            else if (move <= -pv("TREND", 0.3) && last < e && e < e3) out.add(LabSignal("TREND", "PE", "Down ${f1(-move)}% from the open, below a falling 20-bar average"))
         }
         if (f("LATE") && m in (13 * 60)..(13 * 60 + 45)) {
-            if (move >= 0.6) out.add(LabSignal("LATE", "CE", "Up ${f1(move)}% from the open by afternoon"))
-            else if (move <= -0.6) out.add(LabSignal("LATE", "PE", "Down ${f1(-move)}% from the open by afternoon"))
+            if (move >= pv("LATE", 0.6)) out.add(LabSignal("LATE", "CE", "Up ${f1(move)}% from the open by afternoon"))
+            else if (move <= -pv("LATE", 0.6)) out.add(LabSignal("LATE", "PE", "Down ${f1(-move)}% from the open by afternoon"))
         }
         if (f("EXPIRY") && expiryToday && sym == "NIFTY" && m in (13 * 60 + 30)..(14 * 60 + 30) && li >= 2) {
             val hiP = (0 until li).maxOf { bars.h[it] }; val loP = (0 until li).minOf { bars.l[it] }
@@ -239,19 +266,26 @@ object FnoLab {
                 "lot" to t.lot, "lots" to lots(capital, t.entry, t.lot, t.stopPct), "now" to bid, "status" to t.status, "liveHit" to t.liveHit,
                 "exitPx" to t.exitPx, "pnl" to if (t.status == "OPEN") Fno.r2(net(t.entry, bid, t.qty)) else t.pnl, "spot" to t.spot, "stratStatus" to status(b, k), "day" to t.day)
         }
-        val today = (b.open.filter { it.day == day } + b.closed.filter { it.day == day }).sortedByDescending { it.at }
+        val today = (b.open.filter { it.day == day } + b.closed.filter { it.day == day }).filter { it.champ }.sortedByDescending { it.at }
+        val shadowToday = (b.open.count { it.day == day && !it.champ } + b.closed.count { it.day == day && !it.champ })
         val strats = ArrayList<Map<String, Any?>>()
+        val lessons = ArrayList<String>()
         for (s in STRATS) for (sym in INDEX.keys) {
             if ((s.id == "GAPDN" || s.id == "EXPIRY") && sym != "NIFTY") continue
-            val k = s.id + "|" + sym; val v = b.stats[k]?.get("live") ?: VarStat(); val be = bestExit(b, k)
+            val ch = champion(b, s.id, sym); val k = "$ch|$sym"
+            val v = b.stats[k]?.get("live") ?: VarStat(); val be = bestExit(b, k)
             val bv = b.stats[k]?.get(vkey(be.first, be.second))
+            val vars = (VARIANTS[s.id] ?: listOf(0.0)).indices.map { i -> val vk = vid(s.id, i); val vs = b.stats["$vk|$sym"]?.get("live") ?: VarStat()
+                linkedMapOf("param" to paramText(vk), "n" to vs.n, "avg" to Fno.r2(vs.mean), "champ" to (vk == ch)) }
+            val tot = vars.sumOf { (it["n"] as Int) }
             strats.add(linkedMapOf("id" to s.id, "name" to s.name, "rule" to s.rule, "sym" to sym, "n" to v.n, "wins" to v.wins, "avg" to Fno.r2(v.mean),
                 "total" to Fno.r2(v.sum), "t" to Fno.r2(v.t), "status" to status(b, k), "stopPct" to be.first, "tgtPct" to be.second,
-                "bestAvg" to Fno.r2(bv?.mean ?: 0.0), "bestN" to (bv?.n ?: 0)))
+                "bestAvg" to Fno.r2(bv?.mean ?: 0.0), "bestN" to (bv?.n ?: 0), "champion" to paramText(ch), "variants" to vars, "tested" to tot))
+            if (v.n >= 5) lessons.add("${s.name} on $sym: best so far is ${paramText(ch)} with stop −${be.first.toInt()}%" + (if (be.second > 0) " / target +${be.second.toInt()}%" else " / hold to 3:15") + " (avg ₹${Fno.r2(v.mean)}/lot over ${v.n} trades)")
         }
-        val all = VarStat(); b.closed.forEach { all.add(it.pnl) }
-        return linkedMapOf("ok" to true, "today" to today.map { tv(it) }, "recent" to b.closed.filter { it.day != day }.take(20).map { tv(it) },
-            "strategies" to strats, "record" to linkedMapOf("n" to all.n, "wins" to all.wins, "total" to Fno.r2(all.sum), "avg" to Fno.r2(all.mean)))
+        val all = VarStat(); b.closed.filter { it.champ }.forEach { all.add(it.pnl) }
+        return linkedMapOf("ok" to true, "today" to today.map { tv(it) }, "recent" to b.closed.filter { it.day != day && it.champ }.take(20).map { tv(it) },
+            "strategies" to strats, "lessons" to lessons.take(6), "shadowToday" to shadowToday, "record" to linkedMapOf("n" to all.n, "wins" to all.wins, "total" to Fno.r2(all.sum), "avg" to Fno.r2(all.mean)))
     }
 
     /* ---------- live ticker (NSE allIndices) ---------- */

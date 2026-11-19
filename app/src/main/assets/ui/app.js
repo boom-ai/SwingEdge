@@ -517,7 +517,7 @@
   }
   var fnoTimer = null, fnoBusy = false;
   function fnoArgs(extra) { var a = { sym: ui.fno.sym || 'NIFTY', expiry: ui.fno.exp || '' }; for (var k in extra) a[k] = extra[k]; return a; }
-  function fnoSend(name, extra) { if (fnoBusy && name === 'fno') return; fnoBusy = true; try { bridge().action(name, JSON.stringify(fnoArgs(extra || {}))); } catch (e) { fnoBusy = false; } }
+  function fnoSend(name, extra) { if (fnoBusy && name === 'fno' && Date.now() - fnoBusy < 6000) return; fnoBusy = Date.now(); try { bridge().action(name, JSON.stringify(fnoArgs(extra || {}))); } catch (e) { fnoBusy = false; } }
   function fnoLoad() { fnoSend('fno', {}); }
   /* ---------- live ticker + lab calls ---------- */
   ui.tick = { list: [], prev: {}, at: 0 }; ui.lab = {};
@@ -560,7 +560,7 @@
       if (document.hidden || !S) return;
       var t = Date.now(), fnoOn = !!(sheet && sheet.kind === 'fno'), onToday = ui.tab === 'today' && !sheet;
       if (!fnoOn && !onToday) return;
-      var open = S.marketOpen === true, gap = open ? (fnoOn ? 2000 : 4000) : 60000;
+      var open = S.marketOpen === true, gap = open ? (fnoOn ? 1000 : 2000) : 60000;
       if (t - tickAt >= gap && !(tickBusy && t - tickBusy < 8000)) { tickAt = t; tickBusy = t; bridge().action('fnoTicker', '{}'); }
       if ((t - labAt >= (open ? 15000 : 120000) || !ui.lab.ok) && t - labAt >= 5000) { labAt = t; bridge().action('fnoLab', '{}'); }
     } catch (e) { tickBusy = 0; }
@@ -572,7 +572,7 @@
       if (!sheet || sheet.kind !== 'fno') { fnoPoll(false); return; }
       if (document.hidden || (ui.fno && ui.fno.form)) return;
       fnoLoad();
-    }, 2000);
+    }, 1000);
   }
   function fnoReadForm() {
     var fm = ui.fno.form; if (!fm) return false;

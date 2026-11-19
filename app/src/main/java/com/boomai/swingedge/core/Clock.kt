@@ -14,6 +14,7 @@ object Clock {
     const val HOLIDAY_CHECK_MIN = 9 * 60 + 30
 
     fun epochDay(ms: Long): Int = Math.floorDiv(ms + IST_OFFSET_MS, DAY_MS).toInt()
+    fun hhmmss(ms: Long): String { val t = Math.floorMod(ms + IST_OFFSET_MS, DAY_MS) / 1000L; return String.format(java.util.Locale.US, "%02d:%02d:%02d", t / 3600, (t / 60) % 60, t % 60) }
     fun minuteOfDay(ms: Long): Int = (Math.floorMod(ms + IST_OFFSET_MS, DAY_MS) / 60_000L).toInt()
     fun msAt(epochDay: Int, minute: Int): Long = epochDay.toLong() * DAY_MS + minute * 60_000L - IST_OFFSET_MS
     /** 0 = Monday ... 6 = Sunday. */

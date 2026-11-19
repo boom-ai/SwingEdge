@@ -49,6 +49,33 @@ class AndroidPlatform(context: Context) : Platform {
 
     // ------------------------------------------------------------------ HTTP
 
+    /** Small JSON POST (live quote batches). https only, 6 s budget, 1 MB cap. */
+    override fun httpPost(url: String, body: String): String? {
+        var conn: HttpURLConnection? = null
+        try {
+            val u = URL(url)
+            if (u.protocol?.lowercase() != "https" || body.length > 64 * 1024) return null
+            conn = u.openConnection() as HttpURLConnection
+            conn.connectTimeout = 4_000; conn.readTimeout = 5_000
+            conn.requestMethod = "POST"; conn.doOutput = true; conn.useCaches = false
+            conn.setRequestProperty("User-Agent", USER_AGENT)
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept-Encoding", "gzip")
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            if (conn.responseCode != HttpURLConnection.HTTP_OK) return null
+            var input: InputStream = conn.inputStream
+            if ("gzip".equals(conn.contentEncoding, ignoreCase = true)) input = GZIPInputStream(input)
+            val bos = ByteArrayOutputStream(16 * 1024); val buf = ByteArray(16 * 1024)
+            input.use { while (true) { val r = it.read(buf); if (r < 0) break; bos.write(buf, 0, r); if (bos.size() > 1024 * 1024) return null } }
+            return String(bos.toByteArray(), Charsets.UTF_8)
+        } catch (t: Throwable) {
+            return null
+        } finally {
+            try { conn?.disconnect() } catch (_: Throwable) {}
+        }
+    }
+
     override fun httpGetAll(urls: List<String>): List<String?> {
         val n = try { urls.size } catch (_: Throwable) { 0 }
         val out = arrayOfNulls<String>(n)

@@ -1952,14 +1952,56 @@ class SwingApp(private val p: Platform) {
     }
 
     /** Live chain, refetched when older than [maxAgeMs]. Null when NSE does not answer. */
+    private val nseBase = java.util.concurrent.ConcurrentHashMap<String, FnoChain>()
+    private val growwIds = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Map<Int, Pair<String, String>>>>()
+    @Volatile private var gIdx: Pair<Long, List<Map<String, Any?>>>? = null
+    @Volatile var liveOkAt = 0L
+
+    /** Live index levels (Groww batch, ~1 s fresh; cached 700 ms). */
+    private fun growwIndices(): List<Map<String, Any?>> {
+        val now = p.now(); gIdx?.let { if (now - it.first < 700L) return it.second }
+        val got = Groww.parseIndices(try { p.httpPost(Groww.INDEX_URL, Groww.indexBody(Groww.TICKER.map { it.first })) } catch (t: Throwable) { null })
+        if (got.isNotEmpty()) { gIdx = Pair(now, got); liveOkAt = now }
+        return got
+    }
+
+    /**
+     * Option chain for [sym]/[expiry]: NSE gives strikes, spreads, IV and OI (refreshed every 45 s); live last prices for the
+     * strikes around the money come from a tick-by-tick batch call each time (so the screen and paper fills move every second).
+     */
     private fun fnoChain(sym: String, expiry: String, maxAgeMs: Long): FnoChain? {
         val key = "$sym|$expiry"
-        val c = fnoChains[key]
         val now = p.now()
-        if (c != null && now - c.fetchedAt < maxAgeMs) return c
-        val got = Fno.parseChain(sym, expiry, fnoGet { Fno.chainUrl(it, sym, expiry) }, p.now())
-        if (got != null) fnoChains[key] = got
-        return got ?: c
+        val c = fnoChains[key]
+        if (c != null && now - c.fetchedAt < Math.min(maxAgeMs, 900L)) return c
+        var base = nseBase[key]
+        if (base == null || now - base.fetchedAt > Math.max(45_000L, Math.min(maxAgeMs, 90_000L))) {
+            Fno.parseChain(sym, expiry, fnoGet { Fno.chainUrl(it, sym, expiry) }, now)?.let { base = it; nseBase[key] = it }
+        }
+        val b = base ?: return c
+        val live = try { liveOverlay(b, now) } catch (t: Throwable) { null }
+        val out = live ?: b
+        fnoChains[key] = out
+        return out
+    }
+
+    private fun liveOverlay(b: FnoChain, now: Long): FnoChain? {
+        val iso = java.time.LocalDate.ofEpochDay(Fno.expDay(b.expiry).toLong()).toString()
+        val ik = b.sym + "|" + iso
+        val ids = growwIds[ik]?.takeIf { now - it.first < 30 * 60_000L && it.second.isNotEmpty() }?.second
+            ?: Groww.parseIds(try { p.httpGetAll(listOf(Groww.chainUrl(b.sym, iso))).firstOrNull() } catch (t: Throwable) { null }).also { if (it.isNotEmpty()) growwIds[ik] = Pair(now, it) }
+        if (ids.isEmpty()) return null
+        val spotLive = growwIndices().firstOrNull { it["sym"] == b.sym }?.get("last") as? Double
+        val spot = spotLive ?: b.spot
+        val near = b.strikes.sortedBy { Math.abs(it - spot) }.take(14).filter { ids.containsKey(it) }
+        val want = near.flatMap { listOf(ids[it]!!.first, ids[it]!!.second) }
+        if (want.isEmpty()) return null
+        val px = Groww.parsePrices(try { p.httpPost(Groww.PRICES_URL, Json.stringify(want)) } catch (t: Throwable) { null })
+        if (px.isEmpty()) return null
+        liveOkAt = now
+        val live = near.associateWith { Pair(px[ids[it]!!.first], px[ids[it]!!.second]) }
+        val lt = px.values.maxOfOrNull { it.second } ?: now
+        return Groww.overlay(b, spot, live, now, "Live " + Clock.hhmmss(if (lt > 0) lt else now))
     }
 
     private fun fnoView(b: FnoBook, c: FnoChain?, err: String): Map<String, Any?> {
@@ -2013,17 +2055,18 @@ class SwingApp(private val p: Platform) {
         return synchronized(labLock) {
             val b = labLoad(); val v = LinkedHashMap(FnoLab.view(b, Clock.epochDay(p.now()), capital(), fnoChains))
             v["ticker"] = fnoTickerList(); v["at"] = p.now()
-            v["scan"] = linkedMapOf("at" to labStepAt, "info" to labLast, "nseOk" to nseOkAt, "nseFail" to nseFailAt, "variants" to FnoLab.allVids("NIFTY").size + FnoLab.allVids("BANKNIFTY").size)
+            v["scan"] = linkedMapOf("at" to labStepAt, "info" to labLast, "liveOk" to liveOkAt, "nseOk" to nseOkAt, "nseFail" to nseFailAt, "variants" to FnoLab.allVids("NIFTY").size + FnoLab.allVids("BANKNIFTY").size)
             v
         }
     }
     private fun fnoTickerList(): List<Map<String, Any?>> {
+        growwIndices().let { if (it.isNotEmpty()) return it }
         val now = p.now(); tickCache?.let { if (now - it.first < 2_500L) return it.second }
         val got = FnoLab.parseIndices(fnoGet { it + "/api/allIndices" })
         if (got.isNotEmpty()) tickCache = Pair(now, got)
         return got.ifEmpty { tickCache?.second ?: emptyList() }
     }
-    private fun fnoTicker(): Map<String, Any?> = linkedMapOf("ok" to true, "at" to p.now(), "ticker" to fnoTickerList(),
+    private fun fnoTicker(): Map<String, Any?> = linkedMapOf("ok" to true, "at" to p.now(), "ticker" to fnoTickerList(), "liveOk" to liveOkAt,
         "chains" to listOf("NIFTY", "BANKNIFTY").mapNotNull { s -> fnoChains.values.filter { it.sym == s }.maxByOrNull { it.fetchedAt }?.let { linkedMapOf("sym" to s, "spot" to it.spot, "at" to it.fetchedAt) } })
 
     private fun labExpiry(sym: String, forExpiryDay: Boolean): String? {

@@ -308,3 +308,37 @@ object V15Tests {
         T.eq(Json.parseObject(app.action("fnoTicker", "{}"))!!.list("ticker").size, 2, "ticker action")
     }
 }
+
+
+object V16Tests {
+    fun all(): List<Pair<String, () -> Unit>> = listOf("v16-live-feed" to ::live)
+    fun live() {
+        val idx = """{"segment":"CASH","exchangeAggRespMap":{"NSE":{"priceLivePointsMap":{},"indexLivePointsMap":{"NIFTY":{"close":25227.95,"dayChange":85.9,"dayChangePerc":0.34,"value":25313.85,"tsInMillis":1795067365},"INDIAVIX":{"value":15.99,"dayChange":0.42,"dayChangePerc":2.7,"tsInMillis":1795067365}}}}}"""
+        val t = Groww.parseIndices(idx)
+        T.eq(t.map { it["name"] }, listOf("Nifty 50", "India VIX"), "indices in ticker order"); T.eq(t[0]["last"], 25313.85, "nifty live value")
+        T.eq(Groww.parseIndices("junk").size, 0, "junk -> empty")
+        val chain = """{"optionChain":{"optionChains":[{"callOption":{"growwContractId":"NIFTY26NOV25450CE"},"putOption":{"growwContractId":"NIFTY26NOV25450PE"},"strikePrice":2545000}],"expiryDetailsDto":{}}}"""
+        T.eq(Groww.parseIds(chain)[25450]?.first, "NIFTY26NOV25450CE", "contract ids by strike")
+        val px = """{"NIFTY26NOV25450CE":{"ltp":123.45,"lastTradeTime":1795067564,"dayChange":5},"NIFTY26NOV25450PE":{"ltp":88.1,"lastTradeTime":1795067564}}"""
+        T.eq(Groww.parsePrices(px)["NIFTY26NOV25450CE"]?.first, 123.45, "batch ltp")
+        // integration: the paper chain takes the live price
+        val day = java.time.LocalDate.of(2026, 11, 18).toEpochDay().toInt()
+        val p = FakePlatform.standard(); p.setTime(day, 10 * 60)
+        val H = "https://www.nseindia.com"
+        p.served[Fno.infoUrl(H, "NIFTY")] = "{\"expiryDates\":[\"23-Nov-2026\"]}"
+        p.served[Fno.chainUrl(H, "NIFTY", "23-Nov-2026")] = V12Tests.chainJson(25450.0, 100.0, 101.0)
+        p.served[Groww.chainUrl("NIFTY", "2026-11-23")] = chain
+        p.posted[Groww.PRICES_URL] = px; p.posted[Groww.INDEX_URL] = idx
+        val app = SwingApp(p)
+        val r = Json.parseObject(app.action("fno", "{\"sym\":\"NIFTY\",\"expiry\":\"23-Nov-2026\"}"))!!
+        val rows = r.obj("chain").list("rows").map { it.asObj() }
+        val k = rows.firstOrNull { it.int("k") == 25450 }
+        T.check(k != null && k.obj("ce").num("ltp") == 123.45, "chain row shows the live CE price: $k")
+        T.check(k != null && k.obj("ce").num("bid") < 123.45 && k.obj("ce").num("ask") > 123.45, "bid/ask around the live price")
+        T.check(r.obj("chain").str("ts").startsWith("Live"), "chain marked Live")
+        T.eq(Json.parseObject(app.action("fnoTicker", "{}"))!!.list("ticker")[0].asObj().num("last"), 25313.85, "ticker from the live feed")
+        p.posted.clear()
+        val r2 = Json.parseObject(app.action("fno", "{\"sym\":\"NIFTY\",\"expiry\":\"23-Nov-2026\"}"))!!
+        T.check(r2.obj("chain").list("rows").isNotEmpty(), "falls back to NSE when the live feed is down")
+    }
+}

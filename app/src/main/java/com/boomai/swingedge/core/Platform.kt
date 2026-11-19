@@ -6,6 +6,8 @@ interface Platform {
     fun now(): Long
     /** Fetch all URLs in parallel. Same order as input; null for any failure. Must never throw. */
     fun httpGetAll(urls: List<String>): List<String?>
+    /** POST a JSON body; null on any failure. */
+    fun httpPost(url: String, body: String): String? = null
     /** Read a small private text file; null if missing. */
     fun read(name: String): String?
     /** Atomically write a small private text file. */

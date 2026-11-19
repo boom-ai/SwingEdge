@@ -228,6 +228,8 @@ class FakePlatform : Platform {
     val served = HashMap<String, String>()
 
     override fun now(): Long = nowMs
+    val posted = java.util.Collections.synchronizedMap(HashMap<String, String>())
+    override fun httpPost(url: String, body: String): String? { if (offline) return null; synchronized(this) { httpCalls++ }; return posted[url] }
     override fun httpGetAll(urls: List<String>): List<String?> {
         synchronized(this) {
             httpCalls++

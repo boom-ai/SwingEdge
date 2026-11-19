@@ -125,7 +125,7 @@ function run(S, ui, tag) {
 bases.forEach((b, i) => run(b.state, { tab: 'today', expanded: {}, pending: {}, device: b.device, now: Date.now() }, 'base' + i));
 // unmutated new screens must render completely, with the real numbers in them
 {
-  const b = bases[0], t = STOCKS[0], u = { tab: 'setups', fullCards: true, pending: {}, device: b.device, now: Date.now(), emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, stock: { sym: t.sym, info: t.info, chart: t.chart, want: 260, range: 260 }, recent: [{ sym: 'ITC', name: 'ITC Ltd' }], search: { q: 'tata', sent: 'tata', shown: 'tata', results: SEARCHES[0].results } };
+  const b = bases[0], t = STOCKS[0], u = { tab: 'setups', fullCards: true, stMore: true, showTargets: true, pending: {}, device: b.device, now: Date.now(), emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, stock: { sym: t.sym, info: t.info, chart: t.chart, want: 260, range: 260 }, recent: [{ sym: 'ITC', name: 'ITC Ltd' }], search: { q: 'tata', sent: 'tata', shown: 'tata', results: SEARCHES[0].results } };
   const must = (what, html, re) => { renders++; if (!re.test(html)) { fails++; console.log('FAIL', what, 'missing', re); } };
   const html = SE.sheet('stock', b.state, u, { id: t.sym });
   must('stock page', html, /Tata Motors Ltd/); must('stock page', html, /10 \/ 20 EMA/); must('stock page', html, /Technical checklist/); must('stock page', html, /Setups it matches/); must('stock page', html, /aria-label="Price chart with volume"/);

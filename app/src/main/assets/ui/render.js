@@ -614,8 +614,8 @@
   function dayPips(t) {
     var d = N(t.day), m = N(t.maxDays);
     if (d === null || m === null || m <= 0 || d < 0) return '<span>Day ' + (d !== null && d >= 0 ? cnt(d) : DASH) + (m !== null && m > 0 ? ' of ' + cnt(m) : '') + '</span>';
-    var h = '<span>Day <b class="num">' + cnt(d) + '</b> of <b class="num">' + cnt(m) + '</b></span>';
-    if (m <= 12) {
+    var h = '<span>Day <b class="num">' + cnt(d) + '/' + cnt(m) + '</b></span>';
+    if (false) {
       h += '<span class="pips" aria-hidden="true">';
       for (var i = 1; i <= m; i++) h += '<i class="' + (i <= d ? (d >= m ? 'f last' : 'f') : '') + '"></i>';
       h += '</span>';
@@ -634,7 +634,7 @@
       '<div class="days">' + dayPips(t) + '<span class="sp"></span><span>Opened ' + dm(t.openedAt, ui.now) + '</span></div>' +
       '<div class="act ' + (a.cls === 'sell' ? 'sell' : a.cls === 'trim' ? 'trim' : '') + '"><div class="ah">' + tag(a.cls, a.label, a.icon) + '</div>' +
       '<div class="an">' + tx(t.actionNote, unknown ? 'No instruction received for this trade yet.' : 'No note.') + '</div></div>' +
-      '<div class="btns">' + btn('close', id, 'Close trade', (a.cls === 'sell' ? 'dan' : '') + ' grow', { disabled: !id, busy: pend(ui, 'closeTrade:' + id) }) + '</div>' +
+      '<div class="btns">' + btn('close', id, a.cls === 'sell' ? 'Sell ' + (N(t.qty) || '') + ' shares' : a.cls === 'trim' ? 'Sell some (book half)' : 'Close trade', (a.cls === 'sell' ? 'dan' : a.cls === 'trim' ? '' : 'ghost') + ' grow', { disabled: !id, busy: pend(ui, 'closeTrade:' + id) }) + '</div>' +
       '</div></article>';
   }
   function scorecard(S) {
@@ -666,7 +666,8 @@
       return ra - rb || a.i - b.i;
     });
     var max = N(O(S.settings).maxOpenTrades);
-    var h = '<div class="btns hintpad">' + btn('fno-open', null, 'F&O paper trading (live prices)', 'sm', { icon: 'chart' }) + btn('opt-open', null, 'Options calculator', 'sm ghost', { icon: 'flask' }) + '</div>' + weekBlock(S, N(O(S.settings).capital) || 0) + targetsSection(S, ui) + '<div class="sec"><h2>Open trades</h2><span class="cnt">' + open.length + (max !== null && max > 0 ? ' of ' + cnt(max) + ' max' : '') + '</span></div>';
+    var h = '<div class="btns hintpad">' + btn('fno-open', null, 'F&O paper trading (live prices)', 'sm', { icon: 'chart' }) + btn('opt-open', null, 'Options calculator', 'sm ghost', { icon: 'flask' }) + '</div>' + weekBlock(S, N(O(S.settings).capital) || 0) + (ui.showTargets === true ? targetsSection(S, ui) + '<div class="btns hintpad">' + btn('targets-toggle', null, 'Hide my targets', 'sm ghost', {}) + '</div>' : (function () { var tg = A(S.targets).filter(function (x) { return T(x.sym).trim(); }), hit = tg.filter(function (x) { return /^HIT_/.test(T(x.status)); }).length;
+        return '<button type="button" class="card collap" data-c="targets-toggle"><b>My price targets</b><span class="' + (hit ? 'up' : 'mut') + '">' + (hit ? hit + ' hit · ' : '') + tg.length + ' ›</span></button>'; })()) + '<div class="sec"><h2>Open trades</h2><span class="cnt">' + open.length + (max !== null && max > 0 ? ' of ' + cnt(max) + ' max' : '') + '</span></div>';
     if (!open.length) {
       h += '<div class="empty"><div class="ei">' + ic('trades') + '</div><h3>No open trades</h3>' +
         '<p>When you tap “I bought it” on a buy idea, the trade appears here with its stop-loss, targets and a daily call to hold, book half or exit.</p></div>';
@@ -696,24 +697,28 @@
     var out = '<article class="card rail hold ' + rail + (nodata ? ' nodata' : '') + '"><div class="cb">' +
       '<div class="hd"><div class="who"><div class="sym">' + vt + symBtn(h.sym, h.name) + '</div>' +
       '<div class="sub">' + qtyStr(h.qty) + ' shares · avg ' + px(h.avg) + (T(h.name).trim() && T(h.name).trim() !== sym ? ' · ' + esc(T(h.name).trim()) : '') + '</div>' +
-      (!nodata && N(h.strength) > 0 ? '<div class="str"><span>Trend strength</span><i><b style="width:' + Math.min(100, Math.round(N(h.strength))) + '%" class="' + (N(h.strength) >= 65 ? 'g' : N(h.strength) >= 40 ? 'a' : 'r') + '"></b></i><span class="num">' + Math.round(N(h.strength)) + '</span></div>' : '') + '</div>';
+      (!nodata && N(h.strength) > 0 && O(ui.hx)[sym] === true ? '<div class="str"><span>Trend strength</span><i><b style="width:' + Math.min(100, Math.round(N(h.strength))) + '%" class="' + (N(h.strength) >= 65 ? 'g' : N(h.strength) >= 40 ? 'a' : 'r') + '"></b></i><span class="num">' + Math.round(N(h.strength)) + '</span></div>' : '') + '</div>';
     if (nodata) {
       out += '<div class="px"><div class="ltp mut">' + DASH + '</div><div class="ltpl">no price</div></div></div>' +
         '<div class="nd">' + ic(T(h.noDataWhy).trim() ? 'info' : 'clock') + '<span>' + (T(h.noDataWhy).trim() ? esc(T(h.noDataWhy).trim()) : 'No data yet. Prices and a verdict appear after the next scan.') + '</span></div>';
     } else {
       out += '<div class="px"><div class="ltp">' + px(h.ltp) + '</div><div class="ltpl num ' + tone(h.dayChgPct) + '">' + pc(h.dayChgPct, true, true) + ' today</div></div></div>';
       if (T(h.headline).trim()) out += '<div class="headline">' + esc(T(h.headline).trim()) + '</div>';
-      out += '<div class="lv"><div class="w2"><div class="k">P&amp;L <span class="num ' + tone(h.pnlPct) + '">' + pc(h.pnlPct, true) + '</span></div><div class="v ' + tone(h.pnlRs) + '">' + rs(h.pnlRs, true) + '</div></div>' +
+      out += '<div class="hpl"><span class="mut">P&amp;L</span> <b class="num ' + tone(h.pnlRs) + '">' + rs(h.pnlRs, true) + '</b> <span class="num ' + tone(h.pnlPct) + '">' + pc(h.pnlPct, true) + '</span></div>';
+      if (O(ui.hx)[sym] === true && (N(h.stop) > 0 || N(h.bookAt) > 0)) out += '<div class="lv">' +
         (N(h.stop) > 0 ? '<div><div class="k">Stop</div><div class="v">' + pxBare(h.stop) + '</div></div>' : '') +
         (N(h.bookAt) > 0 ? '<div><div class="k">Book at</div><div class="v">' + pxBare(h.bookAt) + '</div></div>' : '') + '</div>';
     }
-    var rb = nodata ? '' : reasonsBlock('hold:' + sym, h.reasons, ui, 'Why');
-    out += '<div class="foot">' + (rb ? rb.split('</button>')[0] + '</button>' : '<span class="more"></span>') +
-      '<button type="button" class="rm" data-c="remove" data-id="' + esc(sym) + '"' + (!sym || pend(ui, 'removeHolding:' + sym) ? ' disabled' : '') + '>' + ic('trash') + 'Remove</button></div>';
+    var open = O(ui.hx)[sym] === true;
+    var rb = nodata || !open ? '' : reasonsBlock('hold:' + sym, h.reasons, ui, 'Why');
+    out += '<div class="foot"><button type="button" class="more" data-c="hold-x" data-id="' + esc(sym) + '" aria-expanded="' + open + '">' + (open ? 'Less' : 'Details') + '</button>' +
+      (open ? (rb ? rb.split('</button>')[0] + '</button>' : '') + '<button type="button" class="rm" data-c="remove" data-id="' + esc(sym) + '"' + (!sym || pend(ui, 'removeHolding:' + sym) ? ' disabled' : '') + '>' + ic('trash') + 'Remove</button>' : '') + '</div>';
     if (rb && rb.indexOf('<ul') >= 0) out += rb.slice(rb.indexOf('<ul'));
     return out + '</div></article>';
   }
-  function overview(S) {
+  var ovOpen = false;
+  function overview(S, ui) {
+    ovOpen = O(ui).ovOpen === true;
     var hs = A(S.holdings).filter(function (x) { return N(x.valueRs) > 0; });
     var total = hs.reduce(function (a, x) { return a + N(x.valueRs); }, 0);
     if (!(total > 0) || hs.length < 2) return '';
@@ -737,8 +742,8 @@
     var vc = { SELL: 0, TRIM: 0, WATCH: 0, HOLD: 0 };
     A(S.holdings).forEach(function (x) { if (x.dataOk !== false && vc[x.verdict] !== undefined) vc[x.verdict]++; });
     var health = '<div class="hl"><span class="hold">' + vc.HOLD + ' healthy</span><span class="watch">' + vc.WATCH + ' on watch</span><span class="trim">' + vc.TRIM + ' to trim</span><span class="sell">' + vc.SELL + ' to sell</span></div>';
-    return '<div class="sec"><h2>Overview</h2></div><div class="card ov">' + health + '<div class="k">Where the money is</div>' + bar +
-      (warn ? '<div class="ovw">' + ic('warn') + '<span>' + esc(warn) + '</span></div>' : '') + wl + '</div>';
+    return '<div class="sec"><h2>Overview</h2><span class="sp"></span><button type="button" class="linkbtn" data-c="ov-toggle">' + (ovOpen ? 'Less' : 'More') + '</button></div><div class="card ov">' + health +
+      (ovOpen ? '<div class="k">Where the money is</div>' + bar + (warn ? '<div class="ovw">' + ic('warn') + '<span>' + esc(warn) + '</span></div>' : '') + wl : (warn ? '<div class="ovw">' + ic('warn') + '<span>' + esc(warn) + '</span></div>' : '')) + '</div>';
   }
   function portfolio(S, ui) {
     var p = O(S.portfolio), hs = sortedHoldings(S, ui.sort);
@@ -752,11 +757,11 @@
         '<div class="calls">' + (sell > 0 ? tag('sell', cnt(sell) + ' TO SELL', 'down') : '') + (trim > 0 ? tag('trim', cnt(trim) + ' TO TRIM', 'scissors') : '') +
         (!(sell > 0) && !(trim > 0) ? '<span class="t">No sell or trim calls right now.</span>' : '') + '</div></div></div>';
     }
-    h += '<div class="tools">' + btn('add', null, 'Add', '', { icon: 'plus' }) +
+    h += '<div class="tools">' + (ui.addOpen === true ? btn('add', null, 'Add one', '', { icon: 'plus' }) +
       btn('pick', null, 'Import file', '', { icon: 'file', busy: pend(ui, 'importHoldings') }) +
-      btn('paste', null, 'Paste', '', { icon: 'paste', disabled: pend(ui, 'importHoldings') }) + '</div>';
+      btn('paste', null, 'Paste', '', { icon: 'paste', disabled: pend(ui, 'importHoldings') }) : btn('add', null, 'Add', '', { icon: 'plus' }) + btn('add-open', null, 'Import / paste', 'ghost', { icon: 'file', busy: pend(ui, 'importHoldings') })) + '</div>';
     if (ui.importResult) h += '<div style="margin-top:10px">' + importResult(ui.importResult) + '</div>';
-    if (hs.length >= 2) h += overview(S);
+    if (hs.length >= 2) h += overview(S, ui);
     h += '<div class="sec"><h2>Holdings</h2><span class="cnt">' + hs.length + '</span></div>';
     if (hs.length >= 2) {
       var sk = ui.sort || 'action';
@@ -826,7 +831,11 @@
       '<div class="hint" style="padding-top:10px">' + ic('clock') + '<span class="t">A re-test downloads about two years of prices and takes a few minutes. You can leave this screen.</span></div>';
     return h;
   }
-  function alerts(S, ui) { return feed(S, ui) + strategies(S, ui) + '<div class="sec"><h2>Track record</h2></div>' + trackRow(S); }
+  function alerts(S, ui) {
+    var st = ui.alTab === 'strat';
+    return '<div class="seg2">' + [['feed', 'Alerts'], ['strat', 'Strategies']].map(function (v) { var on = (v[0] === 'strat') === st; return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-c="al-tab" data-id="' + v[0] + '">' + v[1] + '</button>'; }).join('') + '</div>' +
+      (st ? strategies(S, ui) + '<div class="sec"><h2>Track record</h2></div>' + trackRow(S) : feed(S, ui));
+  }
 
   /* =====================================================================================================
      v3 (SPEC3): buy verdict card, user targets, ranked ideas, full-screen chart chrome + readouts
@@ -1077,12 +1086,12 @@
     var lo = N(x.entryLow), hi = N(x.entryHigh);
     var zone = lo > 0 && hi > 0 ? (Math.round(lo) === Math.round(hi) ? emaNum(lo) : emaNum(Math.min(lo, hi)) + '–' + emaNum(Math.max(lo, hi))) : DASH;
     var rr = N(x.rr), hz = N(x.horizonDays);
-    return '<button type="button" class="srow idea" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' +
-      '<span class="s1"><span class="rk num">' + (i + 1) + '</span><span class="wn"><b>' + esc(sym) + '</b><span class="ws">' + (nm && nm !== sym ? esc(nm) : '&nbsp;') + '</span></span>' +
-      spark(x.spark, up) + '<span class="sp"><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + (N(x.dayChgPct) === null ? '' : pc(x.dayChgPct, true, true)) + '</span></span></span>' +
-      '<span class="s2 idz">' + scoreRing(x.score, k.cls, 36) + '<span class="idt"><span class="vpill sm ' + k.cls + '">' + esc(lab.slice(0, 5)) + '</span></span>' +
-      '<span class="idc idw"><i>Entry zone</i><b class="num">' + zone + '</b></span><span class="idc"><i>Stop</i><b class="num">' + emaNum(x.stop) + '</b></span><span class="idc"><i>Target 1</i><b class="num">' + emaNum(x.t1) + '</b></span></span>' +
-      (full && (T(x.headline).trim() || (rr !== null && rr > 0) || hz > 0) ? '<span class="s3 clip">' + ((rr !== null && rr > 0) ? 'Reward : risk 1 : ' + (rr > 99 ? '>99' : rr.toFixed(1)) : '') + (hz > 0 ? ((rr !== null && rr > 0) ? ' · ' : '') + 'about ' + cnt(hz) + ' trading days' : '') + '</span>' : '') +
+    var rp = function (v) { var n = N(v); return n === null ? DASH : n >= 100 ? Math.round(n).toLocaleString('en-IN') : emaNum(n); };
+    var zone2 = lo > 0 && hi > 0 ? (Math.round(lo) === Math.round(hi) ? rp(lo) : rp(Math.min(lo, hi)) + '–' + rp(Math.max(lo, hi))) : DASH;
+    return '<button type="button" class="srow idea2" data-c="stock" data-id="' + esc(sym) + '" data-name="' + esc(nm) + '">' +
+      '<span class="i1">' + scoreRing(x.score, k.cls, 38) + '<span class="wn"><b>' + esc(sym) + '</b>' + (lab !== 'BUY' ? '<span class="ws">' + esc(lab) + '</span>' : '') + '</span>' +
+      '<span class="sp"><span class="num">' + px(x.ltp) + '</span><span class="num ' + tone(x.dayChgPct) + '">' + (N(x.dayChgPct) === null ? '' : pc(x.dayChgPct, true, true)) + '</span></span></span>' +
+      '<span class="i2 num">Buy <b>' + zone2 + '</b> · Stop <b class="down">' + rp(x.stop) + '</b> · Target <b class="up">' + rp(x.t1) + '</b>' + ((rr !== null && rr > 0 && full) ? ' · ' + (rr > 99 ? '>99' : rr.toFixed(1)) + '×' : '') + '</span>' +
       '</button>';
   }
   function ideasBlock(S, where) {
@@ -1095,7 +1104,7 @@
       return today ? h + '<div class="hint hintpad">' + ic('layers') + '<span class="t">The ranked list fills after the next full scan (2:45 pm or Scan now).</span></div>'
         : h + '<div class="empty"><div class="ei">' + ic('layers') + '</div><h3>No ranked setups yet</h3><p>The ranked list fills after the next full scan (2:45 pm or Scan now).</p></div>';
     }
-    return h + '<div class="hint hintpad ideanote">' + ic('layers') + '<span class="t">Highest momentum scores today, held about ' + (hz > 0 ? cnt(hz) : 60) + ' trading days. A screen, not proven buy calls: in 2022–26 this list did not beat random uptrend stocks. Separate from the short-term strategy calls.</span></div>' +
+    return h + '<div class="hint hintpad ideanote">' + ic('layers') + '<span class="t">Strongest trends today · hold up to ' + (hz > 0 ? cnt(hz) : 60) + ' days. A screen, not a guarantee.</span></div>' +
       '<div class="card mv">' + show.map(function (x, i) { return ideaRow(x, i, !today); }).join('') + '</div>';
   }
 
@@ -2117,8 +2126,11 @@
       return skCard('10 / 20 EMA', 4) + skCard('Moving averages', 5) + skCard('Technical checklist', 5) + skCard('Momentum', 4);
     }
     var d = st.info;
-    return listingCard(d) + crossCard(d) + emaTable(d) + checksCard(d) + momentumCard(d) + statsCard(d) + moneyCard(d) + levelsCard(d) + heldCard(d) + setupsCard(d) +
-      '<section class="card sk-card" id="sk-sum"><h3 class="skh">In short</h3>' + (T(d.summary).trim() ? '<p class="sk-p">' + esc(T(d.summary).trim()) + '</p>' : '<p class="sk-p mut">No summary available.</p>') + '</section>' +
+    var more = O(ui).stMore === true;
+    return listingCard(d) + '<section class="card sk-card" id="sk-sum"><h3 class="skh">In short</h3>' + (T(d.summary).trim() ? '<p class="sk-p">' + esc(T(d.summary).trim()) + '</p>' : '<p class="sk-p mut">No summary available.</p>') + '</section>' +
+      levelsCard(d) + heldCard(d) + setupsCard(d) + checksCard(d) + moneyCard(d) +
+      '<div class="btns hintpad">' + btn('st-more', null, more ? 'Fewer indicators' : 'More indicators (averages, momentum, stats)', 'sm ghost', {}) + '</div>' +
+      (more ? crossCard(d) + emaTable(d) + momentumCard(d) + statsCard(d) : '') +
       '<p class="sk-foot">' + ic('info') + '<span>Data comes from the last scan or quote. It describes the chart and is not investment advice. Past patterns do not promise what happens next.</span></p>';
   }
   function stockPart(part, S, ui, data) {

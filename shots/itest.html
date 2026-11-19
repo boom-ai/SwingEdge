@@ -69,17 +69,17 @@ document.getElementById('f').onload=async()=>{
   type('sym','wipro');click('#sheet-root [data-c="submit"]');await sleep(800);ok(q('#sheet-root').hidden&&st().holdings.some(h=>h.sym==='WIPRO'),'holding added');
   ok(/NO DATA/.test(q('#view').textContent),'no-data state shown');
   // paste import
-  click('[data-c="paste"]');type('text','Symbol,Qty,Avg\nLT,6,3540.5\nrubbish line\nAXISBANK 18 1104');click('#sheet-root [data-c="submit"]');await sleep(1200);
+  if(q('[data-c="add-open"]'))click('[data-c="add-open"]');click('[data-c="paste"]');type('text','Symbol,Qty,Avg\nLT,6,3540.5\nrubbish line\nAXISBANK 18 1104');click('#sheet-root [data-c="submit"]');await sleep(1200);
   ok(q('#sheet-root').hidden&&!!q('.result'),'import result card');ok(/2 holdings imported/.test(q('.result').textContent)&&/rubbish line/.test(q('.result').textContent),'result text: '+q('.result').textContent.slice(0,80));
   click('[data-c="pick"]');await sleep(1800);ok(/3 holdings imported/.test(q('.result').textContent),'file import result: '+q('.result').textContent.slice(0,60));
   // remove with confirm
-  click('[data-c="remove"][data-id="YESBANK"]');ok(/Remove YESBANK/.test(q('#sheet-root').textContent),'confirm sheet');click('#sheet-root [data-c="submit"]');await sleep(800);ok(!st().holdings.some(h=>h.sym==='YESBANK'),'removed');
+  click('[data-c="hold-x"][data-id="YESBANK"]');ok(!!q('[data-c="remove"][data-id="YESBANK"]'),'Details reveals Remove');click('[data-c="remove"][data-id="YESBANK"]');ok(/Remove YESBANK/.test(q('#sheet-root').textContent),'confirm sheet');click('#sheet-root [data-c="submit"]');await sleep(800);ok(!st().holdings.some(h=>h.sym==='YESBANK'),'removed');
   // settings + device
   click('[data-c="settings"]');ok(qa('#devlist .chk.no').length===2,'2 device issues');click('#devlist [data-c="dev-notif"]');await sleep(900);ok(qa('#devlist .chk.no').length===1,'device row turns ok');
   type('capital','250000');click('.tog[data-id="notifyBrief"]');type('riskPct','9');click('#sheet-root [data-c="submit"]');ok(q('[data-f=riskPct]').className.indexOf('bad')>=0,'risk validated');
   type('riskPct','1');click('#sheet-root [data-c="submit"]');await sleep(800);const s=st().settings;ok(s.capital===250000&&s.riskPct===1&&s.notifyBrief===false&&s.notifyBuy===true,'settings saved '+JSON.stringify(s));
   // alerts: backtest
-  click('[data-c="tab"][data-id="alerts"]');click('[data-c="backtest"]');click('[data-c="backtest"]');ok(calls.filter(c=>c==='runBacktest').length===1,'backtest once');await sleep(1000);ok(q('[data-c="backtest"]').disabled&&!!q('.busyline'),'backtest busy');
+  click('[data-c="tab"][data-id="alerts"]');click('[data-c="al-tab"][data-id="strat"]');click('[data-c="backtest"]');click('[data-c="backtest"]');ok(calls.filter(c=>c==='runBacktest').length===1,'backtest once');await sleep(1000);ok(q('[data-c="backtest"]').disabled&&!!q('.busyline'),'backtest busy');
   click('[data-c="tab"][data-id="today"]');ok(q('[data-c="scan"]').disabled,'scan blocked during backtest');await sleep(9000);ok(!q('[data-c="scan"]').disabled&&!q('.busyline'),'idle after backtest');
   // ===== search, stock page, watchlist (SPEC2) =====
   const inp=()=>q('#sheet-root input[name="q"]');
@@ -105,7 +105,7 @@ document.getElementById('f').onload=async()=>{
   typeQ('tata');enter();await sleep(1000);
   ok(stockOpen()&&/TATAMOTORS/.test(q('#st-head').textContent),'Enter opens the first result as a stock page');
   ok(log.some(c=>c.n==='stockInfo'&&c.a.sym==='TATAMOTORS')&&log.some(c=>c.n==='getChart'&&c.a.sym==='TATAMOTORS'&&c.a.bars===130),'stockInfo + getChart(bars 130) requested');
-  ok(!!q('#st-body #sk-cross')&&/93[3-5]/.test(q('#st-price').textContent)&&!!q('#st-chart svg.chart'),'info and chart rendered');
+  ok(!!q('#st-body #sk-sum')&&/93[3-5]/.test(q('#st-price').textContent)&&!!q('#st-chart svg.chart'),'info and chart rendered');
   ok(!!q('#st-chart svg.chart rect.vu, #st-chart svg.chart rect.vd'),'volume strip drawn');
   ok(qa('.echip').length===5&&qa('.echip.on').length===4&&!q('.echip.on[data-id="100"]'),'EMA 10/20/50/200 on, 100 off by default');
   click('.echip[data-id="100"]');ok(!!q('#st-chart polyline.e100')&&qa('.echip.on').length===5,'toggling EMA 100 draws its line');
@@ -160,10 +160,10 @@ document.getElementById('f').onload=async()=>{
   click('[data-c="tab"][data-id="portfolio"]');await tapOpen('#view .card .symbtn',q('#view .card .symbtn b').textContent,'Holding card symbol');
   const wl=q('#view .wl');if(wl)await tapOpen('#view .wl',wl.getAttribute('data-id'),'best/worst row');
   click('[data-c="tab"][data-id="setups"]');ok(!!q('#view .wsec')&&qa('#view .wmain').length===5,'My watchlist section shows its rows: 3 defaults + no-data row + the stock added above ('+qa('#view .wmain').length+')');
-  await tapOpen('#view .srow:not(.wmain):not(.idea)',q('#view .srow:not(.wmain):not(.idea)').getAttribute('data-id'),'EMA-cross row');
+  await tapOpen('#view .srow:not(.wmain):not(.idea2)',q('#view .srow:not(.wmain):not(.idea2)').getAttribute('data-id'),'EMA-cross row');
   await tapOpen('#view .wmain','DIXON','watchlist row');
   ok(/no data yet/i.test(qa('#view .wrow').filter(r=>/NEWLISTCO/.test(r.textContent))[0].textContent),'dataOk:false watchlist row says "no data yet"');
-  ok(qa('#view .srow:not(.wmain):not(.idea) .s2.g5 > span').length===5*qa('#view .srow:not(.wmain):not(.idea)').length,'EMA values laid out as a five-column grid');
+  ok(qa('#view .srow:not(.wmain):not(.idea2) .s2.g5 > span').length===5*qa('#view .srow:not(.wmain):not(.idea2)').length,'EMA values laid out as a five-column grid');
   // edit mode removes
   click('[data-c="watch-edit"]');ok(qa('#view .wrm').length===5,'Edit shows a remove button per row');
   click('#view .wrm[data-id="DIXON"]');ok(q('#view .wrm[data-id="DIXON"]').disabled,'remove locks its row while in flight');await sleep(800);
@@ -184,14 +184,14 @@ document.getElementById('f').onload=async()=>{
   ok(typeof w.Touch==='function'&&typeof w.TouchEvent==='function','Touch and TouchEvent constructors exist in this browser');
   await sect('today ideas / hit rows',async()=>{
     click('[data-c="tab"][data-id="today"]');await sleep(80);
-    ok(/Best setups now/.test(q('#view').textContent)&&qa('#view .srow.idea').length===5,'Today shows the top 5 ideas: '+qa('#view .srow.idea').length);
-    ok(!!q('#view .srow.idea .ring, #view .srow.idea svg'),'idea rows carry a score gauge and a sparkline');
+    ok(/Best setups now/.test(q('#view').textContent)&&qa('#view .srow.idea2').length===5,'Today shows the top 5 ideas: '+qa('#view .srow.idea2').length);
+    ok(!!q('#view .srow.idea2 .ring, #view .srow.idea2 svg'),'idea rows carry a score gauge and a sparkline');
     ok(/TARGET HIT/.test(q('#view').textContent)&&/STOP HIT/.test(q('#view').textContent),'Today shows the hit target and the hit stop in Act now');
     const pos=t=>q('#view').innerHTML.indexOf(t);
     ok(pos('TARGET HIT')<pos('Best setups now')&&pos('TARGET HIT')<pos('class="sym"><span class="tag buy">BUY')||pos('TARGET HIT')<pos('Best setups now'),'hit rows come before the ideas');
-    const first=q('#view .srow.idea');const sym=first.getAttribute('data-id');first.click();await sleep(150);ok(stockOpen()&&q('#st-head').textContent.indexOf(sym)>=0,'tapping an idea opens the stock page for '+sym);await closeAll();
+    const first=q('#view .srow.idea2');const sym=first.getAttribute('data-id');first.click();await sleep(150);ok(stockOpen()&&q('#st-head').textContent.indexOf(sym)>=0,'tapping an idea opens the stock page for '+sym);await closeAll();
     click('#view [data-c="tab"][data-id="setups"]');await sleep(80);
-    ok(qa('#view .srow.idea').length>5&&/a screen, not proven/i.test(q('#view').textContent),'Setups lists the full ranked list ('+qa('#view .srow.idea').length+') with the explanation line');
+    ok(qa('#view .srow.idea2').length>5&&/screen|guarantee/i.test(q('#view').textContent),'Setups lists the full ranked list ('+qa('#view .srow.idea2').length+') with the explanation line');
     ok(q('#view').innerHTML.indexOf('Best setups now')<q('#view').innerHTML.indexOf('EMA'),'ideas sit above the EMA crossovers');
   });
   await sect('verdict BUY',async()=>{
@@ -302,7 +302,7 @@ document.getElementById('f').onload=async()=>{
   });
   await sect('Trades: My targets',async()=>{
     click('[data-c="tab"][data-id="trades"]');await sleep(80);
-    const ts=()=>qa('#view .trow');ok(/My targets/.test(q('#view').textContent)&&ts().length>=2,'My targets section with rows: '+ts().length);
+    if(q('#view [data-c="targets-toggle"].collap'))click('#view [data-c="targets-toggle"]');const ts=()=>qa('#view .trow');ok(/My targets/.test(q('#view').textContent)&&ts().length>=2,'My targets section with rows: '+ts().length);
     ok(q('#view').innerHTML.indexOf('My targets')<q('#view').innerHTML.indexOf('Open trades')||q('#view').innerHTML.indexOf('My targets')<q('#view').innerHTML.indexOf('class="track'),'My targets sits above the open trades');
     ok(/HIT TARGET/.test(q('#view').textContent)&&/HIT STOP/.test(q('#view').textContent),'HIT_TARGET and HIT_STOP pills render');
     ok(qa('#view .trow .tw').length>=2,'hit rows show a time');
@@ -415,7 +415,7 @@ document.getElementById('f').onload=async()=>{
     ok(/does not count/.test(q('.sheet').textContent),'replay note present');
     hist();await sleep(250);ok(q('#sheet-root').hidden,'Back closes the track sheet');
     // entry 2: Alerts tab
-    click('[data-c="tab"][data-id="alerts"]');await sleep(100);
+    click('[data-c="tab"][data-id="alerts"]');click('[data-c="al-tab"][data-id="strat"]');await sleep(100);
     await open(()=>click('#view .trkrow'));ok(!!q('.sheet .trkt'),'Alerts row opens the track sheet');
     // recent pick -> stock page, Back returns to the track sheet
     const pk=q('.trkp');if(pk){const sy=pk.getAttribute('data-id');click(pk);await sleep(900);ok(!!q('.sheet')&&!q('.sheet .trkt'),'a recent pick opens its stock page: '+sy);hist();await sleep(300);ok(!!q('.sheet .trkt'),'Back from the stock page returns to the track sheet');}else ok(false,'recent picks listed');

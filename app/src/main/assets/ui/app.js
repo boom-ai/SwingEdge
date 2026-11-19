@@ -1096,6 +1096,12 @@
       case 'remove': openSheet('remove', { id: id }); break;
       case 'add': openSheet('add'); break;
       case 'paste': openSheet('paste'); break;
+      case 'targets-toggle': ui.showTargets = !ui.showTargets; render(true); break;
+      case 'hold-x': ui.hx = ui.hx || {}; ui.hx[id] = !ui.hx[id]; render(true); break;
+      case 'ov-toggle': ui.ovOpen = !ui.ovOpen; render(true); break;
+      case 'add-open': ui.addOpen = true; render(true); break;
+      case 'st-more': ui.stMore = !ui.stMore; paintStock(['body']); break;
+      case 'al-tab': ui.alTab = id; render(true); break;
       case 'feed-all': ui.feedAll = !ui.feedAll; render(true); break;
       case 'clearfeed': openSheet('clearfeed'); break;
       case 'track': if (!(sheet && sheet.kind === 'track')) openSheet('track', {}, true); break;

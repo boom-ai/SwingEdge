@@ -297,6 +297,7 @@
     var h = '<div class="topbar"><div class="brand">' + ic('logo') + 'SwingEdge</div>' +
       '<div class="mkt ' + (open ? 'open' : closed ? 'closed' : '') + '"><i class="dot"></i><span class="clip">' + esc(note) + '</span></div>' +
       '<button type="button" class="iconbtn" data-c="search" aria-label="Search stocks">' + ic('search') + '</button>' +
+      '<button type="button" class="iconbtn' + (ui.tab === 'alerts' ? ' on' : '') + '" data-c="tab" data-id="alerts" aria-label="Alerts">' + ic('alerts') + '</button>' +
       '<button type="button" class="iconbtn" data-c="settings" aria-label="Settings' + (issues ? ', phone setup needs attention' : '') + '">' + ic('gear') + (issues ? '<i class="pip"></i>' : '') + '</button></div>';
     if (isBusy(S)) {
       var p = N(S.busy.pct);
@@ -304,7 +305,7 @@
     }
     return h;
   }
-  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['funds', 'Funds'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['alerts', 'Alerts']];
+  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['funds', 'Funds'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['fno', 'F&O']];
   function tabbar(S, ui) {
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
@@ -314,7 +315,7 @@
       if (t[0] === 'portfolio' && c.holdActs > 0) badge = '<span class="badge a">' + c.holdActs + '</span>';
       var on = ui.tab === t[0];
       return '<button type="button" class="tab' + (on ? ' on' : '') + '" data-c="tab" data-id="' + t[0] + '"' + (on ? ' aria-current="page"' : '') + '>' +
-        ic(t[0]) + '<span>' + t[1] + (t[0] === 'trades' && nOpen && !badge ? ' · ' + nOpen : '') + '</span>' + badge + '</button>';
+        ic(t[0] === 'fno' ? 'chart' : t[0]) + '<span>' + esc(t[1]) + (t[0] === 'trades' && nOpen && !badge ? ' · ' + nOpen : '') + '</span>' + badge + '</button>';
     }).join('');
   }
 
@@ -1442,7 +1443,7 @@
     var live = r.live === true;
     h += '<div class="card fhead"><div class="fr1"><b class="big">' + esc(sym) + ' ' + f1(c.spot) + '</b><span class="sp"></span><span class="ldot ' + (live ? 'on' : 'off') + '">' + (live ? 'LIVE' : 'NO PRICE') + '</span></div>' +
       '<div class="mut">' + (T(c.ts).trim() ? 'NSE ' + esc(T(c.ts)) : esc(T(r.error) || 'Waiting for NSE')) + (N(c.lot) ? ' · lot ' + N(c.lot) : '') + '</div>' +
-      '<div class="ixc">' + texts(c.expiries).map(function (e) { return '<button type="button" class="rchip' + (e === T(c.expiry) ? ' on' : '') + '" data-c="fno-exp" data-id="' + esc(e) + '"><span>' + esc(e) + '</span></button>'; }).join('') + '</div></div>';
+      '<div class="mut sm2">Expiry</div><div class="ixc">' + texts(c.expiries).map(function (e) { var dd = expDays(e, ui.now); return '<button type="button" class="rchip' + (e === T(c.expiry) ? ' on' : '') + '" data-c="fno-exp" data-id="' + esc(e) + '"><span class="mut">' + (dd !== null ? (dd <= 0 ? 'today' : dd + 'd') : '') + '</span> <span>' + esc(e) + '</span></button>'; }).join('') + '</div></div>';
     if (T(r.error).trim() && live) h += '<div class="hint hintpad">' + ic('warn') + '<span class="t">' + esc(r.error) + '</span></div>';
     h += '<div class="sg">' + tile('Paper cash', rsB(acc.cash), '') + tile('Account value', rsB(acc.value), '') + tile('Total P&L', rsS(acc.total), 'realised ' + rsS(acc.realized), N(acc.total) > 0 ? 'up' : N(acc.total) < 0 ? 'down' : '') + '</div>';
     var res = O(r.result);
@@ -1485,7 +1486,7 @@
           return '<td class="' + (itm ? 'itm' : '') + '"><button type="button" class="qb2' + fl + '" data-c="fno-pick" data-id="' + side.toUpperCase() + ':' + k + '"><b>' + f1(q.ltp) + '</b><span class="' + tone(ch) + '">' + (ch !== null ? (ch > 0 ? '+' : '') + ch.toFixed(1) : '') + '</span></button></td>'; };
         h += '<tr class="' + (atm ? 'atm' : '') + '">' + oi(ce, 'ce') + lt(ce, 'ce', k < spot) + '<td class="k"><b>' + k + '</b></td>' + lt(pe, 'pe', k > spot) + oi(pe, 'pe') + '</tr>';
       });
-      h += '</table></div>';
+      h += '</table></div><div class="btns hintpad">' + btn('fno-width', null, (N(ui.fno.width) || 8) > 8 ? 'Fewer strikes' : 'More strikes', 'sm ghost', {}) + '</div>';
     }
     var done = A(r.orders).filter(function (o) { return T(o.status) !== 'OPEN'; }).slice(0, 15);
     if (done.length) h += '<h3 class="skh">Order history</h3>' + tbl(['Time', 'Order', 'Price', 'P&L'], done.map(function (o) {
@@ -1532,6 +1533,12 @@
         '</div></div>';
     }).join('') + '</div>';
   }
+  var MON3 = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
+  function expDays(e, now) {
+    var m = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/.exec(String(e)); if (!m || MON3[m[2].toUpperCase()] === undefined) return null;
+    var ex = Date.UTC(+m[3], MON3[m[2].toUpperCase()], +m[1]), ist = new Date(now + 19800000), td = Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate());
+    return Math.round((ex - td) / 864e5);
+  }
   function kfmt(v) { var x = N(v); if (x === null) return DASH; return x >= 1e7 ? (x / 1e7).toFixed(1) + 'Cr' : x >= 1e5 ? (x / 1e5).toFixed(1) + 'L' : x >= 1e3 ? (x / 1e3).toFixed(1) + 'K' : String(Math.round(x)); }
   function f0n(v) { var x = N(v); return x === null ? DASH : Math.round(x).toLocaleString('en-IN'); }
   function movers(ui) {
@@ -1552,6 +1559,7 @@
         '<div class="mut sm2">' + esc(T(x.stratName)) + ' · ' + esc(T(x.why)) + ' · ' + hm(x.at) + ' · exp ' + esc(T(x.expiry)) + '</div>' +
         '<div class="lv"><div><div class="k">Buy ≤</div><div class="v sm">₹' + f1(N(x.entry) * 1.02) + '</div></div><div><div class="k">Stop</div><div class="v sm down">₹' + f1(x.stop) + '</div></div>' +
         '<div><div class="k">Target</div><div class="v sm up">' + (N(x.target) ? '₹' + f1(x.target) : '3:15 pm') + '</div></div><div><div class="k">Now</div><div class="v sm">₹' + f1(x.now) + '</div></div></div>' +
+        (open && !hit ? '<div class="btns" style="margin:6px 0">' + btn('fno-take', T(x.id), 'Paper trade this', 'sm', { icon: 'plus' }) + '</div>' : '') +
         '<div class="fr3"><span class="mut wrapn">' + (lots ? lots + ' lot' + (lots > 1 ? 's' : '') + ' (' + (lots * (N(x.lot) || 0)) + ' qty) for ' + rsB(cap) : 'Too costly for your capital') + ' · exit by 3:15 pm</span><span class="sp"></span><b class="num ' + tone(pnl) + '">' + stTxt + ' ' + rsS(pnl) + '/lot</b></div></div></article>';
     }).join('') + '<div class="hint hintpad">' + ic('shield') + '<span class="t">Calls marked Learning or Unproven are paper tests, not advice: no rule here has proven itself yet, and SEBI found about 9 in 10 retail F&amp;O traders lose money. Buy ≤ is the ask + 2%.</span></div>';
   }

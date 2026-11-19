@@ -2022,9 +2022,10 @@ class SwingApp(private val p: Platform) {
         return Groww.overlay(b, spot, live, now, "Live " + Clock.hhmmss(if (lt > 0) lt else now))
     }
 
+    @Volatile private var fnoWidth = 8
     private fun fnoView(b: FnoBook, c: FnoChain?, err: String): Map<String, Any?> {
         val m = LinkedHashMap<String, Any?>()
-        m["ok"] = true; m["chain"] = Fno.chainView(c); m["error"] = err
+        m["ok"] = true; m["chain"] = Fno.chainView(c, fnoWidth); m["error"] = err
         m["live"] = c != null && p.now() - c.fetchedAt < Fno.STALE_MS
         m["account"] = Fno.summary(b); m["positions"] = b.pos.map { it.toMap() }
         m["orders"] = b.orders.take(40).map { it.toMap() }
@@ -2036,6 +2037,7 @@ class SwingApp(private val p: Platform) {
     private fun fnoAction(name: String, a: Map<String, Any?>): Map<String, Any?> {
         if (Fno.LOT.size < 5) try { uniLots() } catch (t: Throwable) {}
         val sym = a.str("sym").uppercase().ifEmpty { "NIFTY" }.let { if (Fno.LOT.containsKey(it)) it else "NIFTY" }
+        a.int("width").takeIf { it in 4..25 }?.let { fnoWidth = it }
         if (name == "fnoReset") synchronized(fnoLock) { val b = FnoBook(); fnoBook = b; fnoSave(b); return fnoView(b, null, "") }
         val exps = fnoExpiries(sym)
         val expiry = a.str("expiry").takeIf { it in exps } ?: exps.firstOrNull() ?: return synchronized(fnoLock) { fnoView(fnoLoad(), null, "NSE did not answer. Check the internet and try again.") }

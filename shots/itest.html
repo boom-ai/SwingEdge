@@ -28,6 +28,9 @@ document.getElementById('f').onload=async()=>{
    ok(q('#sheet-root input[name="fsym"]')===fi&&fi.value==='REL','typed text survives the live refresh');
    q('#fno-sugg [data-id="RELIANCE"]').click();await sleep(300);ok(!!q('#sheet-root .rchip.on[data-id="RELIANCE"]'),'tapping a match opens its chain');
    q('#sheet-root [data-c="fno-sym"][data-id="NIFTY"]').click();await sleep(300);}
+  {const tk=q('#sheet-root [data-c="fno-take"]');ok(!!tk,'calls have a Paper trade this button');tk.click();await sleep(1500);
+   ok(!!q('#sheet-root .ofq')&&+q('#sheet-root input[name="fsl"]').value>0,'order ticket opens prefilled with the call\'s stop');
+   ok(/today|\d+d/.test(q('#sheet-root').textContent)&&/Expiry/.test(q('#sheet-root').textContent),'expiry chips show days left');}
   w.history.back();await sleep(200);
   ok(qa('#view .card.k-buy').length===3,'3 buy cards');
   // order: exits, book half, sell, trim, buy

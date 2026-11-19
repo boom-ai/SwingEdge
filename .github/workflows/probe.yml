@@ -7,10 +7,8 @@ jobs:
       - run: |
           UA='Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
           curl -sI -H "User-Agent: $UA" https://www.nseindia.com/api/allIndices | grep -i "^location"
-          for i in 1 2 3 4 5 6 7 8; do curl -s -L -o /tmp/a -w "allIndices %{http_code} %{size_download} %{time_total} %{url_effective}\n" -H "User-Agent: $UA" -H "Accept: application/json" https://www.nseindia.com/api/allIndices; python3 -c "
-import json;d=json.load(open('/tmp/a'));r=[x for x in d['data'] if x['index'] in('NIFTY 50','NIFTY BANK','INDIA VIX')];print(d.get('timestamp'),[(x['index'],x['last'],x.get('percentChange')) for x in r])" 2>&1 | head -2; sleep 3; done
+          for i in 1 2 3 4 5 6 7 8; do curl -s -L -o /tmp/a -w "allIndices %{http_code} %{size_download} %{time_total} %{url_effective}\n" -H "User-Agent: $UA" -H "Accept: application/json" https://www.nseindia.com/api/allIndices; python3 -c "import json;d=json.load(open('/tmp/a'));r=[x for x in d['data'] if x['index'] in('NIFTY 50','NIFTY BANK','INDIA VIX')];print(d.get('timestamp'),[(x['index'],x['last'],x.get('percentChange')) for x in r])" 2>&1 | head -2; sleep 3; done
           curl -s -L -o /tmp/b -w "info %{http_code} %{size_download}\n" -H "User-Agent: $UA" "https://www.nseindia.com/api/option-chain-contract-info?symbol=NIFTY"; head -c 200 /tmp/b; echo
           E=$(python3 -c "import json;print(json.load(open('/tmp/b'))['expiryDates'][0])")
-          for i in 1 2 3; do curl -s -L -o /tmp/c -w "chain %{http_code} %{size_download} %{time_total}\n" -H "User-Agent: $UA" "https://www.nseindia.com/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=$E"; python3 -c "
-import json;d=json.load(open('/tmp/c'));print(d['records'].get('timestamp'),d['records'].get('underlyingValue'))" 2>&1|head -2; sleep 2; done
+          for i in 1 2 3; do curl -s -L -o /tmp/c -w "chain %{http_code} %{size_download} %{time_total}\n" -H "User-Agent: $UA" "https://www.nseindia.com/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=$E"; python3 -c "import json;d=json.load(open('/tmp/c'));print(d['records'].get('timestamp'),d['records'].get('underlyingValue'))" 2>&1|head -2; sleep 2; done
           date -u

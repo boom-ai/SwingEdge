@@ -6,12 +6,9 @@ jobs:
     steps:
       - run: |
           UA='Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
-          for i in $(seq 1 15); do
-            T=$(date -u +%H:%M:%S)
-            A=$(curl -s -L -H "User-Agent: $UA" "https://www.nseindia.in/api/allIndices?_=$RANDOM$RANDOM" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('timestamp'),d['data'][0]['last'],[x['last'] for x in d['data'] if x['index']=='NIFTY BANK'][0])" 2>&1|tail -1)
-            M=$(curl -s -L -H "User-Agent: $UA" "https://www.nseindia.in/api/marketStatus?_=$RANDOM$RANDOM" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['marketState'][0].get('last'))" 2>&1|tail -1)
-            S=$(curl -s -L -H "User-Agent: $UA" "https://www.nseindia.in/api/equity-stockIndices?index=NIFTY%2050&_=$RANDOM$RANDOM" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('timestamp'),d['data'][0]['lastPrice'])" 2>&1|tail -1)
-            C=$(curl -s -L -H "User-Agent: $UA" "https://www.nseindia.in/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=23-Nov-2026&_=$RANDOM$RANDOM" | python3 -c "import json,sys;d=json.load(sys.stdin);r=d['records'];x=[y for y in r['data'] if y.get('strikePrice')==25300][0];print(r.get('timestamp'),r.get('underlyingValue'),x['CE']['lastPrice'])" 2>&1|tail -1)
-            echo "R $T | all $A | mkt $M | stk $S | chain $C"
-            sleep 1
-          done
+          curl -s -w " [%{http_code}]\n" -H "User-Agent: $UA" "https://groww.in/v1/api/stocks_data/v1/accord_points/exchange/NSE/segment/CASH/latest_indices_ohlc/NIFTY" | head -c 400; echo
+          curl -s -o /tmp/g -w "chain [%{http_code}] %{size_download}\n" -H "User-Agent: $UA" "https://groww.in/v1/api/option_chain_service/v1/option_chain/nifty?expiry=2026-11-23"; head -c 600 /tmp/g; echo
+          curl -s -o /tmp/g2 -w "chain2 [%{http_code}] %{size_download}\n" -H "User-Agent: $UA" "https://groww.in/v1/api/option_chain_service/v1/option_chain/nifty"; head -c 300 /tmp/g2; echo
+          for i in $(seq 1 10); do T=$(date -u +%H:%M:%S); G=$(curl -s -H "User-Agent: $UA" "https://groww.in/v1/api/stocks_data/v1/accord_points/exchange/NSE/segment/CASH/latest_indices_ohlc/NIFTY" | head -c 160); echo "G $T $G"; sleep 1; done
+          curl -s -w " [%{http_code}]\n" -H "User-Agent: $UA" "https://query1.finance.yahoo.com/v7/finance/spark?symbols=%5ENSEI&range=1d&interval=1m" | head -c 200; echo
+          curl -s -w " [%{http_code}]\n" -H "User-Agent: $UA" "https://www.google.com/finance/quote/NIFTY_50:INDEXNSE" | grep -o 'data-last-price="[^"]*"' | head -2

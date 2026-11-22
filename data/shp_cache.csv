@@ -242,6 +242,7 @@ AGARIND,2026-09-30,2026-10-14,57.2,2.37,0.0,0.06,22.54,https://nsearchives.nsein
 AGARWALEYE,2026-03-31,2026-04-13,32.36,57.94,5.87,1.96,1.53,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1649997_13042026052637_WEB.xml
 AGARWALEYE,2026-06-30,2026-07-07,32.34,57.96,6.02,1.7,1.66,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1688740_07072026024339_WEB.xml
 AGARWALEYE,2026-09-30,2026-10-09,32.33,49.56,14.18,1.69,1.67,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1735241_09102026082233_WEB.xml
+AGARWALEYE,2026-11-19,2026-11-21,30.85,47.36,14.05,2.08,3.52,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1760658_21112026050318_WEB.xml
 AGASTYAEN,2026-03-31,2026-04-10,25.4,0.19,0.0,0.0,36.25,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1649181_10042026082917_WEB.xml
 AGASTYAEN,2026-06-10,2026-06-19,53.09,0.0,0.0,0.0,17.31,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1682759_19062026050401_WEB.xml
 AGASTYAEN,2026-06-17,2026-06-19,67.98,0.0,0.0,0.0,11.53,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1682823_19062026065302_WEB.xml
@@ -3663,7 +3664,6 @@ KRBL,2026-09-30,2026-10-14,60.17,6.98,0.09,0.56,12.1,https://nsearchives.nseindi
 KREBSBIO,2026-03-31,2026-04-13,72.74,0.5,0.0,0.0,10.64,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1649778_13042026034406_WEB.xml
 KREBSBIO,2026-06-30,2026-07-08,72.74,0.5,0.0,0.0,10.52,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1689230_08072026031307_WEB.xml
 KREBSBIO,2026-09-30,2026-10-06,72.74,0.5,0.0,0.0,10.75,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1733367_06102026030447_WEB.xml
-KRIDHANINF,2026-03-17,2026-03-26,44.88,0.0,0.0,0.0,31.47,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1641146_26032026052019_WEB.xml
 KRIDHANINF,2026-03-31,2026-04-21,44.88,0.0,0.0,0.0,31.73,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1656437_21042026053950_WEB.xml
 KRIDHANINF,2026-05-14,2026-05-23,40.05,0.0,0.0,0.0,27.84,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1672135_23052026100524_WEB.xml
 KRIDHANINF,2026-06-30,2026-07-21,40.05,0.0,0.0,0.0,27.83,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1724357_15092026061321_WEB.xml
@@ -4982,9 +4982,6 @@ PICCADIL,2026-09-30,2026-10-12,68.57,1.0,0.07,0.85,15.56,https://nsearchives.nse
 PIDILITIND,2026-03-31,2026-04-17,69.32,11.75,4.34,5.3,7.28,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1653375_17042026053100_WEB.xml
 PIDILITIND,2026-06-30,2026-07-20,69.24,11.69,4.33,5.55,7.18,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1697305_20072026062509_WEB.xml
 PIDILITIND,2026-09-30,2026-10-16,69.18,12.42,3.92,5.29,7.05,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1740164_16102026052814_WEB.xml
-PIGL,2026-03-16,2026-03-26,50.26,0.0,0.0,0.76,22.93,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1640680_26032026020547_WEB.xml
-PIGL,2026-03-18,2026-03-26,49.99,0.0,0.0,0.74,22.34,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1640949_26032026032406_WEB.xml
-PIGL,2026-03-19,2026-03-26,50.69,0.0,0.0,0.73,22.02,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1640956_26032026032801_WEB.xml
 PIGL,2026-03-31,2026-04-20,50.69,0.01,0.0,0.75,20.14,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1661147_29042026043542_WEB.xml
 PIGL,2026-06-30,2026-07-20,50.69,0.0,0.0,0.82,21.3,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1722427_08092026010021_WEB.xml
 PIGL,2026-09-30,2026-10-19,50.69,0.01,0.0,1.13,21.32,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1741276_19102026011626_WEB.xml
@@ -6998,6 +6995,7 @@ URBANCO,2026-03-24,2026-04-23,19.02,55.87,8.88,1.75,5.39,https://nsearchives.nse
 URBANCO,2026-03-31,2026-04-21,19.02,55.77,8.98,1.76,5.37,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1656142_21042026031306_WEB.xml
 URBANCO,2026-06-30,2026-07-21,19.02,55.29,9.5,1.93,5.84,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1698101_21072026030054_WEB.xml
 URBANCO,2026-09-30,2026-10-11,19.02,52.51,12.46,2.71,5.6,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1735757_11102026045751_WEB.xml
+URBANCO,2026-11-19,2026-11-22,17.23,50.55,16.17,3.95,5.26,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1760684_22112026015920_WEB.xml
 URJA,2026-03-31,2026-04-20,18.35,0.1,0.0,0.0,74.09,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1654666_20042026124248_WEB.xml
 URJA,2026-06-30,2026-07-17,17.37,0.02,0.0,0.0,74.67,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1695271_17072026042853_WEB.xml
 URJA,2026-09-30,2026-10-14,17.21,0.02,0.0,0.0,74.67,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1738027_14102026061327_WEB.xml

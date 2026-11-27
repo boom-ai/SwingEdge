@@ -1092,6 +1092,11 @@
       case 'strategies': setTab('alerts', 'strategies'); break;
       case 'settings': openSheet('settings'); break;
       case 'toggle': if (ui.expanded[id]) delete ui.expanded[id]; else ui.expanded[id] = 1; render(true); break;
+      case 'info': (function () { /* (i) caption: flipped in place so it also works inside sheets; the next render reads ui.expanded */
+        var k = 'i:' + id, on = !ui.expanded[k]; if (on) ui.expanded[k] = 1; else delete ui.expanded[k];
+        [].forEach.call(document.querySelectorAll('[data-i]'), function (p) { if (p.getAttribute('data-i') === id) p.hidden = !on; });
+        [].forEach.call(document.querySelectorAll('[data-c="info"]'), function (b) { if (b.getAttribute('data-id') === id) { b.setAttribute('aria-expanded', on ? 'true' : 'false'); b.classList.toggle('on', on); } });
+      })(); break;
       case 'scan': act('scanNow', {}, 'scanNow'); break;
       case 'backtest': act('runBacktest', {}, 'runBacktest'); break;
       case 'take': openSheet('take', { id: id }); break;

@@ -1,0 +1,55 @@
+/* SwingEdge — chart indicators (chartind.js / chartfull.js). Uses the app.css tokens only: dark surfaces, one accent, green/red for direction. */
+
+/* full chart: "Indicators" button in the range bar */
+.cfbar { align-items: center; }
+.cfib { margin-left: auto; min-height: 44px; padding: 0 10px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sec); font-weight: 600; color: var(--text-2); }
+.cfib svg { width: 16px; height: 16px; color: var(--accent-2); }
+.cfib em { font-style: normal; font-size: var(--t-cap); font-weight: 700; min-width: 16px; height: 16px; line-height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: #fff; text-align: center; }
+.cfib em:empty { display: none; }
+.cfib[aria-expanded="true"] { background: var(--surface); color: var(--text); }
+.cfib:active { filter: brightness(1.25); }
+
+/* the toggle sheet, over the lower part of the chart stage */
+.cfim { position: absolute; left: 0; right: 0; bottom: 0; max-height: 82%; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain;
+  z-index: 3; background: var(--surface); border-radius: 12px 12px 0 0; box-shadow: 0 -8px 24px rgba(0, 0, 0, .5); padding: 0 12px 12px; }
+.cfim[hidden] { display: none; }
+.cfimh { position: sticky; top: 0; display: flex; align-items: center; gap: 8px; background: var(--surface); padding: 8px 0 4px; z-index: 1; }
+.cfimh b { font-size: var(--t-body); font-weight: 600; }
+.cfimh span { font-size: var(--t-cap); color: var(--muted); }
+.cfimx { margin-left: auto; min-height: 40px; padding: 0 12px; color: var(--accent-2); font-weight: 600; font-size: var(--t-sec); }
+.cfimg { font-size: var(--t-cap); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 8px 0 4px; }
+.cfimr { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.cfic { min-height: 40px; padding: 0 8px; border-radius: 8px; display: flex; align-items: center; gap: 8px; text-align: left; font-size: var(--t-sec); color: var(--muted); background: var(--well); }
+.cfic span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfic.on { background: var(--raised); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+.cfic:active { filter: brightness(1.25); }
+.cfic i { flex: none; width: 10px; height: 10px; position: relative; opacity: .45; }
+.cfic.on i { opacity: 1; }
+.cfic i.g-line { height: 2px; border-radius: 1px; background: var(--c); }
+.cfic i.g-dot, .cfic i.g-ring { border-radius: 50%; background: var(--c); }
+.cfic i.g-ring { background: transparent; box-shadow: inset 0 0 0 1.5px var(--c); }
+.cfic i.g-up, .cfic i.g-star { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid var(--c); }
+.cfic i.g-dn { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid var(--c); }
+.cfic i.g-tiny { width: 6px; height: 6px; border-radius: 1px; background: var(--c); }
+.cfimn { font-size: var(--t-cap); color: var(--muted); margin: 10px 0 0; line-height: 1.4; }
+
+/* crosshair readout additions */
+.cfro .cix i { border-radius: 2px; }
+.cfro .cik { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); font-size: var(--t-cap); font-weight: 600; color: var(--text); }
+.cfro .cik > div { display: flex; align-items: center; gap: 4px; padding: 1px 0; }
+.cfro .cik i { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+
+/* stock-page chart: RSI pane, Darvas boxes, toggle chips */
+svg.chart .dvx { fill: rgba(75, 139, 245, .10); stroke: rgba(75, 139, 245, .75); stroke-width: .8; }
+svg.chart .dvu { fill: var(--green); }
+svg.chart .dvd { fill: var(--red); }
+svg.chart .rsib { fill: rgba(75, 139, 245, .07); }
+svg.chart .rsig { stroke: rgba(169, 174, 181, .4); stroke-width: .8; stroke-dasharray: 3 3; }
+svg.chart .rsil { stroke: var(--accent); stroke-width: 1.2; }
+svg.chart .rsit { fill: var(--muted); font: 600 8.5px var(--sans); }
+.xlg { margin-top: 4px; }
+.xchip { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 2px; border-radius: 8px; text-align: center; opacity: .5; }
+.xchip.on { opacity: 1; background: var(--surface); }
+.xchip .el { display: block; font-size: var(--t-cap); color: var(--muted); white-space: nowrap; }
+.xchip .ev { display: block; margin-top: 2px; font-size: var(--t-sec); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xchip:active { filter: brightness(1.25); }

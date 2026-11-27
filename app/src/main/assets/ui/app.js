@@ -1182,6 +1182,8 @@
       case 'cf-vol': ui.cfOpts.vol = ui.cfOpts.vol === false; if (cfInst) cfInst.setOpts({ vol: ui.cfOpts.vol }); paintCfTog(); break;
       case 'cf-reset': if (cfInst) { cfInst.reset(); ui.cfOpts.rangeOn = '6M'; paintCfRange(); } break;
       case 'cf-retry': loadFull(); break;
+      case 'cf-ind': if (cfInst && cfInst.toggleMenu) cfInst.toggleMenu(); break;                 /* chartfull.js owns the menu */
+      case 'cx': if (window.CI) { window.CI.toggleInline(id); paintStock(['chart']); } break;   /* inline chart: RSI / levels / Darvas */
       case 'target': openTarget(id); break;
       case 'target-from-call': {
         var ci = ui.stock && ui.stock.info && ui.stock.info.call;

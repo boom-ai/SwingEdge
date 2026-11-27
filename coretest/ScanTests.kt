@@ -5,7 +5,7 @@ import com.boomai.swingedge.core.*
 /** Whole-market scan: bhavcopy parsing (NSE + BSE), history merge / adjustment, batch-vs-app scoring parity, app ingestion. */
 object ScanTests {
     fun all(): List<Pair<String, () -> Unit>> = listOf(
-        "scan-bhav-parse" to ::parse, "scan-history-merge" to ::merge, "scan-batch-parity" to ::parity, "scan-app-ingest" to ::ingest)
+        "scan-bhav-parse" to ::parse, "scan-history-merge" to ::merge, "scan-batch-parity" to ::parity, "scan-corp-actions" to ::corp, "scan-app-ingest" to ::ingest)
 
     const val UDIFF_HDR = "TradDt,BizDt,Sgmt,Src,FinInstrmTp,FinInstrmId,ISIN,TckrSymb,SctySrs,XpryDt,FininstrmActlXpryDt,StrkPric,OptnTp,FinInstrmNm,OpnPric,HghPric,LwPric,ClsPric,LastPric,PrvsClsgPric,UndrlygPric,SttlmPric,OpnIntrst,ChngInOpnIntrst,TtlTradgVol,TtlTrfVal,TtlNbOfTxsExctd,SsnId,NewBrdLotQty,Rmks,Rsvd1,Rsvd2,Rsvd3,Rsvd4"
 
@@ -110,6 +110,34 @@ object ScanTests {
         T.check(th.s.d.take(th.s.n).none { it == 20007 } && s.s.d.take(s.s.n).none { it == 20007 }, "a day without an NSE file is not a session")
         T.eq(by["TWOSER"]!!.s.c[by["TWOSER"]!!.s.n - 1], 12.0, "EQ row preferred over BE")
         T.eq(MarketHistory.build(files.filter { it.exch == "BSE" }), emptyList<MarketStock>(), "no NSE file -> nothing")
+    }
+
+    fun corp() {
+        val H = MarketHistory
+        T.eq(H.classify(50.0, 100.0, 51.0), "ok", "1:1 bonus / 1:2 split, opens near the adjusted price")
+        T.eq(H.classify(66.7, 100.0, 66.0), "ok", "1:2 bonus (0.667)"); T.eq(H.classify(10.02, 100.0, 10.1), "ok", "1:10 split")
+        T.eq(H.classify(1000.0, 100.0, 990.0), "ok", "10:1 consolidation"); T.eq(H.classify(90.9, 100.0, 91.0), "ok", "1:10 bonus (0.909)")
+        T.eq(H.classify(97.0, 100.0, 97.5), "small", "3% (settlement / auction / dividend) ignored")
+        T.eq(H.classify(92.5, 100.0, 92.0), "small", "7.5% move ignored")
+        T.eq(H.classify(63.0, 100.0, 63.0), "ratio", "0.63 is not a standard factor")
+        T.eq(H.classify(50.0, 100.0, 99.0), "open", "prev halves but it opens at our close: data quirk, ignored")
+        T.eq(H.classify(50.0, 100.0, 0.0), "open", "no open: not applied")
+        T.eq(H.classify(50.0, 100.0, 75.0), "open", "open halfway: not applied")
+        T.check(H.FACTORS.all { Math.abs(it - 1) >= H.MIN_MOVE } && H.FACTORS.size in 12..30, "factor whitelist: " + H.FACTORS.toList())
+        // in a series: one real bonus, three quirks -> one adjustment, the rest left alone
+        val days = (0 until 30).map { 21000 + it }
+        val rows = ArrayList<BhavDay>()
+        var last = 0.0
+        for ((k, d) in days.withIndex()) {
+            val c = if (k < 15) 200.0 else 100.0
+            val (prev, open) = when (k) { 0 -> Pair(c, c); 5 -> Pair(194.0, 200.0); 8 -> Pair(100.0, 200.0); 11 -> Pair(126.0, 126.0); 15 -> Pair(100.0, 101.0); else -> Pair(last, c) }
+            rows.add(nseDay(d, listOf(udiff(d, "NSE", "1", "INE777A01011", "QRK", "EQ", "QUIRK LTD", open, maxOf(open, c), minOf(open, c), c, prev, 1000.0))))
+            last = c
+        }
+        val q = MarketHistory.build(rows).first()
+        T.eq(q.adjustments, 1, "only the bonus applied"); T.eq(q.events.map { it.reason }, listOf("small", "open", "ratio", "ok"), "events recorded with reasons")
+        T.near(q.s.c[0], 100.0, 1e-9, "history halved before the bonus"); T.near(q.s.c[q.s.n - 1], 100.0, 1e-9, "latest close untouched")
+        T.near(q.s.c[14] * q.s.v[14], 200.0 * 1000.0, 1e-6, "turnover kept")
     }
 
     /** Deterministic synthetic stock: 2-decimal prices, liquid unless [vol] small. */

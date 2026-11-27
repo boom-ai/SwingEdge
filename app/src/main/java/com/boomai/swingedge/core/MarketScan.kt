@@ -12,15 +12,59 @@ package com.boomai.swingedge.core
 class MarketStock(
     val sym: String, val exch: String, val code: String, val isin: String, val series: String, val name: String,
     val s: Series,
-    /** corporate-action adjustments applied (splits, bonuses, rights) */
-    val adjustments: Int
+    /** corporate-action adjustments applied (splits, bonuses, consolidations) */
+    val adjustments: Int,
+    /** every bar where the exchange's previous close disagreed with our last close by more than 1%, accepted or not */
+    val events: List<AdjEvent> = emptyList()
 )
+
+/**
+ * One previous-close mismatch. [ratio] = prevClose / our last close. [reason]: "ok" (applied as a split / bonus),
+ * "small" (move under MIN_MOVE: dividend, settlement / auction price, circuit quirks), "ratio" (not a standard
+ * corporate-action factor), "open" (the day opened near our last close, not near the exchange's previous close), "range".
+ */
+class AdjEvent(val sym: String, val exch: String, val day: Int, val prev: Double, val last: Double, val open: Double, val ratio: Double, val factor: Double, val reason: String) {
+    val accepted: Boolean get() = reason == "ok"
+}
 
 object MarketHistory {
     /** Sessions kept: R12_1 needs 253 bars; a little more for safety. */
     const val SESSIONS = 275
-    /** prevClose / last close outside 1 +- this = a corporate action on that ex-date (dividends are not adjusted). */
+    /** prevClose / last close outside 1 +- this is recorded as a candidate event (diagnostics only). */
     const val ADJ_MIN = 0.01
+    /** A split / bonus moves the price by at least this much ... */
+    const val MIN_MOVE = 0.08
+    /** ... its factor is within this of a standard ratio ([FACTORS]) ... */
+    const val FACTOR_TOL = 0.015
+    /** ... and the day opens within this of the adjusted previous close (and closer to it than to our unadjusted close). */
+    const val OPEN_TOL = 0.15
+
+    /**
+     * Standard price factors (new price / old price) of Indian splits, bonuses and consolidations. Bonus a:b (a new shares
+     * per b held) = b/(a+b): 1:1 0.5, 1:2 0.667, 2:1 0.333, 3:1 0.25, 4:1 0.2, 5:1 0.167, 1:3 0.75, 1:4 0.8, 1:5 0.833,
+     * 3:2 0.4, 2:3 0.6, 1:10 0.909. Splits (new / old face value): 1/2, 1/5, 1/10, 2/5, 1/4, 1/3 (and split + bonus
+     * combinations land on these too, e.g. 0.25, 0.1, 0.05). Consolidations 2, 5, 10.
+     */
+    val FACTORS: DoubleArray = doubleArrayOf(0.05, 0.1, 1.0 / 6, 0.2, 0.25, 1.0 / 3, 0.4, 0.5, 0.6, 2.0 / 3, 0.75, 0.8, 5.0 / 6, 10.0 / 11, 2.0, 5.0, 10.0)
+
+    /** The standard factor [f] matches (within FACTOR_TOL), or NaN. */
+    fun standardFactor(f: Double): Double {
+        var best = Double.NaN; var err = FACTOR_TOL
+        for (w in FACTORS) { val e = Math.abs(f / w - 1); if (e <= err) { err = e; best = w } }
+        return best
+    }
+
+    /** Classifies one mismatch; see [AdjEvent.reason]. Returns the reason and the factor to apply (exact ratio when accepted). */
+    fun classify(prev: Double, last: Double, open: Double): String {
+        val f = prev / last
+        if (!(f > 0.02 && f < 50)) return "range"
+        if (Math.abs(f - 1) < MIN_MOVE) return "small"
+        if (standardFactor(f).isNaN()) return "ratio"
+        if (!(open > 0)) return "open"
+        val toAdj = Math.abs(open / prev - 1); val toRaw = Math.abs(open / last - 1)
+        if (toAdj > OPEN_TOL || toAdj >= toRaw) return "open"
+        return "ok"
+    }
     /** A stock must have traded within the last this many sessions to be listed. */
     const val ACTIVE_SESSIONS = 10
     private val SYM_RE = Regex("^[A-Z0-9&][A-Z0-9&\\-]*$")
@@ -100,8 +144,8 @@ object MarketHistory {
             }
             val last = rows0.last().r
             val isin = rows0.lastOrNull { it.r.isin.isNotEmpty() }?.r?.isin ?: ""
-            val (s, adj) = series(sym, rows, junction)
-            out.add(MarketStock(sym, Bhav.NSE, bfCode, isin, last.series, nseNames[sym]?.takeIf { it.isNotBlank() } ?: last.name.ifEmpty { sym }, s, adj))
+            val (s, ev) = series(sym, Bhav.NSE, rows, junction)
+            out.add(MarketStock(sym, Bhav.NSE, bfCode, isin, last.series, nseNames[sym]?.takeIf { it.isNotBlank() } ?: last.name.ifEmpty { sym }, s, ev.count { it.accepted }, ev))
         }
         val taken = HashSet<String>(nse.keys); taken.addAll(nseKnown)
         bseOnly.sortBy { it.first }
@@ -111,31 +155,37 @@ object MarketHistory {
             val id = last.sym.trim().uppercase()
             val sym = if (id.isNotEmpty() && id.length <= 25 && SYM_RE.matches(id) && !taken.contains(id)) id else code
             if (sym.isEmpty() || !taken.add(sym)) continue
-            val (s, adj) = series(sym, rows, -1)
-            out.add(MarketStock(sym, Bhav.BSE, code, last.isin, last.series, last.name.ifEmpty { sym }, s, adj))
+            val (s, ev) = series(sym, Bhav.BSE, rows, -1)
+            out.add(MarketStock(sym, Bhav.BSE, code, last.isin, last.series, last.name.ifEmpty { sym }, s, ev.count { it.accepted }, ev))
         }
         out.sortBy { it.sym }
         return out
     }
 
-    /** Bars oldest first, back-adjusted on every ex-date the exchange's previous close reveals (not across [junction]). */
-    private fun series(sym: String, rows: List<Raw>, junction: Int): Pair<Series, Int> {
+    /**
+     * Bars oldest first, back-adjusted on each ex-date of a split / bonus: the exchange's previous close differs from our
+     * last close by a standard factor ([classify]). Any other mismatch (settlement or auction prices, series switches,
+     * dividends, data quirks) is recorded but ignored. Never across [junction] (BSE history before an NSE listing).
+     */
+    private fun series(sym: String, exch: String, rows: List<Raw>, junction: Int): Pair<Series, List<AdjEvent>> {
         val n = rows.size
         val o = DoubleArray(n); val h = DoubleArray(n); val l = DoubleArray(n); val c = DoubleArray(n); val v = DoubleArray(n)
         for ((k, x) in rows.withIndex()) { o[k] = x.r.o; h[k] = x.r.h; l[k] = x.r.l; c[k] = x.r.c; v[k] = x.r.vol }
-        var adj = 0
+        val ev = ArrayList<AdjEvent>()
         for (k in 1 until n) {
             if (k == junction) continue
-            val pv = rows[k].r.prev; val lc = c[k - 1]
+            val pv = rows[k].r.prev; val lc = rows[k - 1].r.c
             if (!(pv > 0) || !(lc > 0)) continue
             val f = pv / lc
-            if (Math.abs(f - 1) <= ADJ_MIN || f < 0.02 || f > 50) continue
+            if (Math.abs(f - 1) <= ADJ_MIN) continue
+            val why = classify(pv, lc, rows[k].r.o)
+            ev.add(AdjEvent(sym, exch, rows[k].day, pv, lc, rows[k].r.o, f, if (why == "ok") f else 1.0, why))
+            if (why != "ok") continue
             for (j in 0 until k) { o[j] *= f; h[j] *= f; l[j] *= f; c[j] *= f; v[j] /= f }
-            adj++
         }
         val s = Series(sym, maxOf(1, n))
         for (k in 0 until n) s.add(rows[k].day, o[k], h[k], l[k], c[k], v[k])
-        return Pair(s, adj)
+        return Pair(s, ev)
     }
 }
 

@@ -3,7 +3,9 @@ package com.boomai.swingedge.scan
 import com.boomai.swingedge.core.Bhav
 import com.boomai.swingedge.core.BhavDay
 import com.boomai.swingedge.core.Json
+import com.boomai.swingedge.core.AdjEvent
 import com.boomai.swingedge.core.MarketHistory
+import com.boomai.swingedge.core.MarketStock
 import com.boomai.swingedge.core.MarketScan
 import com.boomai.swingedge.core.StockList
 import java.io.File
@@ -57,12 +59,15 @@ fun main(args: Array<String>) {
     val meta = MarketScan.meta(data, used, stocks.count { it.adjustments > 0 })
     println("stocks: ${data.rows.size} (NSE ${data.nseCount}, BSE-only ${data.bseCount}); as of ${meta["asof"]}; rated ${meta["rated"]}, BUY ${meta["buy"]}, gate ${data.gate}; adjusted ${meta["adjustedStocks"]}; ${System.currentTimeMillis() - t0} ms")
 
+    diagnostics(stocks)
+
     val out = File(args[3])
     val old = if (out.exists()) MarketScan.parse(out.readText()) else null
     when {
         data.rows.size < MIN_WRITE_ROWS -> { println("NOT written: only ${data.rows.size} stocks (need $MIN_WRITE_ROWS)"); exitProcess(2) }
         used < MIN_WRITE_SESSIONS -> { println("NOT written: only $used NSE sessions (need $MIN_WRITE_SESSIONS for 12-month scores)"); exitProcess(2) }
         old != null && old.day > data.day -> { println("NOT written: existing file is newer (${old.day} > ${data.day})"); exitProcess(2) }
+        old != null && old.day == data.day && data.rows.size < old.rows.size * 8 / 10 -> { println("NOT written: same day as the existing file but ${data.rows.size} stocks vs ${old.rows.size}"); exitProcess(2) }
     }
     val text = MarketScan.encode(data)
     if (MarketScan.parse(text, MarketScan.MIN_ROWS) == null) { println("NOT written: encoded file does not parse back"); exitProcess(2) }
@@ -72,6 +77,26 @@ fun main(args: Array<String>) {
 }
 
 private const val MIN_WRITE_ROWS = 1000
+
+/** Corporate-action diagnostics for the workflow log. */
+private fun diagnostics(stocks: List<MarketStock>) {
+    val all = stocks.flatMap { it.events }
+    val acc = all.filter { it.accepted }
+    val hist = java.util.TreeMap<Int, Int>()
+    for (x in stocks) { val k = minOf(x.adjustments, 4); hist[k] = (hist[k] ?: 0) + 1 }
+    val cand = java.util.TreeMap<Int, Int>()
+    for (x in stocks) { val k = minOf(x.events.size, 10); cand[k] = (cand[k] ?: 0) + 1 }
+    println("== corporate actions: ${acc.size} applied on ${stocks.count { it.adjustments > 0 }} stocks; ${all.size} prev-close mismatches > ${(MarketHistory.ADJ_MIN * 100).toInt()}%")
+    println("   applied per stock (4 = 4+): $hist")
+    println("   mismatches per stock (10 = 10+): $cand")
+    println("   mismatches by reason: " + all.groupingBy { it.reason }.eachCount().toSortedMap() + "  by exchange: " + all.groupingBy { it.exch + ":" + it.reason }.eachCount().toSortedMap())
+    fun line(e: AdjEvent) = "   %-12s %s %s prev %.2f ourClose %.2f open %.2f ratio %.4f %s".format(e.sym, e.exch, java.time.LocalDate.ofEpochDay(e.day.toLong()), e.prev, e.last, e.open, e.ratio, e.reason)
+    println("-- applied (top 20 by size):"); acc.sortedByDescending { Math.abs(Math.log(it.ratio)) }.take(20).forEach { println(line(it)) }
+    println("-- ignored (top 20 by size):"); all.filter { !it.accepted }.sortedByDescending { Math.abs(Math.log(it.ratio)) }.take(20).forEach { println(line(it)) }
+    println("-- ignored, largest 1-8% mismatches (top 20):"); all.filter { it.reason == "small" }.sortedByDescending { Math.abs(Math.log(it.ratio)) }.take(20).forEach { println(line(it)) }
+    val share = stocks.count { it.adjustments > 0 } * 100.0 / maxOf(1, stocks.size)
+    if (share > 15) println("::warning::corporate-action adjustments on %.0f%% of stocks - check the log above".format(share))
+}
 private const val MIN_WRITE_SESSIONS = 253
 
 private fun read(f: File): String {

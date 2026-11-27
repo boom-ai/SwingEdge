@@ -30,6 +30,8 @@ class SwingApp(private val p: Platform) {
     @Volatile private var vTested = false
 
     private val cache = DailyCache(p)
+    /** nightly-calls: tomorrow's intraday calls (Nightly.kt) */
+    private val night = NightDesk(p)
     @Volatile private var universe: List<String> = emptyList()
     @Volatile private var universeSet: Set<String> = emptySet()
     @Volatile private var names: Map<String, String> = emptyMap()
@@ -109,7 +111,7 @@ class SwingApp(private val p: Platform) {
             val now = now()
             val m = LinkedHashMap<String, Any?>(snapshot)
             m["now"] = now
-            m["marketOpen"] = Clock.isMarketOpen(now) && vHolidayDay != Clock.epochDay(now)
+            m["marketOpen"] = Clock.isMarketOpen(now) && vHolidayDay != Clock.epochDay(now) && !Holidays.isHoliday(Clock.epochDay(now))
             m["marketNote"] = marketNote(now)
             m["nextScanAt"] = Clock.nextWake(now)
             m["busy"] = busy
@@ -126,7 +128,7 @@ class SwingApp(private val p: Platform) {
         }
     }
 
-    fun nextWakeAt(): Long = try { Clock.nextWake(now()) } catch (t: Throwable) { System.currentTimeMillis() + 15 * 60_000L }
+    fun nextWakeAt(): Long = try { val n = now(); minOf(Clock.nextWake(n), try { night.nextWake(n) } catch (t: Throwable) { Long.MAX_VALUE }) } catch (t: Throwable) { System.currentTimeMillis() + 15 * 60_000L }
 
     fun tick(trigger: String): String {
         lock.lock()
@@ -144,7 +146,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes" || name == "intraday") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -249,10 +251,11 @@ class SwingApp(private val p: Platform) {
     private fun marketNote(now: Long): String {
         val day = Clock.epochDay(now)
         val min = Clock.minuteOfDay(now)
-        if (!Clock.isWeekday(day)) return "Closed · weekend · opens " + Clock.dayLabel(Clock.nextWeekday(day)) + " 09:15"
-        if (vHolidayDay == day) return "No trading on the exchange today — looks like a market holiday. Opens " + Clock.dayLabel(Clock.nextWeekday(day)) + " 09:15"
+        if (!Clock.isWeekday(day)) return "Closed · weekend · opens " + Clock.dayLabel(Holidays.nextTradingDay(day)) + " 09:15"
+        if (Holidays.isHoliday(day)) return "Closed · NSE holiday" + (Holidays.names[day]?.let { " ($it)" } ?: "") + " · opens " + Clock.dayLabel(Holidays.nextTradingDay(day)) + " 09:15"
+        if (vHolidayDay == day) return "No trading on the exchange today — looks like a market holiday. Opens " + Clock.dayLabel(Holidays.nextTradingDay(day)) + " 09:15"
         if (min < Clock.OPEN_MIN) return "Closed · opens 09:15 today"
-        if (min >= Clock.CLOSE_MIN) return "Closed · opens " + Clock.dayLabel(Clock.nextWeekday(day)) + " 09:15"
+        if (min >= Clock.CLOSE_MIN) return "Closed · opens " + Clock.dayLabel(Holidays.nextTradingDay(day)) + " 09:15"
         val tail = when {
             !vAnyLive && !vTested -> "Strategies are not tested yet — no new buys until the test has run"
             !vAnyLive -> NO_LIVE_TEXT
@@ -273,7 +276,7 @@ class SwingApp(private val p: Platform) {
         val done = ArrayList<String>()
         expireSignals(now)
 
-        if (weekday && min >= Clock.BRIEF_MIN && min < Clock.OPEN_MIN && st.lastBriefDay != day) {
+        if (weekday && min >= Clock.BRIEF_MIN && min < Clock.OPEN_MIN && st.lastBriefDay != day && !Holidays.isHoliday(day)) {
             st.lastBriefDay = day
             brief(day)
             done.add("brief")
@@ -297,6 +300,7 @@ class SwingApp(private val p: Platform) {
         }
         // SPEC5: the stock list, once per calendar day from 07:30 (not reported in the status: it changes nothing the user sees)
         if (min >= StockList.REFRESH_MIN && listTriedDay != day) refreshSymbols(false)
+        try { night.step(now)?.let { (t, b) -> post("brief", NID_NIGHT, t, b); done.add("night calls") } } catch (t: Throwable) { log("night: $t") }
         return if (done.isEmpty()) "Nothing due" else done.joinToString(" · ")
     }
 
@@ -1790,6 +1794,7 @@ class SwingApp(private val p: Platform) {
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
                 "fnoLab" -> labView()
                 "liveQuotes" -> liveQuotes(a)
+                "intraday" -> night.view(now())
                 "brokerStatus" -> brokerStatus()
                 "brokerQuotes" -> brokerQuotes(a)
                 "fnoTicker" -> fnoTicker()
@@ -2769,6 +2774,7 @@ class SwingApp(private val p: Platform) {
         const val REPLAY_FILE = "replay.json"
         const val NID_BRIEF = 1001
         const val NID_EOD = 1002
+        const val NID_NIGHT = 1003
         private val SYM_RE = Regex("^[A-Z0-9&][A-Z0-9&\\-]*$")
         private const val LRU_MAX = 20
         /** A stock-page quote younger than this is reused by the next lookup of the same symbol. */

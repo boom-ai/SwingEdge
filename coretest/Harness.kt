@@ -49,12 +49,14 @@ fun main(args: Array<String>) {
     com.boomai.swingedge.core.Params.PF_SELL_ON_FALLING_50 = true; com.boomai.swingedge.core.Params.PF_SELL_ON_STOP_BREAK = true
     com.boomai.swingedge.core.Params.PF_SELL_ON_REL_WEAK = true; com.boomai.swingedge.core.Params.PF_TRIM_ON_STRENGTH = true
     com.boomai.swingedge.core.Params.BT_MAX_CONCURRENT = 100000   // equality tests compare every setup; the cap is exercised on real data
+    // Legacy simulations run on a synthetic weekday calendar; real NSE holidays (nightly-calls) are switched on only in NightTests.
+    com.boomai.swingedge.core.Holidays.enabled = false
     val only = args.firstOrNull()
     if (only == "sample") {
         Sample.run()
         return
     }
-    val all: List<Pair<String, () -> Unit>> = UnitTests.all() + SimTests.all() + V2Tests.all() + V3Tests.all() + V4Tests.all() + V5Tests.all() + V6Tests.all() + V7Tests.all() + V8Tests.all() + V9Tests.all() + V10Tests.all() + V11Tests.all() + V12Tests.all() + V15Tests.all() + V16Tests.all() + V17Tests.all() + V18Tests.all() + V19Tests.all() + ScanTests.all()
+    val all: List<Pair<String, () -> Unit>> = UnitTests.all() + SimTests.all() + V2Tests.all() + V3Tests.all() + V4Tests.all() + V5Tests.all() + V6Tests.all() + V7Tests.all() + V8Tests.all() + V9Tests.all() + V10Tests.all() + V11Tests.all() + V12Tests.all() + V15Tests.all() + V16Tests.all() + V17Tests.all() + V18Tests.all() + V19Tests.all() + ScanTests.all() + NightTests.all()
     for ((name, body) in all) if (only == null || name.contains(only, true)) T.section(name, body)
     println()
     println("RESULT: ${T.pass} checks passed, ${T.fail} failed")

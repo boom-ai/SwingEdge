@@ -1326,3 +1326,8 @@ tr.spotr td span { position: absolute; left: 50%; transform: translate(-50%, -50
   .busyline.indet i, .prog .pb.indet i { width: 100%; opacity: .5; transform: none; }
 }
 .brow { display: flex; padding: 4px 0 8px; } .brow > div { display: flex; flex-direction: column; gap: 2px; } .brow .mut { font-size: 13px; }
+/* nightly calls: Today "Tomorrow" card */
+.card.nt { padding: 0 0 4px; overflow: hidden; }
+.card.nt .sec { padding-top: 10px; }
+.card.nt .lrow small.ntw { font-size: var(--t-cap); line-height: 1.35; }
+.card.nt .bt { margin: 8px var(--pad); }

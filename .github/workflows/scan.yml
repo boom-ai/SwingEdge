@@ -1,5 +1,6 @@
 name: whole-market scan
-# Every NSE (EQ/BE/BZ/SM/ST) + BSE-only equity, scored with the app's own Kotlin code -> data/scan.csv + data/scan_meta.json.
+# Every NSE (EQ/BE/BZ/SM/ST) + BSE-only equity, scored with the app's own Kotlin code -> data/scan.csv + data/scan_meta.json,
+# plus tomorrow's intraday calls with their back-test record (data/intraday.csv) and NSE trading holidays (data/holidays.json).
 # Daily bhavcopies are kept in the Actions cache (rolling ~275 sessions); a lost cache is simply re-downloaded.
 on:
   schedule:
@@ -37,6 +38,22 @@ jobs:
         run: |
           python3 -u tools/bhavsync.py "$BHAV_DIR" "${{ github.event.inputs.sessions || '275' }}" || echo "bhavsync failed; using what is cached"
           ls "$BHAV_DIR" | wc -l
+
+      - name: NSE trading holidays + index closes (nightly calls)
+        run: |
+          set -u
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          curl -sS -m 30 -A "$UA" -c /tmp/ck -o /dev/null https://www.nseindia.com/ || true
+          curl -sS -L --compressed -m 60 -A "$UA" -H "Accept: application/json,*/*" -H "Referer: https://www.nseindia.com/resources/exchange-communication-holidays" \
+            -c /tmp/ck -b /tmp/ck -o /tmp/holidays_api.json -w "holiday api: %{http_code} %{size_download}\n" "https://www.nseindia.com/api/holiday-master?type=trading" || echo "holiday api: curl failed"
+          python3 tools/holidays.py /tmp/holidays_api.json data/holidays.json || true
+          last=$(ls "$BHAV_DIR" | grep -E '^nse(full)?_[0-9]{8}' | grep -oE '[0-9]{8}' | sort | tail -1 || true)
+          if [ -n "$last" ]; then
+            ddmmyyyy="${last:6:2}${last:4:2}${last:0:4}"
+            curl -sS -L -m 60 -A "$UA" -o /tmp/ind_close_all.csv -w "index closes $ddmmyyyy: %{http_code} %{size_download}\n" \
+              "https://nsearchives.nseindia.com/content/indices/ind_close_all_${ddmmyyyy}.csv" || true
+            if grep -qi "Index Name" /tmp/ind_close_all.csv 2>/dev/null; then cp /tmp/ind_close_all.csv "$BHAV_DIR/ind_close_all.csv"; else rm -f "$BHAV_DIR/ind_close_all.csv"; fi
+          fi
 
       - name: Save bhavcopy cache
         if: always()
@@ -83,11 +100,13 @@ jobs:
           exit $rc
 
       - name: Commit if changed
-        if: steps.scan.outputs.rc == '0'
+        if: steps.scan.outputs.rc == '0' || steps.scan.outputs.rc == '2'
         run: |
           head -c 300 data/scan_meta.json; echo
           git config user.name "swingedge-bot"; git config user.email "actions@users.noreply.github.com"
-          git add data/scan.csv data/scan_meta.json
+          head -c 600 data/intraday.csv 2>/dev/null || true; echo
+          git add data/scan.csv data/scan_meta.json data/holidays.json
+          [ -f data/intraday.csv ] && git add data/intraday.csv
           if git diff --cached --quiet; then echo "no changes"; exit 0; fi
           git commit -qm "Whole-market scan $(python3 -c 'import json;print(json.load(open("data/scan_meta.json"))["asof"])')"
           for i in 1 2 3 4 5; do git pull -q --rebase origin main && git push -q origin main && break; sleep $((i * 5)); done

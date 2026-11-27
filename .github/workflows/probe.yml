@@ -1,0 +1,13 @@
+name: probe
+on: workflow_dispatch
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA='Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
+          curl -s -L -o /tmp/l -w "lots %{http_code} %{size_download}\n" -H "User-Agent: $UA" "https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv"; wc -l /tmp/l
+          curl -s -o /dev/null -w "growwIdx %{http_code}\n" -H "User-Agent: $UA" -H "Content-Type: application/json" -X POST -d '{"exchangeAggReqMap":{"NSE":{"priceSymbolList":["RELIANCE"],"indexSymbolList":["NIFTY"]}}}' https://groww.in/v1/api/stocks_data/v1/tr_live_delayed/segment/CASH/latest_aggregated
+          curl -s -w " growwPx %{http_code}\n" -H "User-Agent: $UA" -H "Content-Type: application/json" -X POST -d '["NIFTY26DEC26000CE","RELIANCE26DEC1500CE"]' https://groww.in/v1/api/stocks_fo_data/v1/tr_live_prices/exchange/NSE/segment/FNO/latest_prices_batch | head -c 300
+          curl -s -L -w " info %{http_code}\n" -H "User-Agent: $UA" "https://www.nseindia.in/api/option-chain-contract-info?symbol=NIFTY&_=1" | head -c 200
+          curl -s -o /dev/null -w "growwChain %{http_code}\n" -H "User-Agent: $UA" "https://groww.in/v1/api/option_chain_service/v1/option_chain/nifty"

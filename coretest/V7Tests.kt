@@ -288,7 +288,7 @@ object V15Tests {
         var v = Json.parseObject(app.action("fnoLab", "{}"))!!
         val td = v.list("today").map { it.asObj() }
         T.check(td.size == 1 && td[0].str("strat") == "ORB#1" && td[0].str("side") == "CE" && td[0].int("strike") == 25450, "ORB champion call taken at ATM: $td")
-        T.eq(v.int("shadowToday"), 2, "the two challenger thresholds are paper-traded in the background")
+        T.check(v.int("shadowToday") >= 2, "the two challenger thresholds are paper-traded in the background (plus any daily-context rule challengers)")
         T.eq(td[0].num("entry"), 101.0, "entry at the live ask"); T.eq(td[0].str("expiry"), "23-Nov-2026", "skips the expiry that is today")
         T.eq(v.list("ticker").size, 2, "live ticker from NSE"); T.eq(v.list("ticker")[0].asObj().num("last"), 25460.5, "nifty last")
         p.setTime(day, 10 * 60); p.served[Fno.chainUrl(H, "NIFTY", "23-Nov-2026")] = V12Tests.chainJson(25480.0, 160.0, 161.0)

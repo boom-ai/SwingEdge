@@ -2392,8 +2392,8 @@ class SwingApp(private val p: Platform) {
                 for (t in openU) {
                     val l = px[t.cid]?.first
                     val slip = if (FnoUniverse.isIndex(t.sym)) 0.005 else 0.01
-                    if (l != null && t.bids.size < FnoLab.MAX_PATH) { val bid = Fno.r2(l * (1 - slip)); t.bids.add(bid)
-                        FnoLab.liveCheck(t, bid)?.let { hit -> if (t.champ && !t.gated && FnoLab.status(b, FnoLab.key(t)) == "WORKING") events.add(Pair("${t.sym} ${FnoUniverse.strikeText(t.strike.toDouble())} ${t.side}: " + (if (hit == "STOP") "stop hit, exit now" else "target hit, book it"), "${FnoLab.stratName(t.strat)}")) } }
+                    if (l != null && t.bids.size < FnoLab.MAX_PATH) { val bid = Fno.r2(l * (1 - slip)); t.mark(bid, m)
+                        FnoLab.liveCheck(t, bid, m)?.let { hit -> if (t.champ && !t.gated && FnoLab.status(b, FnoLab.key(t)) == "WORKING") events.add(Pair("${t.sym} ${FnoUniverse.strikeText(t.strike.toDouble())} ${t.side}: " + LabEntry.hitText(hit), "${FnoLab.stratName(t.strat)}")) } }
                     if (t.day < day || m >= FnoLab.EXIT_MIN) FnoLab.close(b, t)
                 }
             }
@@ -2409,9 +2409,10 @@ class SwingApp(private val p: Platform) {
                 if (se.day != day) continue
                 val bars = se.toBars() ?: continue
                 if (bars.n < 3) continue
+                bars.daily = labDailyCtx(s0, s0, day, false)
                 val fired = b.fired.filter { it.value == day && it.key.endsWith("|$s0") }.keys.map { it.substringBefore("|") }.toSet()
                 val scale = if (FnoUniverse.isIndex(s0)) 1.0 else 2.0
-                for (sg in FnoLab.signalsAll(s0, bars, m, fired, false, scale)) cands.add(Cand(s0, sg, FnoLab.champion(b, FnoLab.baseOf(sg.strat), s0) == sg.strat, bars, q[s0]?.ltp ?: bars.last))
+                for (sg in FnoLab.signalsAll(s0, bars, m, fired, false, scale)) cands.add(Cand(s0, sg, FnoLab.champion(b, FnoLab.baseOf(sg.strat), s0, day.toLong()) == sg.strat, bars, q[s0]?.ltp ?: bars.last))
             }
         }
         val pick = cands.sortedWith(compareByDescending<Cand> { it.champ }.thenBy { it.sym }).take(12)
@@ -2435,20 +2436,26 @@ class SwingApp(private val p: Platform) {
                 if (l < 1.0) continue
                 val sym = pl.c.sym; val sg = pl.c.sg
                 b.fired["${sg.strat}|$sym"] = day
-                val key = sg.strat + "|" + sym; val (sp, tp) = FnoLab.bestExit(b, key)
+                val key = sg.strat + "|" + sym
                 val slip = if (FnoUniverse.isIndex(sym)) 0.005 else 0.01
                 val entry = Fno.r2(l * (1 + slip))
-                val fe = FnoLab.features(pl.c.bars, m, sg.side, vix); val pw = FnoLab.predict(b.w, fe)
-                val gated = pl.c.champ && b.gate > 0 && pw < b.gate
-                b.seq++
-                val t = LabTrade("L${b.seq}", sg.strat, sym, pl.exp, Math.round(pl.k).toInt(), sg.side, Fno.LOT[sym] ?: 0, entry, now, day,
-                    sg.why + (if (b.trained >= 10) " · win chance " + Math.round(pw * 100) + "%" else ""), sp, tp, arrayListOf(Fno.r2(l * (1 - slip))),
-                    spot = pl.c.spot, champ = pl.c.champ, feats = fe, p = pw, gated = gated, cid = pl.cid)
-                b.open.add(t)
-                if (pl.c.champ && !gated && FnoLab.status(b, key) == "WORKING")
+                val ctx = LabEntry.ctx(b, sym, pl.exp, day, null, 0.0, vix, labBars["NIFTY"]?.second, pl.c.bars)
+                val t = LabEntry.open(b, sg, sym, pl.exp, Math.round(pl.k).toInt(), entry, Fno.r2(l * (1 - slip)), now, day, m, pl.c.bars, pl.c.champ, ctx, capital(), pl.c.spot, pl.cid)
+                val sp = t.stopPct
+                if (pl.c.champ && !t.gated && FnoLab.status(b, key) == "WORKING")
                     events.add(Pair("BUY $sym ${FnoUniverse.strikeText(pl.k)} ${sg.side} ≤ ₹${Fno.r2(entry * 1.02)}", "${FnoLab.stratName(sg.strat)}: ${sg.why}. Stop ₹${Fno.r2(entry * (1 - sp / 100))}, exit by 3:15 pm."))
             }
         }
+    }
+
+    /** Previous-days context for the lab rules: daily history from the scan cache, or (indices only) one Yahoo download a day. */
+    private val labDaily = java.util.concurrent.ConcurrentHashMap<String, Pair<Int, DailyCtx?>>()
+    private fun labDailyCtx(sym: String, ysym: String, day: Int, fetch: Boolean): DailyCtx? {
+        labDaily[sym]?.let { if (it.first == day && (it.second != null || !fetch)) return it.second }
+        var ctx = try { FnoLearn.dailyCtx(cache.get(ysym) ?: cache.get(sym), day) } catch (t: Throwable) { null }
+        if (ctx == null && fetch && labDaily[sym]?.first != day) ctx = try { FnoLearn.dailyCtx(Yahoo.daily(ysym, httpAll(listOf(Yahoo.dailyUrl(Params.YAHOO_HOST_1, ysym))).firstOrNull(), day), day) } catch (t: Throwable) { null }
+        labDaily[sym] = Pair(day, ctx)
+        return ctx
     }
 
     private val labRunning = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -2468,8 +2475,8 @@ class SwingApp(private val p: Platform) {
                 val q = c?.quote(t.strike, t.side)
                 synchronized(labLock) {
                     val b = labLoad()
-                    if (q != null && q.bid > 0 && t.bids.size < FnoLab.MAX_PATH) t.bids.add(q.bid)
-                    if (q != null) FnoLab.liveCheck(t, q.bid)?.let { hit -> if (t.champ && !t.gated && FnoLab.status(b, FnoLab.key(t)) == "WORKING") events.add(Pair("${t.sym} ${t.strike} ${t.side}: " + (if (hit == "STOP") "stop hit, exit now" else "target hit, book it"), "Bid ₹${Fno.r2(q.bid)} vs entry ₹${t.entry} (${FnoLab.stratName(t.strat)})")) }
+                    if (q != null && q.bid > 0 && t.bids.size < FnoLab.MAX_PATH) t.mark(q.bid, m)
+                    if (q != null) FnoLab.liveCheck(t, q.bid, m)?.let { hit -> if (t.champ && !t.gated && FnoLab.status(b, FnoLab.key(t)) == "WORKING") events.add(Pair("${t.sym} ${t.strike} ${t.side}: " + LabEntry.hitText(hit), "Bid ₹${Fno.r2(q.bid)} vs entry ₹${t.entry} (${FnoLab.stratName(t.strat)})")) }
                     if (t.day < day || m >= FnoLab.EXIT_MIN) FnoLab.close(b, t)
                 }
             }
@@ -2478,6 +2485,7 @@ class SwingApp(private val p: Platform) {
                 val cb = labBars[sym]
                 val bars = if (cb != null && now - cb.first < 55_000L) cb.second else FnoLab.parseBars(httpAll(listOf(Yahoo.tickerUrl(Params.YAHOO_HOST_1, ysym, "1d", "5m"))).firstOrNull())?.also { labBars[sym] = Pair(now, it) }
                 if (bars == null) continue
+                if (bars.daily == null) bars.daily = labDailyCtx(sym, ysym, day, true)
                 labLast = sym + ": " + bars.n + " five-minute bars, last " + Fno.r2(bars.last)
                 val fired = synchronized(labLock) { labLoad().fired.filter { it.value == day && it.key.endsWith("|" + sym) }.keys.map { it.substringBefore("|") }.toSet() }
                 val expToday = sym == "NIFTY" && labExpiry(sym, true) != null
@@ -2489,15 +2497,13 @@ class SwingApp(private val p: Platform) {
                     synchronized(labLock) {
                         val b = labLoad()
                         b.fired["${sg.strat}|$sym"] = day
-                        val key = sg.strat + "|" + sym; val (sp, tp) = FnoLab.bestExit(b, key)
-                        b.seq++
-                        val champ = FnoLab.champion(b, FnoLab.baseOf(sg.strat), sym) == sg.strat
+                        val key = sg.strat + "|" + sym
+                        val champ = FnoLab.champion(b, FnoLab.baseOf(sg.strat), sym, day.toLong()) == sg.strat
                         val vix = (gIdx?.second ?: emptyList()).firstOrNull { it["sym"] == "INDIAVIX" }?.get("last") as? Double
-                        val fe = FnoLab.features(bars, m, sg.side, vix); val pw = FnoLab.predict(b.w, fe)
-                        val gated = champ && b.gate > 0 && pw < b.gate
-                        val t = LabTrade("L${b.seq}", sg.strat, sym, exp, k, sg.side, Fno.LOT[sym] ?: 0, q.ask, now, day, sg.why + (if (b.trained >= 10) " · win chance " + Math.round(pw * 100) + "%" else ""), sp, tp, arrayListOf(q.bid), spot = c.spot, champ = champ, feats = fe, p = pw, gated = gated)
-                        b.open.add(t)
-                        if (champ && !gated && FnoLab.status(b, key) == "WORKING") events.add(Pair("BUY $sym $k ${sg.side} ≤ ₹${Fno.r2(q.ask * 1.02)}", "${FnoLab.stratName(sg.strat)}: ${sg.why}. Stop ₹${Fno.r2(q.ask * (1 - sp / 100))}" + (if (tp > 0) ", target ₹${Fno.r2(q.ask * (1 + tp / 100))}" else "") + ", exit by 3:15 pm."))
+                        val ctx = LabEntry.ctx(b, sym, exp, day, c, q.iv, vix, null, bars)
+                        val t = LabEntry.open(b, sg, sym, exp, k, q.ask, q.bid, now, day, m, bars, champ, ctx, capital(), c.spot)
+                        val sp = t.stopPct; val tp = t.tgtPct
+                        if (champ && !t.gated && FnoLab.status(b, key) == "WORKING") events.add(Pair("BUY $sym $k ${sg.side} ≤ ₹${Fno.r2(q.ask * 1.02)}", "${FnoLab.stratName(sg.strat)}: ${sg.why}. Stop ₹${Fno.r2(q.ask * (1 - sp / 100))}" + (if (tp > 0) ", target ₹${Fno.r2(q.ask * (1 + tp / 100))}" else "") + ", exit by 3:15 pm."))
                     }
                 }
             }

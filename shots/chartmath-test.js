@@ -8,27 +8,28 @@ const JUNK = [null, undefined, NaN, Infinity, -Infinity, 0, -5, 1e21, '', 'x', '
 
 /* ---- clampView ---- */
 let v = CM.clampView(0, 0, 0); ok(v.s === 0 && v.c === 0, '0 bars -> empty view');
-v = CM.clampView(5, 10, 1); ok(v.s === 0 && v.c === 1, '1 bar: view is exactly that bar');
+v = CM.clampView(5, 10, 1); ok(v.s >= 0 && v.c === 1 + CM.gapOf(1), '1 bar: view is that bar plus the right gap');
 v = CM.clampView(0, 3, 20); ok(v.c === 20 && v.s === 0, '20 bars: cannot zoom in below the minimum (20 = all of it)');
 v = CM.clampView(0, 3, 500); ok(v.c === 20, '500 bars: min 20 visible');
 v = CM.clampView(-50, 100, 500); ok(v.s === 0 && v.c === 100, 'pan before the first bar clamps to 0');
-v = CM.clampView(900, 100, 500); ok(v.s === 400 && v.c === 100, 'pan after the last bar clamps to n - c');
-v = CM.clampView(0, 9999, 500); ok(v.c === 500 && v.s === 0, 'zoom out beyond the data = all bars');
+v = CM.clampView(900, 100, 500); ok(v.s === 400 + CM.maxGap(100) && v.c === 100, 'pan after the last bar clamps to n - c + max gap');
+v = CM.clampView(0, 9999, 500); ok(v.c === 500 + CM.gapOf(500) && v.s === 0, 'zoom out beyond the data = all bars + gap');
 v = CM.clampView(NaN, NaN, 130); ok(v.c === 130 && v.s === 0, 'NaN view = whole data');
 JUNK.forEach((j, k) => { const r = CM.clampView(j, j, j); ok(typeof r.s === 'number' && typeof r.c === 'number' && isFinite(r.s) && isFinite(r.c), 'clampView junk #' + k); });
-JUNK.forEach((j, k) => { const r = CM.clampView(j, j, 100); ok(r.s >= 0 && r.s + r.c <= 100 + 1e-9 && r.c >= 20, 'clampView junk window #' + k); });
+JUNK.forEach((j, k) => { const r = CM.clampView(j, j, 100); ok(r.s >= 0 && r.s + r.c <= 100 + CM.maxGap(r.c) + 1e-9 && r.c >= 20, 'clampView junk window #' + k); });
 
 /* ---- default and ranges ---- */
-v = CM.defaultView(500); ok(v.c === 126 && v.s === 374, 'default window = last 126 of 500');
-v = CM.defaultView(50); ok(v.c === 50 && v.s === 0, 'default window with 50 bars = all');
-v = CM.defaultView(1); ok(v.c === 1, 'default window with 1 bar');
+v = CM.defaultView(500); ok(v.c === 126 + CM.gapOf(126) && v.s === 374, 'default window = last 126 of 500 + right gap');
+ok(CM.gapOf(126) === 10 && CM.gapOf(20) === 2, 'gap ~8% of the window, at least 2 bars');
+v = CM.defaultView(50); ok(v.c === 50 + CM.gapOf(50) && v.s === 0, 'default window with 50 bars = all + gap');
+v = CM.defaultView(1); ok(v.c === 1 + CM.gapOf(1), 'default window with 1 bar');
 ok(CM.rangeCount('3M', 500) === 63 && CM.rangeCount('1Y', 500) === 252 && CM.rangeCount('All', 500) === 500 && CM.rangeCount('2Y', 500) === 500, 'range bar counts');
 ok(CM.rangeCount('3M', 30) === 30 && CM.rangeCount('1Y', 130) === 130, 'range counts clamp to the data');
 ok(CM.rangeCount('3M', 10) === 10, 'range with 10 bars = 10');
 ok(CM.rangeCount('nope', 200) === 200, 'unknown range = all');
-v = CM.rangeView('6M', 500); ok(v.s === 374 && v.c === 126, '6M view is right-aligned');
-ok(CM.activeRanges({ s: 374, c: 126 }, 500).join() === '6M', 'active range 6M');
-ok(CM.activeRanges({ s: 0, c: 500 }, 500).join() === '2Y,All', 'full 500 bars matches both 2Y and All');
+v = CM.rangeView('6M', 500); ok(v.s === 374 && v.c === 126 + CM.gapOf(126), '6M view is right-aligned with a gap');
+ok(CM.activeRanges(CM.rangeView('6M', 500), 500).join() === '6M', 'active range 6M');
+ok(CM.activeRanges(CM.rangeView('All', 500), 500).join() === '2Y,All', 'full 500 bars matches both 2Y and All');
 ok(CM.activeRanges({ s: 300, c: 126 }, 500).length === 0, 'a view panned away from the right edge matches no chip');
 ok(CM.activeRanges({ s: 440, c: 60 }, 500).length === 0, 'a custom zoom matches no chip');
 ok(CM.activeRanges(null, 500).length === 0 && CM.activeRanges({ s: 0, c: 5 }, 0).length === 0, 'active range with junk');
@@ -40,7 +41,7 @@ z = CM.zoomAt({ s: 374, c: 126 }, 2, 1, 500); near(z.s + z.c, 500, 1e-9, 'zoom a
 z = CM.zoomAt({ s: 374, c: 126 }, 2, 0, 500); near(z.s, 374, 1e-9, 'zoom anchored at the left edge keeps the left edge');
 z = CM.zoomAt({ s: 100, c: 22 }, 10, 0.3, 500); near(z.c, 20, 1e-9, 'zoom in stops at 20 bars');
 near(z.s + 0.3 * z.c, 100 + 0.3 * 22, 1e-9, 'anchor stays fixed even when the minimum is hit');
-z = CM.zoomAt({ s: 0, c: 400 }, 0.1, 0.5, 500); ok(z.c === 500 && z.s === 0, 'zoom out stops at all bars');
+z = CM.zoomAt({ s: 0, c: 400 }, 0.1, 0.5, 500); ok(z.c === 500 + CM.gapOf(500) && z.s === 0, 'zoom out stops at all bars + gap');
 z = CM.zoomAt({ s: 0, c: 20 }, 3, 0.5, 20); ok(z.c === 20 && z.s === 0, 'zoom with exactly 20 bars is a no-op');
 z = CM.zoomAt({ s: 0, c: 1 }, 5, 0.5, 1); ok(z.c === 1 && z.s === 0, 'zoom with 1 bar is a no-op');
 z = CM.zoomAt({ s: 10, c: 100 }, 0, 0.5, 500); ok(z.c === 100, 'zero factor ignored');
@@ -49,11 +50,11 @@ z = CM.zoomAt({ s: 10, c: 100 }, 2, 7, 500); ok(z.c === 50 && z.s >= 0, 'anchor 
 z = CM.zoomAt({ s: 10, c: 100 }, 2, NaN, 500); ok(z.c === 50, 'NaN anchor = centre');
 // repeated zoom-in/zoom-out returns to a sane range
 z = { s: 374, c: 126 }; for (let i = 0; i < 40; i++) z = CM.zoomAt(z, 1.3, 0.8, 500); ok(z.c === 20 && z.s + z.c <= 500 && z.s >= 0, '40 zoom-ins stay valid');
-for (let i = 0; i < 60; i++) z = CM.zoomAt(z, 1 / 1.3, 0.2, 500); ok(z.c === 500 && z.s === 0, '60 zoom-outs reach all bars');
+for (let i = 0; i < 60; i++) z = CM.zoomAt(z, 1 / 1.3, 0.2, 500); ok(z.c === 500 + CM.gapOf(500) && z.s === 0, '60 zoom-outs reach all bars + gap');
 
 /* ---- pan ---- */
 let p = CM.panBy({ s: 374, c: 126 }, 100, 300, 500); near(p.s, 374 - 100 / 300 * 126, 1e-9, 'drag right moves back in time');
-p = CM.panBy({ s: 374, c: 126 }, -5000, 300, 500); ok(p.s === 374, 'pan left beyond the last bar stays at the end');
+p = CM.panBy({ s: 374, c: 126 }, -5000, 300, 500); ok(p.s === 374 + CM.maxGap(126), 'pan left beyond the last bar stops at half a screen of empty space');
 p = CM.panBy({ s: 10, c: 126 }, 5000, 300, 500); ok(p.s === 0, 'pan right beyond the first bar stays at 0');
 p = CM.panBy({ s: 0, c: 500 }, 80, 300, 500); ok(p.s === 0 && p.c === 500, 'pan with everything visible does nothing');
 p = CM.panBy({ s: 5, c: 20 }, 10, 0, 500); ok(p.s === 5, 'zero plot width ignored');
@@ -67,7 +68,7 @@ pi = CM.pinchView({ s: 374, c: 126 }, 200, 100, 0.5, 0.5, 500); near(pi.c, 252, 
 pi = CM.pinchView({ s: 300, c: 100 }, 100, 100, 0.2, 0.7, 500); near(pi.c, 100, 1e-9, 'same distance = same zoom');
 near(pi.s + 0.7 * pi.c, 300 + 0.2 * 100, 1e-9, 'a moved midpoint pans the chart with the fingers');
 pi = CM.pinchView({ s: 0, c: 100 }, 100, 1e6, 0.5, 0.5, 500); ok(pi.c === 20, 'extreme pinch-in stops at 20 bars');
-pi = CM.pinchView({ s: 0, c: 100 }, 100, 0.0001, 0.5, 0.5, 500); ok(pi.c === 500, 'extreme pinch-out stops at all bars');
+pi = CM.pinchView({ s: 0, c: 100 }, 100, 0.0001, 0.5, 0.5, 500); ok(pi.c === 500 + CM.gapOf(500), 'extreme pinch-out stops at all bars + gap');
 pi = CM.pinchView({ s: 40, c: 100 }, 0, 100, 0.5, 0.5, 500); ok(pi.c === 100 && pi.s === 40, 'zero start distance ignored');
 pi = CM.pinchView({ s: 40, c: 100 }, 100, NaN, 0.5, 0.5, 500); ok(pi.c === 100, 'NaN distance ignored');
 
@@ -213,6 +214,14 @@ ok(CM.decayVelocity(1, 0) === 1 && CM.decayVelocity(1, 240) < 0.4 && CM.decayVel
   ok(CM.dateTicks(g, { s: 0, c: 500 }, 500, 300, 40, CM.dateMeta(g, 500)).length >= 3, 'gaps in the dates do not break the labels');
   ok(CM.dateMeta(null, 10).n === 0 && CM.dateMeta(F, 0).n === 0, 'dateMeta on junk is empty');
 }
+
+/* ---- manual price scale ---- */
+{ const pr = { min: 100, max: 200, ok: true };
+  ok(CM.scaleRange(pr, 1, 0) === pr, 'scale 1, offset 0 = auto range unchanged');
+  const a = CM.scaleRange(pr, 2, 0); ok(a.min === 50 && a.max === 250 && a.manual, 'stretch x2 around the middle');
+  const b = CM.scaleRange(pr, 0.5, 0.25); ok(b.min === 150 && b.max === 200, 'squeeze + shift up');
+  const c = CM.scaleRange(pr, 999, NaN); ok(c.max - c.min === 2000, 'scale clamps at 20x');
+  ok(CM.scaleRange(null, 2, 0) === null && CM.scaleRange({ min: 5, max: 5 }, 2, 0).min === 5, 'scale with junk range'); }
 
 console.log((fail ? 'FAILED ' : 'OK — ') + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

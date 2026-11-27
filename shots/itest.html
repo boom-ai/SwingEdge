@@ -357,12 +357,12 @@ document.getElementById('f').onload=async()=>{
   await sect('full chart: gestures',async()=>{
     await openSym('RELIANCE');click('#st-chart .xpand');await sleep(1600);
     const I=cfi(),cv=I.canvas,res=reps['c:RELIANCE'];ok(!!I&&!!cv&&!!res,'chart ready for gestures (500 bars in reply: '+!!res+')');
-    let s=I.state();ok(s.c===126&&s.s===374,'default window = last 126 bars: '+s.s+'/'+s.c);
+    let s=I.state();ok(s.c===126+w.CM.gapOf(126)&&s.s===374,'default window = last 126 bars: '+s.s+'/'+s.c);
     const cr=rect(cv),cx=cr.left+s.plot.l+s.plot.w/2,cy=cr.top+cr.height/3;
     const wheel=(dy,x)=>{cv.dispatchEvent(new w.WheelEvent('wheel',{deltaY:dy,clientX:x==null?cx:x,clientY:cy,bubbles:true,cancelable:true}));I.flush();};
     wheel(-400);s=I.state();ok(s.c<126&&s.c>=20,'wheel up zooms in within the clamp: c='+s.c);
     for(let k=0;k<40;k++)wheel(-400);s=I.state();ok(s.c===20,'zoom in stops at 20 bars: c='+s.c);
-    for(let k=0;k<80;k++)wheel(400);s=I.state();ok(s.c===500&&s.s===0,'zoom out stops at all bars: '+s.s+'/'+s.c);
+    for(let k=0;k<80;k++)wheel(400);s=I.state();ok(s.c===500+w.CM.gapOf(500)&&s.s===0,'zoom out stops at all bars: '+s.s+'/'+s.c);
     I.reset();I.flush();wheel(-300);const z=I.state();ok(z.c<126&&z.s>=0&&z.s+z.c<=500+1e-6,'zoom keeps the window inside the data: '+z.s+'/'+z.c);
     // pan by mouse drag
     I.setView({s:200,c:100});I.flush();const sp=I.state().s;
@@ -398,18 +398,18 @@ document.getElementById('f').onload=async()=>{
     const tp=mkT(cv,1,cx,cy);tev(cv,'touchstart',[tp]);await sleep(40);tev(cv,'touchend',[],[tp]);await sleep(40);ok(I.state().cross<0&&q('#cf-ro').hidden,'a tap dismisses the crosshair');
     await sleep(500);I.setView({s:100,c:40});I.flush();
     const d1=mkT(cv,1,cx,cy);tev(cv,'touchstart',[d1]);await sleep(30);tev(cv,'touchend',[],[d1]);await sleep(60);tev(cv,'touchstart',[mkT(cv,1,cx+3,cy)]);await sleep(30);tev(cv,'touchend',[],[mkT(cv,1,cx+3,cy)]);I.flush();
-    s=I.state();ok(s.c===126&&s.s===374,'double-tap resets to the default window: '+s.s+'/'+s.c);
+    s=I.state();ok(s.c===126+w.CM.gapOf(126)&&s.s===374,'double-tap resets to the default window: '+s.s+'/'+s.c);
     // toggles + ranges
     const fr=I.state().frames;click('.cfe[data-id="100"]');I.flush();ok(I.state().emas.indexOf(100)>=0&&I.state().frames>fr&&q('.cfe[data-id="100"]').getAttribute('aria-pressed')==='true','EMA 100 toggle redraws and is pressed: '+JSON.stringify(I.state().emas)+' frames '+fr+'->'+I.state().frames+' '+q('.cfe[data-id="100"]').getAttribute('aria-pressed'));
     click('.cfe[data-id="10"]');I.flush();ok(I.state().emas.indexOf(10)<0,'EMA 10 toggle off: '+JSON.stringify(I.state().emas));click('.cfe[data-id="10"]');I.flush();
     const fr2=I.state().frames;click('[data-c="cf-levels"]');I.flush();ok(I.state().levels===false&&I.state().frames>fr2&&I.state().labels.length===0,'Levels toggle off redraws and removes labels: '+I.state().levels+' '+I.state().labels.length+' frames '+fr2+'->'+I.state().frames);click('[data-c="cf-levels"]');I.flush();
     const lab=I.state().labels;ok(lab.length>=3&&/your target|Stop|Target/i.test(lab.map(l=>l.t).join(' ')),'level labels drawn: '+lab.map(l=>l.t).join(', '));
     const ys=lab.map(l=>l.y).sort((a,b)=>a-b);let gap=1e9;for(let k=1;k<ys.length;k++)gap=Math.min(gap,ys[k]-ys[k-1]);ok(gap>=11,'right-edge labels never overlap (min gap '+gap.toFixed(1)+'px)');
-    click('.rchip[data-id="3M"]');await sleep(60);ok(I.state().c===63&&/3M/.test(q('#cf-rng .rchip.on').textContent),'3M range chip sets 63 bars');
-    click('.rchip[data-id="All"]');await sleep(60);ok(I.state().c===500&&I.state().mode==='line','All shows every bar as a close line');
+    click('.rchip[data-id="3M"]');await sleep(60);ok(I.state().c===63+w.CM.gapOf(63)&&/3M/.test(q('#cf-rng .rchip.on').textContent),'3M range chip sets 63 bars');
+    click('.rchip[data-id="All"]');await sleep(60);ok(I.state().c===500+w.CM.gapOf(500)&&I.state().mode==='line','All shows every bar as a close line');
     click('.rchip[data-id="6M"]');await sleep(60);ok(I.state().mode==='candles','candles when 126 bars are visible');
     click('[data-c="cf-vol"]');I.flush();ok(I.state().vol===false,'volume toggle '+I.state().vol);click('[data-c="cf-vol"]');I.flush();
-    click('[data-c="cf-reset"]');await sleep(60);ok(I.state().c===126,'Reset button restores the default window');
+    click('[data-c="cf-reset"]');await sleep(60);ok(I.state().c===126+w.CM.gapOf(126),'Reset button restores the default window');
     // state poll must not touch the open chart or its focus
     const cvEl=q('#cf-canvas');w.onStateChanged();await sleep(200);ok(q('#cf-canvas')===cvEl&&!!cfi(),'a state poll does not re-render the open chart');
     // resize / rotation: the canvas follows the stage
@@ -452,7 +452,7 @@ document.getElementById('f').onload=async()=>{
     ok(/ATR 14/.test(ro)&&/RSI 2/.test(ro)&&/Supertrend/.test(ro)&&/BB/.test(ro),'crosshair readout lists active indicator values: '+ro.replace(/\s+/g,' ').slice(0,200));
     const ds=[];for(let k=0;k<30;k++){I.setView({s:k*10,c:126});I.flush();ds.push(I.state().lastDrawMs);}ds.sort((a,b)=>a-b);
     ok(ds[15]<16,'draw stays under a frame with many layers on 500 bars (median '+ds[15].toFixed(2)+' ms)');
-    click('[data-c="cf-reset"]');await sleep(60);ok(I.state().c===126,'Reset still restores the default window');
+    click('[data-c="cf-reset"]');await sleep(60);ok(I.state().c===126+w.CM.gapOf(126),'Reset still restores the default window');
     hist();await sleep(250);click('#st-chart .xpand');await sleep(900);const I2=cfi();I2.flush();
     ok(I2.state().panes.join()==='atr,rsi2'&&I2.state().ind.indexOf('darvas')>=0,'reopened chart restores the saved choices');
     try{w.localStorage.removeItem('se_cf_ind');w.localStorage.removeItem('se_cx_ind');}catch(e){}

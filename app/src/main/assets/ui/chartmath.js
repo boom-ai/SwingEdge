@@ -17,29 +17,34 @@
   function cnt(n) { n = num(n); return n !== null && n > 0 ? Math.floor(n) : 0; }
 
   /* ---------- view window ---------- */
+  /* empty slots kept right of the last candle (room for labels and the eye), and how far past it a pan may go */
+  function gapOf(c) { c = fin(c) && c > 0 ? c : 0; return c <= 0 ? 0 : Math.max(2, Math.round(c * 0.08)); }
+  function maxGap(c) { c = fin(c) && c > 0 ? c : 0; return c <= 0 ? 0 : Math.max(3, Math.floor(c * 0.5)); }
   function clampView(s, c, n, minBars) {
     n = cnt(n);
     if (n <= 0) return { s: 0, c: 0 };
     var mn = Math.min(minBars > 0 ? minBars : MINB, n);
-    c = fin(c) ? c : n; c = clamp(c, mn, n);
-    s = fin(s) ? s : n - c; s = clamp(s, 0, n - c);
+    c = fin(c) ? c : n; c = clamp(c, mn, n + gapOf(n));
+    s = fin(s) ? s : n - c; s = c >= n ? 0 : clamp(s, 0, n - c + maxGap(c));   /* wider than the data: show it all, gap on the right */
     return { s: s, c: c };
   }
+  /* right-aligned window showing [count] bars plus the empty gap after the last one */
+  function rightView(count, n) { n = cnt(n); var c0 = Math.min(n, count); return clampView(n - c0, c0 + gapOf(c0), n); }
   function viewOf(v, n, minBars) { v = v || {}; return clampView(v.s, v.c, n, minBars); }
-  function defaultView(n) { n = cnt(n); var c = Math.min(DEFAULT_BARS, n); return clampView(n - c, c, n); }
+  function defaultView(n) { return rightView(DEFAULT_BARS, n); }
   function rangeCount(key, n) {
     n = cnt(n); var c = n;
     for (var i = 0; i < RANGES.length; i++) if (RANGES[i][0] === key) { c = RANGES[i][1] > 0 ? RANGES[i][1] : n; break; }
     return Math.min(n, Math.max(Math.min(MINB, n), c));
   }
-  function rangeView(key, n) { n = cnt(n); var c = rangeCount(key, n); return clampView(n - c, c, n); }
+  function rangeView(key, n) { n = cnt(n); return rightView(rangeCount(key, n), n); }
   /* every range chip the current view equals (right-aligned and the same bar count); several when the history is short */
   function activeRanges(v, n) {
     n = cnt(n); var out = [];
     if (n <= 0 || !v) return out;
     v = viewOf(v, n);
     if (v.s + v.c < n - 0.5) return out;
-    for (var i = 0; i < RANGES.length; i++) if (Math.abs(v.c - rangeCount(RANGES[i][0], n)) < 0.5) out.push(RANGES[i][0]);
+    for (var i = 0; i < RANGES.length; i++) if (Math.abs(v.c - rightView(rangeCount(RANGES[i][0], n), n).c) < 0.5) out.push(RANGES[i][0]);
     return out;
   }
   function zoomAt(v, factor, frac, n, minBars) {
@@ -107,6 +112,14 @@
     mn -= pad; mx += pad;
     if (mn <= 0) mn = Math.max(mx * 0.001, 0.0001);
     return { min: mn, max: mx, ok: true };
+  }
+  /* manual price-axis scale: z = visible span / auto span (1 = auto), o = centre shift in auto spans */
+  function scaleRange(pr, z, o) {
+    if (!pr || !(pr.max > pr.min)) return pr;
+    z = fin(z) && z > 0 ? clamp(z, 0.1, 20) : 1; o = fin(o) ? o : 0;
+    if (z === 1 && o === 0) return pr;
+    var span = pr.max - pr.min, mid = (pr.max + pr.min) / 2 + o * span, half = span * z / 2;
+    return { min: mid - half, max: mid + half, ok: pr.ok, manual: true };
   }
   /* -1 below the axis, 1 above, 0 inside */
   function levelSide(p, mn, mx) { return p < mn ? -1 : p > mx ? 1 : 0; }
@@ -258,7 +271,7 @@
   var api = {
     MINB: MINB, RANGES: RANGES, DEFAULT_BARS: DEFAULT_BARS,
     clampView: clampView, viewOf: viewOf, defaultView: defaultView, rangeCount: rangeCount, rangeView: rangeView, activeRanges: activeRanges,
-    zoomAt: zoomAt, panBy: panBy, pinchView: pinchView, shiftForNewData: shiftForNewData,
+    zoomAt: zoomAt, panBy: panBy, pinchView: pinchView, shiftForNewData: shiftForNewData, gapOf: gapOf, maxGap: maxGap, rightView: rightView, scaleRange: scaleRange,
     xOf: xOf, idxAt: idxAt, yOf: yOf, priceAt: priceAt,
     priceRange: priceRange, levelSide: levelSide, niceTicks: niceTicks, fmtTick: fmtTick, fmtPrice: fmtPrice, fmtDate: fmtDate, dateTicks: dateTicks, dateMeta: dateMeta,
     dodge: dodge, buildLevels: buildLevels, barInfo: barInfo, flingVelocity: flingVelocity, decayVelocity: decayVelocity

@@ -45,7 +45,7 @@
       view: { s: 0, c: 0 }, opts: { emas: { 10: true, 20: true, 50: true, 100: false, 200: true }, levels: true, vol: true },
       lv: [], lvVals: [], series: [], cross: -1, crossX: 0, crossY: null, frames: 0, dirty: false, raf: 0, fling: 0, flingT: 0, destroyed: false,
       pr: { min: 0, max: 1 }, geo: { l: 6, t: 8, r: 0, b: 0, w: 0, pb: 0, vt: 0, vb: 0, panes: [], bot: 0 }, lastNotified: '', labels: [], crossReadIdx: -2,
-      ind: null, io: CI ? CI.loadOpts() : {}, autoLv: [], autoVals: [], autoLabels: [], visMarks: 0, drawMs: 0, menu: null
+      yz: 1, yo: 0, ind: null, io: CI ? CI.loadOpts() : {}, autoLv: [], autoVals: [], autoLabels: [], visMarks: 0, drawMs: 0, menu: null
     };
     var g = { mode: '', t0: 0, x0: 0, y0: 0, lastX: 0, hold: 0, samples: [], rect: null, d0: 0, v0: null, f0: 0, tapT: 0, tapX: 0, tapY: 0, mouse: false, hover: false };
 
@@ -144,8 +144,8 @@
       invalidate();
     }
     function setView(v) { st.view = CM.viewOf(v, st.n); st.fling = 0; invalidate(); }
-    function resetView() { st.view = CM.defaultView(st.n); st.fling = 0; clearCross(); invalidate(); }
-    function setRange(key) { st.view = CM.rangeView(key, st.n); st.fling = 0; invalidate(); }
+    function resetView() { st.view = CM.defaultView(st.n); st.yz = 1; st.yo = 0; st.fling = 0; clearCross(); invalidate(); }
+    function setRange(key) { st.view = CM.rangeView(key, st.n); st.yz = 1; st.yo = 0; st.fling = 0; invalidate(); }
 
     /* ---------- geometry ---------- */
     function layout() {
@@ -213,7 +213,7 @@
       st.labels = [];
       if (n < 5 || W < 60 || H < 60 || !(v.c > 0)) return;
       var i0 = Math.max(0, Math.floor(v.s)), i1 = Math.min(n - 1, Math.ceil(v.s + v.c) - 1);
-      var pr = CM.priceRange(st.H, st.L, i0, i1, st.series, st.opts.levels ? st.lvVals : null);   /* auto levels never stretch the axis */
+      var pr = CM.scaleRange(CM.priceRange(st.H, st.L, i0, i1, st.series, st.opts.levels ? st.lvVals : null), st.yz, st.yo);   /* auto levels never stretch the axis; drag the price axis to scale it by hand */
       st.pr = pr;
       var mn = pr.min, mx = pr.max, step = G.w / v.c, ph = G.ph, pt = G.t, pb = G.pb;
       var Y = function (p) { return pt + (mx - p) / (mx - mn) * ph; };
@@ -717,8 +717,9 @@
     function down(cx, cy, mouse) {
       g.rect = canvas.getBoundingClientRect(); g.mouse = !!mouse;
       var p = localPt(cx, cy);
-      g.mode = 'pending'; g.t0 = now(); g.x0 = p.x; g.y0 = p.y; g.lastX = p.x; g.samples = [{ x: p.x, t: g.t0 }]; st.fling = 0;
+      g.mode = 'pending'; g.t0 = now(); g.x0 = p.x; g.y0 = p.y; g.lastX = p.x; g.lastY = p.y; g.samples = [{ x: p.x, t: g.t0 }]; st.fling = 0;
       cancelHold();
+      if (p.x > st.geo.r && p.y < st.geo.pb) { g.mode = 'yaxis'; g.yz0 = st.yz; clearCross(); return; }   /* price axis: drag to stretch / squeeze */
       g.hold = setTimeout(function () { g.hold = 0; if (g.mode === 'pending') { g.mode = 'cross'; setCross(g.x0, g.y0); } }, HOLD_MS);
     }
     function move(cx, cy) {
@@ -727,8 +728,10 @@
         if (Math.abs(p.x - g.x0) > SLOP || Math.abs(p.y - g.y0) > SLOP) { cancelHold(); g.mode = 'pan'; g.lastX = g.x0; }
         else return;
       }
+      if (g.mode === 'yaxis') { st.yz = Math.max(0.1, Math.min(20, g.yz0 * Math.exp((p.y - g.y0) / 160))); invalidate(); return; }
       if (g.mode === 'pan') {
         st.view = CM.panBy(st.view, p.x - g.lastX, st.geo.w, st.n); g.lastX = p.x;
+        if (st.yz !== 1 || st.yo !== 0) { st.yo += (p.y - g.lastY) / Math.max(20, st.geo.ph) * st.yz; } g.lastY = p.y;
         g.samples.push({ x: p.x, t: t }); if (g.samples.length > 12) g.samples.shift();
         invalidate();
       } else if (g.mode === 'cross') setCross(p.x, p.y);
@@ -736,6 +739,10 @@
     function up() {
       cancelHold();
       var t = now(), mode = g.mode; g.mode = '';
+      if (mode === 'yaxis') {                                             // double tap on the axis = back to auto scale
+        if (Math.abs(st.yz - g.yz0) < 0.01) { if (t - g.axT < DBL_MS) { st.yz = 1; st.yo = 0; g.axT = 0; invalidate(); } else g.axT = t; }
+        return;
+      }
       if (mode === 'pan') {
         var vel = CM.flingVelocity(g.samples, t);
         if (Math.abs(vel) > 0.05) { st.fling = vel; st.flingT = 0; invalidate(); }
@@ -772,7 +779,7 @@
       if (ts.length === 0) { if (g.mode === 'pinch') { g.mode = ''; } else up(); }
       else if (ts.length === 1 && g.mode === 'pinch') {                    // one finger left: carry on as a pan without a jump
         g.rect = canvas.getBoundingClientRect(); var p = localPt(ts[0].clientX, ts[0].clientY);
-        g.mode = 'pan'; g.lastX = p.x; g.x0 = p.x; g.y0 = p.y; g.samples = [{ x: p.x, t: now() }];
+        g.mode = 'pan'; g.lastX = p.x; g.lastY = p.y; g.x0 = p.x; g.y0 = p.y; g.samples = [{ x: p.x, t: now() }];
       }
     }
     function onTouchCancel() { cancelHold(); g.mode = ''; }

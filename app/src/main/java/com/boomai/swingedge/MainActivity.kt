@@ -215,7 +215,7 @@ class MainActivity : Activity() {
     private fun runAction(name: String, argsJson: String) {
         try {
             // look-ups must not queue behind a scan/backtest or behind each other's network waits
-            val exec = if (name == "search") searchExec else if (name == "stockInfo" || name == "getChart" || name == "refreshSymbols" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes") readExec else actionExec
+            val exec = if (name == "search") searchExec else if (name == "stockInfo" || name == "getChart" || name == "refreshSymbols" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes") readExec else actionExec
             exec.execute {
                 val result = try {
                     App.from(this).swing.action(name, argsJson)

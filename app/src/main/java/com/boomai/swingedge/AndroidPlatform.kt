@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import com.boomai.swingedge.core.HttpResp
 import com.boomai.swingedge.core.Platform
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -69,6 +70,38 @@ class AndroidPlatform(context: Context) : Platform {
             val bos = ByteArrayOutputStream(16 * 1024); val buf = ByteArray(16 * 1024)
             input.use { while (true) { val r = it.read(buf); if (r < 0) break; bos.write(buf, 0, r); if (bos.size() > 1024 * 1024) return null } }
             return String(bos.toByteArray(), Charsets.UTF_8)
+        } catch (t: Throwable) {
+            return null
+        } finally {
+            try { conn?.disconnect() } catch (_: Throwable) {}
+        }
+    }
+
+    /** Generic https request with custom headers (broker APIs). Any HTTP status is returned; null on network failure. */
+    override fun httpRequest(method: String, url: String, headers: Map<String, String>, body: String?, maxBytes: Int): HttpResp? {
+        var conn: HttpURLConnection? = null
+        try {
+            val u = URL(url)
+            if (u.protocol?.lowercase() != "https") return null
+            val m = method.uppercase()
+            if (m != "GET" && m != "POST") return null
+            if (body != null && body.length > 64 * 1024) return null
+            conn = u.openConnection() as HttpURLConnection
+            conn.connectTimeout = 6_000; conn.readTimeout = 12_000
+            conn.requestMethod = m; conn.useCaches = false; conn.instanceFollowRedirects = false
+            conn.setRequestProperty("User-Agent", USER_AGENT)
+            conn.setRequestProperty("Accept-Encoding", "gzip")
+            for ((k, v) in headers) conn.setRequestProperty(k, v)
+            if (m == "POST") {
+                conn.doOutput = true
+                conn.outputStream.use { it.write((body ?: "").toByteArray(Charsets.UTF_8)) }
+            }
+            val code = conn.responseCode
+            var input: InputStream = (if (code >= 400) conn.errorStream else conn.inputStream) ?: return HttpResp(code, "")
+            if ("gzip".equals(conn.contentEncoding, ignoreCase = true)) input = GZIPInputStream(input)
+            val bos = ByteArrayOutputStream(16 * 1024); val buf = ByteArray(16 * 1024)
+            input.use { while (true) { val r = it.read(buf); if (r < 0) break; bos.write(buf, 0, r); if (bos.size() > maxBytes) return null } }
+            return HttpResp(code, String(bos.toByteArray(), Charsets.UTF_8))
         } catch (t: Throwable) {
             return null
         } finally {

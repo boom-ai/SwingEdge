@@ -8,6 +8,12 @@ interface Platform {
     fun httpGetAll(urls: List<String>): List<String?>
     /** POST a JSON body; null on any failure. */
     fun httpPost(url: String, body: String): String? = null
+    /**
+     * Generic HTTPS request with custom headers (broker APIs). Returns the status code and body for ANY HTTP status
+     * (so error JSON can be read), or null when the network failed / the URL is not https. Must never throw.
+     * [body] is sent as-is (the caller sets Content-Type in [headers]). Responses larger than [maxBytes] return null.
+     */
+    fun httpRequest(method: String, url: String, headers: Map<String, String>, body: String?, maxBytes: Int = 1_000_000): HttpResp? = null
     /** Read a small private text file; null if missing. */
     fun read(name: String): String?
     /** Atomically write a small private text file. */
@@ -19,6 +25,9 @@ interface Platform {
     fun log(msg: String)
 }
 
+
+/** Status code and body text of an HTTP response. */
+class HttpResp(val code: Int, val body: String)
 
 /** Marker for platforms (tests) where background work must run inline so results are deterministic. */
 interface SyncPlatform

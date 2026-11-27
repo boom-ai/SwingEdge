@@ -231,6 +231,16 @@ class FakePlatform : Platform, SyncPlatform {
     override fun now(): Long = nowMs
     val posted = java.util.Collections.synchronizedMap(HashMap<String, String>())
     override fun httpPost(url: String, body: String): String? { if (offline) return null; synchronized(this) { httpCalls++ }; return posted[url] }
+    /** Broker (custom-header) requests: every call is recorded; the handler answers (null = network failure). */
+    class Req(val method: String, val url: String, val headers: Map<String, String>, val body: String?)
+    val reqs = java.util.Collections.synchronizedList(ArrayList<Req>())
+    @Volatile var reqHandler: ((Req) -> com.boomai.swingedge.core.HttpResp?)? = null
+    override fun httpRequest(method: String, url: String, headers: Map<String, String>, body: String?, maxBytes: Int): com.boomai.swingedge.core.HttpResp? {
+        val r = Req(method, url, headers, body)
+        reqs.add(r)
+        if (offline || !url.startsWith("https://")) return null
+        return try { reqHandler?.invoke(r) } catch (t: Throwable) { null }
+    }
     override fun httpGetAll(urls: List<String>): List<String?> {
         synchronized(this) {
             httpCalls++

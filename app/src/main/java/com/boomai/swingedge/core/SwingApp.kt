@@ -144,7 +144,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1334,6 +1334,12 @@ class SwingApp(private val p: Platform) {
                 }
                 return ok("added" to added, "updated" to updated, "skipped" to res.skipped)
             }
+            "brokerConnect" -> return brokerConnect(a)
+            "brokerDisconnect" -> {
+                broker.disconnect(a.bool("forget"))
+                return LinkedHashMap(brokerStatus()).also { it["ok"] = true }
+            }
+            "brokerSync" -> return brokerSync(now, day)
             "takeTrade" -> {
                 val sig = st.signals.firstOrNull { it.id == a.str("signalId") } ?: return err("That buy idea no longer exists")
                 if (sig.status == "TAKEN") return err("You already took this trade")
@@ -1682,6 +1688,8 @@ class SwingApp(private val p: Platform) {
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
                 "fnoLab" -> labView()
                 "liveQuotes" -> liveQuotes(a)
+                "brokerStatus" -> brokerStatus()
+                "brokerQuotes" -> brokerQuotes(a)
                 "fnoTicker" -> fnoTicker()
                 "fno", "fnoOrder", "fnoCancel", "fnoLevels", "fnoReset" -> fnoAction(name, a)
                 "options" -> synchronized(optLock) { Options.view(optLoad(), optSpots, optVix) }
@@ -1963,13 +1971,113 @@ class SwingApp(private val p: Platform) {
     private fun liveQuotes(a: Map<String, Any?>): Map<String, Any?> {
         val syms = (a["syms"] as? List<*>).orEmpty().mapNotNull { (it as? String)?.trim()?.uppercase() }.filter { it.matches(Regex("[A-Z0-9&\\-]{1,20}")) }.distinct().take(80)
         val now = p.now(); val q = LinkedHashMap<String, Any?>()
-        val need = syms.filter { val c = lqCache[it]; c == null || now - c.first > 1500L }
+        val need0 = syms.filter { val c = lqCache[it]; c == null || now - c.first > 1500L }
+        var need = need0
+        if (need.isNotEmpty() && broker.connected()) {
+            // connected broker: its prices replace Groww's; only the symbols it could not give fall through to Groww
+            val bq = try { broker.quotes(need).data } catch (t: Throwable) { null }
+            if (bq != null) for ((k, v) in bq) lqCache[k] = Pair(now, quoteMap(v, now))
+            need = need.filter { bq == null || !bq.containsKey(it) }
+        }
         if (need.isNotEmpty()) {
             val body = Json.stringify(mapOf("exchangeAggReqMap" to mapOf("NSE" to mapOf("priceSymbolList" to need, "indexSymbolList" to emptyList<String>()))))
             Groww.parseStocks(try { p.httpPost(Groww.INDEX_URL, body) } catch (t: Throwable) { null }).forEach { (k, v) -> lqCache[k] = Pair(now, v) }
         }
         for (s0 in syms) lqCache[s0]?.let { if (now - it.first < 60_000L) q[s0] = it.second }
         return linkedMapOf("ok" to true, "at" to now, "quotes" to q)
+    }
+
+    // =========================================================================================== broker (mStock, read-only)
+
+    private val broker = MStock(p)
+
+    private fun r2(x: Double) = Math.round(x * 100.0) / 100.0
+    private fun quoteMap(q: MStock.BQuote, now: Long): Map<String, Any?> {
+        val chg = if (q.prevClose > 0) q.ltp - q.prevClose else 0.0
+        val pct = if (q.prevClose > 0) chg / q.prevClose * 100 else 0.0
+        return linkedMapOf("ltp" to q.ltp, "chg" to r2(chg), "pct" to r2(pct), "ts" to now)
+    }
+
+    private fun syncInfo(): Map<String, Any?> = try { Json.parseObject(p.read(MStock.SYNC_FILE)) ?: emptyMap() } catch (t: Throwable) { emptyMap() }
+
+    /** Connection state plus the last sync (funds, positions, counts). Reads files only: no network. */
+    private fun brokerStatus(): Map<String, Any?> {
+        val m = LinkedHashMap(broker.status())
+        m["ok"] = true
+        val s = syncInfo()
+        m["lastSync"] = if (s.isEmpty()) null else s.filterKeys { it != "syms" }
+        return m
+    }
+
+    /** Args: apiKey, clientCode, password, otp | totp (optional checksum). Step 1 without otp/totp sends the SMS OTP. */
+    private fun brokerConnect(a: Map<String, Any?>): Map<String, Any?> {
+        val r = broker.connect(a.str("apiKey"), a.str("clientCode"), a.str("password"), a.str("otp"), a.str("totp"), a.str("checksum", MStock.CHECKSUM))
+        if (!r.ok) return err(r.error)
+        val m = LinkedHashMap(brokerStatus())
+        m["needsOtp"] = r.data == false
+        if (r.data == false) m["message"] = "OTP sent to your registered mobile. Enter it to finish connecting."
+        return m
+    }
+
+    /** Args: syms (up to 200). Live price, day open/high/low and previous close straight from the broker. */
+    private fun brokerQuotes(a: Map<String, Any?>): Map<String, Any?> {
+        val syms = (a["syms"] as? List<*>).orEmpty().mapNotNull { (it as? String)?.trim()?.uppercase() }.filter { it.matches(Regex("[A-Z0-9&\\-]{1,25}")) }.distinct().take(MStock.MAX_TOTAL)
+        val now = now()
+        val r = broker.quotes(syms)
+        if (!r.ok) return err(r.error)
+        val q = LinkedHashMap<String, Any?>()
+        for ((k, v) in r.data.orEmpty()) {
+            val m = LinkedHashMap(quoteMap(v, now)); m["open"] = v.open; m["high"] = v.high; m["low"] = v.low; m["prevClose"] = v.prevClose
+            q[k] = m
+        }
+        return linkedMapOf("ok" to true, "at" to now, "quotes" to q, "missing" to syms.filter { !q.containsKey(it) })
+    }
+
+    /** Pulls holdings (into the app's holdings), positions and funds. Broker-synced holdings that were sold are removed; manual ones stay. */
+    private fun brokerSync(now: Long, day: Int): Map<String, Any?> {
+        if (!broker.connected()) return err(if (broker.sessionExpired()) "Your mStock session ended at midnight. Connect again to refresh it." else "Connect your mStock account first.")
+        setBusy("Reading your mStock account…", 10)
+        val h = broker.holdings()
+        if (!h.ok) return err(h.error)
+        val pos = broker.positions()
+        val fu = broker.funds()
+        loadUniverse()
+        val ix = try { searchIndex() } catch (t: Throwable) { null }
+        val prev = (syncInfo()["syms"] as? List<*>).orEmpty().mapNotNull { it as? String }.toHashSet()
+        var added = 0; var updated = 0
+        val loaded = ArrayList<String>(); val skipped = ArrayList<String>(); val merged = ArrayList<String>()
+        for (r in h.data.orEmpty()) {
+            if (r.qty <= 0) continue
+            var raw = r.sym
+            if (raw.isEmpty() || !validSym(raw)) raw = (try { ix?.resolve(r.name) } catch (t: Throwable) { null }) ?: ""
+            if (raw.isEmpty() || !validSym(raw)) { skipped.add(r.name.ifEmpty { "unknown stock" }); continue }
+            val act = try { ix?.actionFor(raw) } catch (t: Throwable) { null }
+            if (act == null) {
+                val sym = realSym(raw)
+                if (upsertHolding(sym, r.qty, r.avg)) added++ else updated++
+                loaded.add(sym)
+            } else {
+                for ((sym, q, av) in mergerParts(act, r.qty, r.avg)) { if (addToHolding(sym, q, av)) added++ else updated++; loaded.add(sym) }
+                merged.add(ScoreTexts.mergedLine(act, r.qty))
+            }
+        }
+        var removed = 0
+        val now0 = loaded.toHashSet()
+        if (now0.isNotEmpty()) removed = prev.count { s0 -> s0 !in now0 && st.holdings.removeAll { it.sym == s0 } }
+        if (merged.isNotEmpty()) feed("info", "Merged stock converted", merged.joinToString(" "))
+        if (loaded.isNotEmpty()) refreshHoldings(loaded.distinct(), now, day)
+        val posList = pos.data.orEmpty().map { linkedMapOf<String, Any?>("sym" to it.sym, "exchange" to it.exchange, "product" to it.product, "qty" to it.qty, "avg" to it.avg, "ltp" to it.ltp, "pnl" to it.pnl, "m2m" to it.m2m) }
+        val fm: Map<String, Any?>? = fu.data?.let { linkedMapOf("available" to it.available, "used" to it.used, "clear" to it.clear, "total" to it.total) }
+        val warnings = ArrayList<String>()
+        if (!pos.ok) warnings.add("Positions: " + pos.error)
+        if (!fu.ok) warnings.add("Funds: " + fu.error)
+        if (skipped.isNotEmpty()) warnings.add("Could not match: " + skipped.joinToString(", "))
+        val keep = (if (now0.isNotEmpty()) now0 else prev).toList()
+        val info = linkedMapOf<String, Any?>("at" to now, "holdings" to loaded.distinct().size, "added" to added, "updated" to updated, "removed" to removed,
+            "positions" to posList, "funds" to (fm ?: syncInfo()["funds"]), "warnings" to warnings, "syms" to keep)
+        try { p.write(MStock.SYNC_FILE, Json.stringify(info)) } catch (t: Throwable) {}
+        val out = LinkedHashMap(info); out.remove("syms"); out["ok"] = true; out["skipped"] = skipped
+        return out
     }
 
     /** Live index levels (Groww batch, ~1 s fresh; cached 700 ms). */

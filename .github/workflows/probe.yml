@@ -1,9 +1,0 @@
-name: probe
-on: workflow_dispatch
-jobs:
-  p:
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          B='{"filter":[{"left":"type","operation":"equal","right":"stock"}],"options":{"lang":"en"},"markets":["india"],"symbols":{"query":{"types":[]},"tickers":[]},"columns":["name","exchange","close","change","volume","average_volume_30d_calc","SMA50","SMA200","RSI","Perf.W","Perf.1M","Perf.3M","Perf.6M","price_52_week_high","price_52_week_low","market_cap_basic","sector","earnings_release_next_date","high","low","open","relative_volume_10d_calc","update_mode"],"sort":{"sortBy":"volume","sortOrder":"desc"},"range":[0,6000]}'
-          for i in 1 2; do curl -s -o /tmp/tv -w "tv %{http_code} %{size_download} %{time_total}\n" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36" -H "Origin: https://in.tradingview.com" -H "Referer: https://in.tradingview.com/" -H "Content-Type: application/json" -X POST -d "$B" https://scanner.tradingview.com/india/scan; python3 -c "import json;d=json.load(open('/tmp/tv'));print('total',d.get('totalCount'),'rows',len(d['data']));print(d['data'][0]);ex={};[ex.__setitem__(r['d'][1],ex.get(r['d'][1],0)+1) for r in d['data']];print(ex)"; sleep 20; date -u; done

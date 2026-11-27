@@ -369,8 +369,8 @@
         sheetBusy('brokerConnect'); act('brokerConnect', { otp: otp }, 'brokerConnect'); return;
       }
       var ak = val('apiKey').trim(), cc = val('clientCode').trim(), pw = val('password'), tt = val('totp').trim();
-      if (!check([['apiKey', ak.length > 5 || (ui.broker && ui.broker.apiKeySaved), 'Paste your API key'], ['clientCode', cc.length > 1, 'Your m.Stock login ID'], ['password', pw.length > 0, 'Your m.Stock password'], ['totp', !tt || /^\d{6}$/.test(tt), '6 digits, or leave blank']])) return;
-      var ba = { clientCode: cc, password: pw }; if (ak) ba.apiKey = ak; if (tt) ba.totp = tt;
+      if (!check([['apiKey', ak.length > 5 || (ui.broker && ui.broker.apiKeySaved), 'Paste your API key'], ['totp', !tt || /^\d{6}$/.test(tt), '6 digits from your authenticator'], ['clientCode', !!tt || cc.length > 1, 'Your m.Stock login ID, or use the authenticator code'], ['password', !!tt || pw.length > 0, 'Your m.Stock password, or use the authenticator code']])) return;
+      var ba = {}; if (cc) ba.clientCode = cc; if (pw) ba.password = pw; if (ak) ba.apiKey = ak; if (tt) ba.totp = tt;
       sheetBusy('brokerConnect'); act('brokerConnect', ba, 'brokerConnect');
     } else if (k === 'settings') {
       var c = num('capital'), r = num('riskPct'), m = num('maxOpenTrades'), cp = num('costPct');

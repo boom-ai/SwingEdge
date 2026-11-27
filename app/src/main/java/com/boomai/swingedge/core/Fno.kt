@@ -9,7 +9,9 @@ package com.boomai.swingedge.core
  * Positions still open at expiry are settled at intrinsic value. Pure Kotlin, never throws.
  */
 
-class FnoQuote(val ltp: Double, val bid: Double, val ask: Double, val iv: Double, val oi: Double, val vol: Double, val chg: Double)
+/** [src] = price source (nse, groww, mstock); [at] = when that price was fetched (0 = with the chain); [synth] = bid/ask estimated around the last price (no live depth). */
+class FnoQuote(val ltp: Double, val bid: Double, val ask: Double, val iv: Double, val oi: Double, val vol: Double, val chg: Double,
+               val src: String = "nse", val at: Long = 0L, val synth: Boolean = false)
 
 class FnoChain(val sym: String, val expiry: String, val spot: Double, val ts: String, val fetchedAt: Long,
                val strikes: List<Int>, val ce: Map<Int, FnoQuote>, val pe: Map<Int, FnoQuote>, val expiries: List<String>) {
@@ -157,6 +159,7 @@ object Fno {
     private fun tryFill(b: FnoBook, o: FnoOrder, c: FnoChain, now: Long, ev: MutableList<FnoEvent>) {
         if (o.status != "OPEN" || c.sym != o.sym || c.expiry != o.expiry || now - c.fetchedAt > STALE_MS) return
         val qt = c.quote(o.strike, o.side) ?: return
+        if (qt.at > 0 && now - qt.at > STALE_MS) return     // this strike's own price is old even if the chain is fresh
         val px = if (o.buy) qt.ask else qt.bid
         if (!(px > 0)) return                          // no seller / buyer right now
         if (o.type == "LIMIT" && (if (o.buy) px > o.limit else px < o.limit)) return
@@ -192,6 +195,7 @@ object Fno {
                 for (p in b.pos.toList()) {
                     if (p.sym != c.sym || p.expiry != c.expiry || now - c.fetchedAt > STALE_MS) continue
                     val qt = c.quote(p.strike, p.side) ?: continue
+                    if (qt.at > 0 && now - qt.at > STALE_MS) continue
                     p.last = qt.ltp; if (qt.bid > 0) p.bid = qt.bid
                     val why = when {
                         p.sl > 0 && qt.bid > 0 && qt.bid <= p.sl -> "Stop-loss hit"
@@ -248,19 +252,38 @@ object Fno {
     }
 
     /** chain around ATM for the screen */
-    fun chainView(c: FnoChain?, width: Int = 8): Map<String, Any?>? {
+    fun chainView(c: FnoChain?, width: Int = 8, now: Long = 0L): Map<String, Any?>? {
         if (c == null) return null
         val atm = c.strikes.minByOrNull { Math.abs(it - c.spot) } ?: return null
         val i = c.strikes.indexOf(atm)
         val ks = c.strikes.subList(maxOf(0, i - width), minOf(c.strikes.size, i + width + 1))
-        fun qm(x: FnoQuote?) = if (x == null) null else linkedMapOf("ltp" to x.ltp, "bid" to x.bid, "ask" to x.ask, "iv" to x.iv, "oi" to x.oi, "chg" to x.chg)
+        // Black-76 on the live last price: implied volatility (%) and delta per strike
+        val ed = expDay(c.expiry); val tNow = if (now > 0) now else c.fetchedAt
+        val ty = if (ed > 0 && c.spot > 0) Black76.years(ed, tNow) else 0.0
+        val fwd = if (ty > 0) Black76.forward(c.spot, ty) else 0.0
+        fun qm(x: FnoQuote?, k: Int, call: Boolean): Map<String, Any?>? {
+            if (x == null) return null
+            val v = if (fwd > 0) Black76.iv(call, x.ltp, fwd, k.toDouble(), ty) else Double.NaN
+            val d = if (!v.isNaN()) Black76.delta(call, fwd, k.toDouble(), ty, v) else Double.NaN
+            return linkedMapOf("ltp" to x.ltp, "bid" to x.bid, "ask" to x.ask, "iv" to x.iv, "oi" to x.oi, "chg" to x.chg,
+                "ivLive" to (if (v.isNaN()) null else r2(v * 100)), "delta" to (if (d.isNaN()) null else Math.rint(d * 1000) / 1000),
+                "src" to x.src, "synth" to x.synth)
+        }
         val ceOi = c.strikes.sumOf { c.ce[it]?.oi ?: 0.0 }; val peOi = c.strikes.sumOf { c.pe[it]?.oi ?: 0.0 }
         val pain = c.strikes.minByOrNull { k -> c.strikes.sumOf { s -> (c.ce[s]?.oi ?: 0.0) * maxOf(0, k - s) + (c.pe[s]?.oi ?: 0.0) * maxOf(0, s - k) } }
         val ivs = listOfNotNull(c.ce[atm]?.iv, c.pe[atm]?.iv).filter { it > 0 }
         val maxOi = ks.maxOfOrNull { maxOf(c.ce[it]?.oi ?: 0.0, c.pe[it]?.oi ?: 0.0) } ?: 0.0
+        val stra = (c.ce[atm]?.ltp ?: 0.0) + (c.pe[atm]?.ltp ?: 0.0)
+        val atmIvs = listOfNotNull(c.ce[atm]?.let { if (fwd > 0) Black76.iv(true, it.ltp, fwd, atm.toDouble(), ty) else null },
+            c.pe[atm]?.let { if (fwd > 0) Black76.iv(false, it.ltp, fwd, atm.toDouble(), ty) else null }).filter { !it.isNaN() }
         return linkedMapOf("sym" to c.sym, "expiry" to c.expiry, "spot" to c.spot, "ts" to c.ts, "fetchedAt" to c.fetchedAt, "atm" to atm,
             "expiries" to c.expiries.take(6), "lot" to (LOT[c.sym] ?: 0), "pcr" to (if (ceOi > 0) r2(peOi / ceOi) else null), "maxPain" to pain,
             "atmIv" to (if (ivs.isNotEmpty()) r2(ivs.average()) else null), "maxOi" to maxOi,
-            "rows" to ks.map { k -> linkedMapOf("k" to k, "ce" to qm(c.ce[k]), "pe" to qm(c.pe[k])) })
+            "atmIvLive" to (if (atmIvs.isNotEmpty()) r2(atmIvs.average() * 100) else null),
+            "straddle" to (if (c.ce[atm] != null && c.pe[atm] != null) r2(stra) else null),
+            "impliedMovePct" to (if (c.ce[atm] != null && c.pe[atm] != null && c.spot > 0) r2(stra / c.spot * 100) else null),
+            "synthetic" to (ks.any { c.ce[it]?.synth == true || c.pe[it]?.synth == true }),
+            "src" to (ks.mapNotNull { c.ce[it]?.src }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key ?: ""),
+            "rows" to ks.map { k -> linkedMapOf("k" to k, "ce" to qm(c.ce[k], k, true), "pe" to qm(c.pe[k], k, false)) })
     }
 }

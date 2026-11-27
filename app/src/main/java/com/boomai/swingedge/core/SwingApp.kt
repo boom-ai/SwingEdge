@@ -146,7 +146,7 @@ class SwingApp(private val p: Platform) {
 
     fun action(name: String, argsJson: String): String {
         if (name == "liveScan" || name == "liveScanSet") return liveAction(name, argsJson)
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes" || name == "priceHealth") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1794,6 +1794,7 @@ class SwingApp(private val p: Platform) {
                 "liveQuotes" -> liveQuotes(a)
                 "brokerStatus" -> brokerStatus()
                 "brokerQuotes" -> brokerQuotes(a)
+                "priceHealth" -> priceHealth()
                 "fnoTicker" -> fnoTicker()
                 "fno", "fnoOrder", "fnoCancel", "fnoLevels", "fnoReset" -> fnoAction(name, a)
                 "options" -> synchronized(optLock) { Options.view(optLoad(), optSpots, optVix) }
@@ -2070,25 +2071,86 @@ class SwingApp(private val p: Platform) {
     @Volatile private var gIdx: Pair<Long, List<Map<String, Any?>>>? = null
     @Volatile var liveOkAt = 0L
 
-    private val lqCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Map<String, Any?>>>()
-    /** Live last prices for up to 80 NSE symbols in one call (Groww batch, ~1 s fresh). */
+    // ------------------------------------------------------------------ live prices (one hub: arbitration, staleness, outliers)
+
+    /** Every live price the app shows goes through here: m.Stock (connected) > Groww > NSE > Yahoo. */
+    val prices = PriceHub { p.now() }
+
+    /** Equity quotes for [syms] (refetched when older than [maxAgeMs]): m.Stock first when connected, Groww for the rest. */
+    private fun eqLive(syms: List<String>, maxAgeMs: Long): Map<String, PriceHub.PQ> {
+        val now = p.now()
+        var need = syms.filter { prices.fresh(PriceHub.eqKey(it), maxAgeMs) == null }
+        if (need.isNotEmpty() && broker.connected()) {
+            val t0 = prices.begin()
+            val r = try { broker.quotes(need) } catch (t: Throwable) { null }
+            val bq = r?.data
+            if (r != null && r.ok) prices.ok(PriceHub.MSTOCK, t0) else prices.fail(PriceHub.MSTOCK, t0, r?.error ?: "no reply")
+            if (bq != null) for ((k, v) in bq) prices.offer(PriceHub.fromBroker(PriceHub.eqKey(k), PriceHub.EQ, v, now))
+            need = need.filter { bq == null || !bq.containsKey(it) }
+        }
+        for (ch in need.chunked(80)) growwBatch(ch)
+        val out = LinkedHashMap<String, PriceHub.PQ>()
+        for (s0 in syms) prices.get(PriceHub.eqKey(s0))?.let { if (now - it.at < 60_000L) out[s0] = it }
+        return out
+    }
+
+    /** One Groww batch call for stocks and/or indices; every price is offered to the hub. Returns the raw samples. */
+    private fun growwBatch(syms: List<String>): List<PriceHub.PQ> {
+        if (syms.isEmpty()) return emptyList()
+        val t0 = prices.begin()
+        val txt = try { p.httpPost(Groww.INDEX_URL, FnoUniverse.quoteBody(syms)) } catch (t: Throwable) { null }
+        val got = Groww.samples(txt, p.now())
+        prices.result(PriceHub.GROWW, t0, got.size, if (txt == null) "no reply" else "no prices")
+        prices.offerAll(got)
+        return got
+    }
+
+    /** Live last prices for up to 80 NSE symbols (hub: m.Stock when connected, else Groww batch, ~1 s fresh). */
     private fun liveQuotes(a: Map<String, Any?>): Map<String, Any?> {
         val syms = (a["syms"] as? List<*>).orEmpty().mapNotNull { (it as? String)?.trim()?.uppercase() }.filter { it.matches(Regex("[A-Z0-9&\\-]{1,20}")) }.distinct().take(80)
         val now = p.now(); val q = LinkedHashMap<String, Any?>()
-        val need0 = syms.filter { val c = lqCache[it]; c == null || now - c.first > 1500L }
-        var need = need0
-        if (need.isNotEmpty() && broker.connected()) {
-            // connected broker: its prices replace Groww's; only the symbols it could not give fall through to Groww
-            val bq = try { broker.quotes(need).data } catch (t: Throwable) { null }
-            if (bq != null) for ((k, v) in bq) lqCache[k] = Pair(now, quoteMap(v, now))
-            need = need.filter { bq == null || !bq.containsKey(it) }
-        }
-        if (need.isNotEmpty()) {
-            val body = Json.stringify(mapOf("exchangeAggReqMap" to mapOf("NSE" to mapOf("priceSymbolList" to need, "indexSymbolList" to emptyList<String>()))))
-            Groww.parseStocks(try { p.httpPost(Groww.INDEX_URL, body) } catch (t: Throwable) { null }).forEach { (k, v) -> lqCache[k] = Pair(now, v) }
-        }
-        for (s0 in syms) lqCache[s0]?.let { if (now - it.first < 60_000L) q[s0] = it.second }
+        for ((s0, v) in eqLive(syms, 1500L)) q[s0] = prices.view(v, now)
         return linkedMapOf("ok" to true, "at" to now, "quotes" to q)
+    }
+
+    /** Diagnostics: per source last ok, errors, latency and glitches rejected; plus the broker's F&O master. */
+    private fun priceHealth(): Map<String, Any?> {
+        val m = LinkedHashMap(prices.health())
+        m["ok"] = true
+        m["summary"] = prices.summary()
+        m["broker"] = linkedMapOf("connected" to broker.connected(), "equities" to broker.masterSize(), "contracts" to broker.derivCount())
+        m["nse"] = linkedMapOf("lastOk" to nseOkAt, "lastFail" to nseFailAt)
+        return m
+    }
+
+    /** Option contract legs priced through the hub: m.Stock (master lookup) when connected, Groww batch for the rest. */
+    private class Leg(val cid: String, val sym: String, val expDay: Int, val strike: Double, val side: String) {
+        val key: String get() = PriceHub.optKey(sym, expDay, strike, side)
+    }
+    private fun legPrices(legs: List<Leg>, maxAgeMs: Long = 60_000L, groww: Boolean = true): Map<String, PriceHub.PQ> {
+        if (legs.isEmpty()) return emptyMap()
+        val now = p.now()
+        val have = HashSet<String>()
+        if (broker.connected()) {
+            val rows = legs.mapNotNull { l -> (broker.deriv(l.sym, l.expDay, l.strike, l.side) ?: broker.derivBySymbol(l.cid))?.let { Pair(l, it) } }
+            if (rows.isNotEmpty()) {
+                val t0 = prices.begin()
+                val r = try { broker.contractQuotes(rows.map { it.second }) } catch (t: Throwable) { null }
+                if (r != null && r.ok) prices.ok(PriceHub.MSTOCK, t0) else prices.fail(PriceHub.MSTOCK, t0, r?.error ?: "no reply")
+                for ((l, row) in rows) r?.data?.get(row.tradingSymbol)?.let { prices.offer(PriceHub.fromBroker(l.key, PriceHub.OPT, it, now)); have.add(l.cid) }
+            }
+        }
+        val byId = legs.associateBy { it.cid }
+        if (groww) for (ch in legs.filter { it.cid.isNotEmpty() && it.cid !in have }.map { it.cid }.distinct().chunked(80)) {
+            val t0 = prices.begin()
+            val txt = try { p.httpPost(Groww.PRICES_URL, Json.stringify(ch)) } catch (t: Throwable) { null }
+            val px = Groww.parsePrices(txt)
+            prices.result(PriceHub.GROWW, t0, px.size, if (txt == null) "no reply" else "no prices")
+            for ((id, v) in px) byId[id]?.let { prices.offer(Groww.optSample(it.key, v, now)) }
+        }
+        val out = HashMap<String, PriceHub.PQ>()
+        for (l in legs) prices.get(l.key)?.let { if (now - it.at <= maxAgeMs) out[l.cid] = it }
+        return out
     }
 
     // =========================================================================================== broker (mStock, read-only)
@@ -2110,6 +2172,7 @@ class SwingApp(private val p: Platform) {
         m["ok"] = true
         val s = syncInfo()
         m["lastSync"] = if (s.isEmpty()) null else s.filterKeys { it != "syms" }
+        m["prices"] = prices.summary()
         return m
     }
 
@@ -2127,10 +2190,13 @@ class SwingApp(private val p: Platform) {
     private fun brokerQuotes(a: Map<String, Any?>): Map<String, Any?> {
         val syms = (a["syms"] as? List<*>).orEmpty().mapNotNull { (it as? String)?.trim()?.uppercase() }.filter { it.matches(Regex("[A-Z0-9&\\-]{1,25}")) }.distinct().take(MStock.MAX_TOTAL)
         val now = now()
+        val t0 = prices.begin()
         val r = broker.quotes(syms)
-        if (!r.ok) return err(r.error)
+        if (!r.ok) { prices.fail(PriceHub.MSTOCK, t0, r.error); return err(r.error) }
+        prices.ok(PriceHub.MSTOCK, t0)
         val q = LinkedHashMap<String, Any?>()
         for ((k, v) in r.data.orEmpty()) {
+            prices.offer(PriceHub.fromBroker(PriceHub.eqKey(k), PriceHub.EQ, v, now))
             val m = LinkedHashMap(quoteMap(v, now)); m["open"] = v.open; m["high"] = v.high; m["low"] = v.low; m["prevClose"] = v.prevClose
             q[k] = m
         }
@@ -2187,9 +2253,21 @@ class SwingApp(private val p: Platform) {
     /** Live index levels (Groww batch, ~1 s fresh; cached 700 ms). */
     private fun growwIndices(): List<Map<String, Any?>> {
         val now = p.now(); gIdx?.let { if (now - it.first < 700L) return it.second }
-        val got = Groww.parseIndices(try { p.httpPost(Groww.INDEX_URL, Groww.indexBody(Groww.TICKER.map { it.first })) } catch (t: Throwable) { null })
-        if (got.isNotEmpty()) { gIdx = Pair(now, got); liveOkAt = now }
-        return got
+        val t0 = prices.begin()
+        val txt = try { p.httpPost(Groww.INDEX_URL, Groww.indexBody(Groww.TICKER.map { it.first })) } catch (t: Throwable) { null }
+        val got = Groww.parseIndices(txt)
+        prices.result(PriceHub.GROWW, t0, got.size, if (txt == null) "no reply" else "no prices")
+        prices.offerAll(Groww.samples(txt, now).filter { it.kind == PriceHub.IDX })
+        val rows = hubTicker(got)
+        if (rows.isNotEmpty()) { gIdx = Pair(now, rows); liveOkAt = now }
+        return rows
+    }
+
+    /** Ticker rows with the hub's arbitrated level and day change (so Groww / NSE never flip the ticker back and forth). */
+    private fun hubTicker(rows: List<Map<String, Any?>>): List<Map<String, Any?>> = rows.map { r ->
+        val sym = r["sym"] as? String ?: Groww.TICKER.firstOrNull { it.second == r["name"] }?.first
+        val q = if (sym == null) null else prices.get(PriceHub.idxKey(sym))
+        if (q == null || p.now() - q.at > 60_000L) r else LinkedHashMap(r).also { m -> m["sym"] = sym; m["last"] = q.ltp; m["chg"] = q.chg; m["pct"] = q.pct; m["src"] = q.src; m["state"] = prices.state(q) }
     }
 
     /**
@@ -2203,7 +2281,9 @@ class SwingApp(private val p: Platform) {
         if (c != null && now - c.fetchedAt < Math.min(maxAgeMs, 900L)) return c
         var base = nseBase[key]
         if (base == null || now - base.fetchedAt > Math.max(45_000L, Math.min(maxAgeMs, 90_000L))) {
-            Fno.parseChain(sym, expiry, fnoGet { Fno.chainUrl(it, sym, expiry) }, now)?.let { base = it; nseBase[key] = it }
+            val t0 = prices.begin()
+            val pc = Fno.parseChain(sym, expiry, fnoGet { Fno.chainUrl(it, sym, expiry) }, now)
+            if (pc != null) { base = pc; nseBase[key] = pc; prices.ok(PriceHub.NSE, t0); prices.offerChain(pc) } else prices.fail(PriceHub.NSE, t0, "option chain did not load")
         }
         val b = base ?: return c
         val live = try { liveOverlay(b, now) } catch (t: Throwable) { null }
@@ -2212,32 +2292,52 @@ class SwingApp(private val p: Platform) {
         return out
     }
 
+    /**
+     * Live prices for the strikes around the money, through the hub: m.Stock contract quotes when connected (real exchange
+     * prices; real bid/ask when the reply carries depth), Groww's batch for whatever m.Stock did not price. Null when no
+     * live source answered (the caller then shows NSE's chain as is).
+     */
     private fun liveOverlay(b: FnoChain, now: Long): FnoChain? {
-        val iso = java.time.LocalDate.ofEpochDay(Fno.expDay(b.expiry).toLong()).toString()
+        val ed = Fno.expDay(b.expiry)
+        val iso = java.time.LocalDate.ofEpochDay(ed.toLong()).toString()
         val ik = b.sym + "|" + iso
-        val monthly = FnoUniverse.isMonthly(b.expiry, b.expiries)
-        val ids = if (monthly) b.strikes.associateWith { k -> Pair(FnoUniverse.contractId(b.sym, b.expiry, k.toDouble(), "CE") ?: "", FnoUniverse.contractId(b.sym, b.expiry, k.toDouble(), "PE") ?: "") }
-            else growwIds[ik]?.takeIf { now - it.first < 30 * 60_000L && it.second.isNotEmpty() }?.second
-            ?: Groww.parseIds(try { p.httpGetAll(listOf(Groww.chainUrl(b.sym, iso))).firstOrNull() } catch (t: Throwable) { null }).also { if (it.isNotEmpty()) growwIds[ik] = Pair(now, it) }
-        if (ids.isEmpty()) return null
-        val spotLive = if (b.sym == "NIFTY" || b.sym == "BANKNIFTY" || b.sym == "FINNIFTY" || b.sym == "MIDCPNIFTY") growwIndices().firstOrNull { it["sym"] == b.sym }?.get("last") as? Double
-            else FnoUniverse.parseQuotes(try { p.httpPost(Groww.INDEX_URL, FnoUniverse.quoteBody(listOf(b.sym))) } catch (t: Throwable) { null })[b.sym]?.ltp
+        val spotLive = if (FnoUniverse.isIndex(b.sym)) growwIndices().firstOrNull { it["sym"] == b.sym }?.get("last") as? Double
+            else eqLive(listOf(b.sym), 1500L)[b.sym]?.ltp
         val spot = spotLive ?: b.spot
-        val near = b.strikes.sortedBy { Math.abs(it - spot) }.take(14).filter { ids.containsKey(it) }
-        val want = near.flatMap { listOf(ids[it]!!.first, ids[it]!!.second) }
-        if (want.isEmpty()) return null
-        val px = Groww.parsePrices(try { p.httpPost(Groww.PRICES_URL, Json.stringify(want)) } catch (t: Throwable) { null })
-        if (px.isEmpty()) return null
+        val near = b.strikes.sortedBy { Math.abs(it - spot) }.take(14)
+        val viaBroker = HashSet<Int>()
+        if (broker.connected()) {
+            val legs = near.flatMap { k -> listOf("CE", "PE").mapNotNull { s -> broker.deriv(b.sym, ed, k.toDouble(), s)?.let { Leg(it.tradingSymbol, b.sym, ed, k.toDouble(), s) } } }
+            legPrices(legs, 1_500L, groww = false)
+            fun fromBroker(k: Int, s: String) = prices.get(PriceHub.optKey(b.sym, ed, k.toDouble(), s))?.let { it.src == PriceHub.MSTOCK && now - it.at <= 1_500L } == true
+            for (k in near) if (fromBroker(k, "CE") && fromBroker(k, "PE")) viaBroker.add(k)
+        }
+        val rest = near.filter { it !in viaBroker }
+        if (rest.isNotEmpty()) {
+            val monthly = FnoUniverse.isMonthly(b.expiry, b.expiries)
+            val ids = if (monthly) b.strikes.associateWith { k -> Pair(FnoUniverse.contractId(b.sym, b.expiry, k.toDouble(), "CE") ?: "", FnoUniverse.contractId(b.sym, b.expiry, k.toDouble(), "PE") ?: "") }
+                else growwIds[ik]?.takeIf { now - it.first < 30 * 60_000L && it.second.isNotEmpty() }?.second
+                ?: Groww.parseIds(try { p.httpGetAll(listOf(Groww.chainUrl(b.sym, iso))).firstOrNull() } catch (t: Throwable) { null }).also { if (it.isNotEmpty()) growwIds[ik] = Pair(now, it) }
+            val want = rest.filter { ids.containsKey(it) }.flatMap { k -> listOf(Pair(ids[k]!!.first, "CE"), Pair(ids[k]!!.second, "PE")).filter { it.first.isNotEmpty() }.map { Leg(it.first, b.sym, ed, k.toDouble(), it.second) } }
+            if (want.isNotEmpty()) {
+                val t0 = prices.begin()
+                val txt = try { p.httpPost(Groww.PRICES_URL, Json.stringify(want.map { it.cid })) } catch (t: Throwable) { null }
+                val px = Groww.parsePrices(txt)
+                prices.result(PriceHub.GROWW, t0, px.size, if (txt == null) "no reply" else "no prices")
+                for (l in want) px[l.cid]?.let { prices.offer(Groww.optSample(l.key, it, now)) }
+            }
+        }
+        val fresh = near.flatMap { k -> listOf("CE", "PE").mapNotNull { s -> prices.get(PriceHub.optKey(b.sym, ed, k.toDouble(), s))?.takeIf { it.src != PriceHub.NSE && now - it.at <= 1_500L } } }
+        if (fresh.isEmpty()) return null
         liveOkAt = now
-        val live = near.associateWith { Pair(px[ids[it]!!.first], px[ids[it]!!.second]) }
-        val lt = px.values.maxOfOrNull { it.second } ?: now
-        return Groww.overlay(b, spot, live, now, "Live " + Clock.hhmmss(if (lt > 0) lt else now))
+        val lt = fresh.maxOf { it.ts }
+        return prices.overlay(b, spot, near, now, "Live " + Clock.hhmmss(if (lt > 0) lt else now))
     }
 
     @Volatile private var fnoWidth = 8
     private fun fnoView(b: FnoBook, c: FnoChain?, err: String): Map<String, Any?> {
         val m = LinkedHashMap<String, Any?>()
-        m["ok"] = true; m["chain"] = Fno.chainView(c, fnoWidth); m["error"] = err
+        m["ok"] = true; m["chain"] = Fno.chainView(c, fnoWidth, p.now()); m["error"] = err
         m["live"] = c != null && p.now() - c.fetchedAt < Fno.STALE_MS
         m["account"] = Fno.summary(b); m["positions"] = b.pos.map { it.toMap() }
         m["orders"] = b.orders.take(40).map { it.toMap() }
@@ -2307,7 +2407,15 @@ class SwingApp(private val p: Platform) {
     private fun fnoTickerList(): List<Map<String, Any?>> {
         growwIndices().let { if (it.isNotEmpty()) return it }
         val now = p.now(); tickCache?.let { if (now - it.first < 2_500L) return it.second }
-        val got = FnoLab.parseIndices(fnoGet { it + "/api/allIndices" })
+        val t0 = prices.begin()
+        val got0 = FnoLab.parseIndices(fnoGet { it + "/api/allIndices" })
+        prices.result(PriceHub.NSE, t0, got0.size)
+        for (r in got0) {
+            val sym = Groww.TICKER.firstOrNull { it.second == r["name"] }?.first ?: continue
+            val l = (r["last"] as? Double) ?: continue; val c = (r["chg"] as? Double) ?: 0.0
+            prices.offer(PriceHub.PQ(PriceHub.idxKey(sym), PriceHub.IDX, l, PriceHub.NSE, now, now, false, prevClose = if (c != 0.0) l - c else 0.0, chg = c, pct = (r["pct"] as? Double) ?: Double.NaN))
+        }
+        val got = hubTicker(got0)
         if (got.isNotEmpty()) tickCache = Pair(now, got)
         return got.ifEmpty { tickCache?.second ?: emptyList() }
     }
@@ -2339,12 +2447,19 @@ class SwingApp(private val p: Platform) {
             if (lots.size >= 3) { try { p.write("fo_lots.csv", txt!!) } catch (t: Throwable) {}; uniLotsDay = day }
             else { txt = try { p.read("fo_lots.csv") } catch (t: Throwable) { null }; lots = FnoUniverse.parseLots(txt); if (lots.isNotEmpty() && Fno.LOT.size < 3) uniLotsDay = -2 }
             for ((k, v) in lots) Fno.LOT[k] = v
+            if (lots.size < 3) try { for ((k, v) in broker.lots()) Fno.LOT.putIfAbsent(k, v) } catch (t: Throwable) {}   // NSE lot file unavailable: m.Stock's F&O master
         }
         return Fno.LOT.keys.sorted()
     }
     private fun uniFetch(syms: List<String>): Map<String, FnoUniverse.Q> {
         val out = HashMap<String, FnoUniverse.Q>()
-        for (ch in syms.chunked(80)) out.putAll(FnoUniverse.parseQuotes(try { p.httpPost(Groww.INDEX_URL, FnoUniverse.quoteBody(ch)) } catch (t: Throwable) { null }))
+        for (ch in syms.chunked(80)) for (x in growwBatch(ch)) {
+            val sym = x.key.substringAfter(':')
+            val q = prices.get(x.key)?.takeIf { p.now() - it.at < 60_000L } ?: x
+            val prev = if (q.prevClose > 0) q.prevClose else if (x.prevClose > 0) x.prevClose else q.ltp
+            out[sym] = FnoUniverse.Q(q.ltp, if (x.open > 0) x.open else q.ltp, prev, if (x.high > 0) x.high else q.ltp, if (x.low > 0) x.low else q.ltp,
+                if (!q.pct.isNaN()) q.pct else if (prev > 0) (q.ltp - prev) / prev * 100 else 0.0)
+        }
         return out
     }
     /** All F&O underlyings with live price and day change (for the movers list and the stock picker). */
@@ -2385,14 +2500,14 @@ class SwingApp(private val p: Platform) {
         // follow open whole-market trades in one batch
         val openU = synchronized(labLock) { labLoad().open.filter { it.cid.isNotEmpty() } }
         if (openU.isNotEmpty()) {
-            val px = HashMap<String, Triple<Double, Long, Double>>()
-            for (ch in openU.map { it.cid }.distinct().chunked(80)) px.putAll(Groww.parsePrices(try { p.httpPost(Groww.PRICES_URL, Json.stringify(ch)) } catch (t: Throwable) { null }))
+            val px = legPrices(openU.map { Leg(it.cid, it.sym, Fno.expDay(it.expiry), it.strike.toDouble(), it.side) }, 90_000L)
             synchronized(labLock) {
                 val b = labLoad()
                 for (t in openU) {
-                    val l = px[t.cid]?.first
+                    val pq = px[t.cid]
+                    val l = pq?.ltp
                     val slip = if (FnoUniverse.isIndex(t.sym)) 0.005 else 0.01
-                    if (l != null && t.bids.size < FnoLab.MAX_PATH) { val bid = Fno.r2(l * (1 - slip)); t.mark(bid, m)
+                    if (l != null && t.bids.size < FnoLab.MAX_PATH) { val bid = if (pq.depth && pq.bid > 0) Fno.r2(pq.bid) else Fno.r2(l * (1 - slip)); t.mark(bid, m)
                         FnoLab.liveCheck(t, bid, m)?.let { hit -> if (t.champ && !t.gated && FnoLab.status(b, FnoLab.key(t)) == "WORKING") events.add(Pair("${t.sym} ${FnoUniverse.strikeText(t.strike.toDouble())} ${t.side}: " + LabEntry.hitText(hit), "${FnoLab.stratName(t.strat)}")) } }
                     if (t.day < day || m >= FnoLab.EXIT_MIN) FnoLab.close(b, t)
                 }
@@ -2427,20 +2542,21 @@ class SwingApp(private val p: Platform) {
             Plan(cd, exp, k, cid)
         }
         if (plans.isEmpty()) return
-        val px = Groww.parsePrices(try { p.httpPost(Groww.PRICES_URL, Json.stringify(plans.map { it.cid })) } catch (t: Throwable) { null })
+        val px = legPrices(plans.map { Leg(it.cid, it.c.sym, Fno.expDay(it.exp), it.k, it.c.sg.side) }, 90_000L)
         val vix = (gIdx?.second ?: emptyList()).firstOrNull { it["sym"] == "INDIAVIX" }?.get("last") as? Double
         synchronized(labLock) {
             val b = labLoad()
             for (pl in plans) {
-                val l = px[pl.cid]?.first ?: continue
+                val pq = px[pl.cid] ?: continue
+                val l = pq.ltp
                 if (l < 1.0) continue
                 val sym = pl.c.sym; val sg = pl.c.sg
                 b.fired["${sg.strat}|$sym"] = day
                 val key = sg.strat + "|" + sym
                 val slip = if (FnoUniverse.isIndex(sym)) 0.005 else 0.01
-                val entry = Fno.r2(l * (1 + slip))
+                val entry = if (pq.depth && pq.ask >= l) Fno.r2(pq.ask) else Fno.r2(l * (1 + slip))
                 val ctx = LabEntry.ctx(b, sym, pl.exp, day, null, 0.0, vix, labBars["NIFTY"]?.second, pl.c.bars)
-                val t = LabEntry.open(b, sg, sym, pl.exp, Math.round(pl.k).toInt(), entry, Fno.r2(l * (1 - slip)), now, day, m, pl.c.bars, pl.c.champ, ctx, capital(), pl.c.spot, pl.cid)
+                val t = LabEntry.open(b, sg, sym, pl.exp, Math.round(pl.k).toInt(), entry, if (pq.depth && pq.bid > 0) Fno.r2(pq.bid) else Fno.r2(l * (1 - slip)), now, day, m, pl.c.bars, pl.c.champ, ctx, capital(), pl.c.spot, pl.cid)
                 val sp = t.stopPct
                 if (pl.c.champ && !t.gated && FnoLab.status(b, key) == "WORKING")
                     events.add(Pair("BUY $sym ${FnoUniverse.strikeText(pl.k)} ${sg.side} ≤ ₹${Fno.r2(entry * 1.02)}", "${FnoLab.stratName(sg.strat)}: ${sg.why}. Stop ₹${Fno.r2(entry * (1 - sp / 100))}, exit by 3:15 pm."))

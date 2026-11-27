@@ -182,17 +182,17 @@ object NightCalls {
         Triple("brk", "55-day breakout (swing)", "Close above the highest high of the last 55 days on at least 1.5× average volume, above the 50-day average, closing in the top 30% of the day's range. Buy next open; stop 2 ATR, target 4 ATR, max 20 days."),
         Triple("darvas", "Darvas / tight-base breakout (swing)", "Uptrend (50-day > 200-day average) within 25% of the 52-week high; the last 15 days sat in a box no wider than 3.5 ATR; today closed above the box top on 1.3× volume. Buy next open; stop at the box bottom (max 3 ATR), target 2× the risk, max 20 days."),
         Triple("pb20", "Pullback to 20-day average (swing)", "Strong trend (20 > 50 > 200-day average, top 30% 6-month strength); today dipped to the 20-day average and closed green above it. Buy next open; stop 1.5 ATR, target 3 ATR, max 10 days."),
-        Triple("hi52", "52-week high on volume (swing)", "New 52-week closing high on at least 1.5× average volume. Buy next open; stop 2.5 ATR, target 5 ATR, max 30 days."),
+        Triple("hi52", "52-week high on volume (swing)", "New 52-week closing high (from 6 months of history on) on at least 1.5× average volume. Buy next open; stop 2.5 ATR, target 5 ATR, max 30 days."),
         Triple("vols", "Volume surge (swing)", "Volume at least 3× its 20-day average, up 4% or more, closing in the top 25% of the range, above the 50-day average. Buy next open; stop 2 ATR, target 4 ATR, max 15 days.")
     )
     val SWING_RULES = setOf("washout", "quick", "daily", "brk", "darvas", "pb20", "hi52", "vols")
     fun isSwing(rule: String) = rule in SWING_RULES
     /** max of a[k] over [i - w, i - 1] (NaN until a full window exists) */
-    fun priorMax(a: DoubleArray, n: Int, w: Int): DoubleArray {
+    fun priorMax(a: DoubleArray, n: Int, w: Int, minW: Int = w): DoubleArray {
         val out = DoubleArray(n) { Double.NaN }; val dq = java.util.ArrayDeque<Int>()
         for (i in 0 until n) {
             while (dq.isNotEmpty() && dq.peekFirst() < i - w) dq.pollFirst()
-            if (i >= w) out[i] = a[dq.peekFirst()]
+            if (i >= minW && dq.isNotEmpty()) out[i] = a[dq.peekFirst()]
             while (dq.isNotEmpty() && a[dq.peekLast()] <= a[i]) dq.pollLast()
             dq.addLast(i)
         }
@@ -249,8 +249,8 @@ object NightCalls {
         /** 20-day average volume of the PRIOR 20 days, prior 55-day high, prior 251-day closing high, prior 15-day box */
         val vavg = DoubleArray(n) { Double.NaN }
         val hi55: DoubleArray by lazy { priorMax(s.h, n, 55) }
-        val chi251: DoubleArray by lazy { priorMax(s.c, n, 251) }
-        val hi252: DoubleArray by lazy { priorMax(s.h, n, 252) }
+        val chi251: DoubleArray by lazy { priorMax(s.c, n, 251, 120) }   // up to a year of history, at least 6 months
+        val hi252: DoubleArray by lazy { priorMax(s.h, n, 252, 120) }
         val box15h: DoubleArray by lazy { priorMax(s.h, n, 15) }
         val box15l: DoubleArray by lazy { priorMin(s.l, n, 15) }
         init {

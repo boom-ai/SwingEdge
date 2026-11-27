@@ -26,6 +26,9 @@ class OptionWatchService : Service() {
     private var handler: Handler? = null
     private var wake: PowerManager.WakeLock? = null
     private var lastOpt = 0L
+    /** live whole-market scan: its own thread, so a slow F&O step never delays it (LiveScan.kt; pacing is in the core) */
+    private var liveThread: HandlerThread? = null
+    private var liveHandler: Handler? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -41,6 +44,8 @@ class OptionWatchService : Service() {
                     wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "swingedge:options").apply { setReferenceCounted(false); acquire(6L * 3600 * 1000) }
                 } catch (t2: Throwable) { Log.w(App.TAG, "options wakelock", t2) }
                 handler?.post(loop)
+                val lt = HandlerThread("live-scan"); lt.start(); liveThread = lt
+                liveHandler = Handler(lt.looper).also { it.post(liveLoop) }
             }
         } catch (t: Throwable) {
             Log.e(App.TAG, "OptionWatchService start failed", t)
@@ -61,6 +66,15 @@ class OptionWatchService : Service() {
         }
     }
 
+    private val liveLoop = object : Runnable {
+        override fun run() {
+            if (!inWindow(System.currentTimeMillis())) return
+            val on = try { (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive } catch (t: Throwable) { true }
+            val wait = try { (application as App).swing.liveScanStep(on) } catch (t: Throwable) { Log.w(App.TAG, "live scan", t); 5_000L }
+            liveHandler?.postDelayed(this, wait.coerceIn(250L, 60_000L))
+        }
+    }
+
     private fun startAsForeground() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CH) == null)
@@ -74,6 +88,8 @@ class OptionWatchService : Service() {
 
     override fun onDestroy() {
         try { handler?.removeCallbacksAndMessages(null); thread?.quitSafely() } catch (t: Throwable) {}
+        try { liveHandler?.removeCallbacksAndMessages(null); liveThread?.quitSafely() } catch (t: Throwable) {}
+        liveHandler = null; liveThread = null
         try { if (wake?.isHeld == true) wake?.release() } catch (t: Throwable) {}
         handler = null; thread = null; wake = null
         super.onDestroy()

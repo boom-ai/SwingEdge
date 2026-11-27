@@ -113,6 +113,7 @@ class SwingApp(private val p: Platform) {
             m["marketNote"] = marketNote(now)
             m["nextScanAt"] = Clock.nextWake(now)
             m["busy"] = busy
+            m["liveScan"] = liveSum
             if (replaying) { val tv = LinkedHashMap(trackView); tv["busyReplay"] = true; m["track"] = tv }
             return Json.stringify(m)
         } catch (t: Throwable) {
@@ -144,6 +145,7 @@ class SwingApp(private val p: Platform) {
     }
 
     fun action(name: String, argsJson: String): String {
+        if (name == "liveScan" || name == "liveScanSet") return liveAction(name, argsJson)
         if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
@@ -2637,6 +2639,202 @@ class SwingApp(private val p: Platform) {
                 StockPage.watchItem(sym, nm, null, null, now)
             }
         }
+    }
+
+    // =========================================================================================== live whole-market scan (LiveScan.kt)
+
+    private val liveEng = LiveEngine()
+    private val liveLock = Any()
+    private val liveBusy = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var liveSum: Map<String, Any?>? = null
+    @Volatile private var liveUiAt = 0L
+    @Volatile private var liveOffSince = 0L
+    @Volatile private var liveStepAt = 0L
+    @Volatile private var liveSavedAt = 0L
+    @Volatile private var liveBg = false
+    @Volatile private var liveNotify = true
+    @Volatile private var liveMode = "off"
+    private var liveRestored = false
+    private var liveRefsKey = ""
+    @Volatile private var liveDriver: Thread? = null
+
+    private fun liveOpen(now: Long): Boolean = Clock.isMarketOpen(now) && vHolidayDay != Clock.epochDay(now)
+
+    /** caller holds [liveLock]: nightly references from scan.csv, the user's stocks and the top ideas. */
+    private fun liveEnsureRefs(now: Long) {
+        if (!liveRestored) {
+            liveRestored = true
+            try {
+                val m = Json.parseObject(p.read(LiveScan.FILE) ?: "")
+                liveBg = m?.get("bg") == true; liveNotify = m?.get("notify") != false
+                @Suppress("UNCHECKED_CAST") liveEng.restore(m?.get("state") as? Map<String, Any?>, Clock.epochDay(now))
+            } catch (t: Throwable) {}
+        }
+        val ms = try { marketData(false, fetch = false) } catch (t: Throwable) { null } ?: return
+        val r = refs
+        val rel = HashSet<String>(); rel.addAll(r.holdings.keys); rel.addAll(r.watch); rel.addAll(r.trades.keys); rel.addAll(r.targets.keys); rel.addAll(r.signals.keys)
+        val top = HashSet<String>(); for (x in ideaItems) (x["sym"] as? String)?.let { top.add(it) }
+        for (x in ms.rows) if (x.rank in 1..25) top.add(x.sym)
+        val key = "${ms.day}|${ms.builtAt}|${rel.hashCode()}|${top.hashCode()}"
+        if (key == liveRefsKey) return
+        liveRefsKey = key
+        val list = ms.rows.map { x ->
+            val c = x.comp
+            val lv = if (c.atr14 > 0 && c.close > 0) SetupScore.levels(c.close, c.atr14) else null
+            LiveRef(x.sym, x.exch, x.code, x.name, c.close, c.sma50, c.high, c.hi252, c.lo252, c.to20,
+                if (lv != null) c.close else 0.0, lv?.get(0) ?: 0.0, lv?.get(1) ?: 0.0, lv?.get(2) ?: 0.0, lv?.get(3) ?: 0.0, x.label, x.score, x.rank, c, x.inTable)
+        }
+        liveEng.setRefs(list, ms.day, rel, top)
+    }
+
+    /**
+     * One live-scan step (at most one network call). Called every second by the foreground service and by the UI driver
+     * while the Setups / Today screen is open. Returns how long to wait before the next call. Never throws.
+     */
+    fun liveScanStep(screenOn: Boolean): Long {
+        val now = try { p.now() } catch (t: Throwable) { System.currentTimeMillis() }
+        if (screenOn) liveOffSince = 0L else if (liveOffSince == 0L) liveOffSince = now
+        if (!liveOpen(now)) { liveMode = "closed"; liveSummary(now); return 60_000L }
+        if (!liveBusy.compareAndSet(false, true)) return 1_000L
+        try {
+            liveStepAt = now
+            val mode = LiveScan.mode(now, liveUiAt, screenOn, liveOffSince, liveBg)
+            liveMode = when (mode) { 2 -> "live"; 1 -> "background"; else -> "paused" }
+            if (mode == 0) { liveSummary(now); return 30_000L }
+            val fg = mode == 2
+            val conn = try { broker.connected() } catch (t: Throwable) { false }
+            val plan = synchronized(liveLock) { liveEnsureRefs(now); liveEng.plan(now, fg, conn) } ?: return if (fg) 500L else 1_000L
+            var size = 0
+            val got: Map<String, LiveQuote>? = try {
+                when (plan.src) {
+                    "tv" -> {
+                        val bse = synchronized(liveLock) { liveEng.refs.values.filter { it.exch == Bhav.BSE }.flatMap { r -> listOfNotNull(r.sym to r.sym, r.code.takeIf { it.isNotEmpty() }?.let { it to r.sym }) }.toMap() }
+                        var cols = if (liveEng.tvMinimal) LiveScan.TV_CORE else LiveScan.TV_CORE + LiveScan.TV_EXTRA
+                        var resp = p.httpRequest("POST", LiveScan.TV_URL, LiveScan.TV_HEADERS + ("Accept-Encoding" to "gzip"), LiveScan.tvBody(cols), 8_000_000)
+                        if (resp != null && resp.code in 400..499 && !liveEng.tvMinimal) {   // a renamed column: retry with the core set and remember it
+                            cols = LiveScan.TV_CORE; synchronized(liveLock) { liveEng.setTvState(true, -1) }
+                            resp = p.httpRequest("POST", LiveScan.TV_URL, LiveScan.TV_HEADERS + ("Accept-Encoding" to "gzip"), LiveScan.tvBody(cols), 8_000_000)
+                        }
+                        size = resp?.body?.length ?: 0
+                        if (resp == null || resp.code != 200) null else {
+                            val delay = LiveScan.tvDelayMs(resp.body, cols)
+                            synchronized(liveLock) { liveEng.setTvState(liveEng.tvMinimal, delay) }
+                            LiveScan.parseTv(resp.body, cols, now, bse, delay)
+                        }
+                    }
+                    "broker" -> broker.quotes(plan.syms).data?.mapValues { (k, q) -> LiveQuote(k, q.ltp, q.open, q.high, q.low, q.prevClose, Double.NaN, now, "broker", at = now) }
+                    "growwBse" -> {
+                        val codes = HashMap<String, String>(); synchronized(liveLock) { for (s in plan.syms) liveEng.bseCode(s)?.let { codes[it] = s } }
+                        val t = p.httpPost(Groww.INDEX_URL, LiveScan.growwBody(codes.keys.toList(), "BSE")); size = t?.length ?: 0
+                        LiveScan.parseGroww(t, "BSE", now, codes)
+                    }
+                    else -> { val t = p.httpPost(Groww.INDEX_URL, LiveScan.growwBody(plan.syms)); size = t?.length ?: 0; if (t == null) null else LiveScan.parseGroww(t, "NSE", now) }
+                }
+            } catch (t: Throwable) { null }
+            val (ev, notes) = synchronized(liveLock) { val e = liveEng.ingest(plan, got, now, size); Pair(e, liveEng.toNotify(e, now)) }
+            if (liveNotify) for (e in notes) {
+                val sell = e.kind == "STOP" || e.kind == "GAP_DOWN" || e.kind == "LC_NEAR"
+                val allowed = try { if (sell || e.kind.startsWith("TARGET")) st.settings.notifySell else st.settings.notifyBuy } catch (t: Throwable) { true }
+                if (allowed) try { p.notify(if (sell || e.kind.startsWith("TARGET")) "sell" else "buy", 7800 + ((e.sym + e.kind).hashCode() and 0x3ff),
+                    "${e.sym}: ${LiveScan.LABEL[e.kind] ?: e.kind} · ₹${Fmt.r2(e.price)}", e.text) } catch (t: Throwable) {}
+            }
+            liveSummary(now)
+            if (ev.isNotEmpty() && now - liveSavedAt > 30_000L || now - liveSavedAt > 300_000L) liveSave(now)
+            return if (fg) LiveScan.FG_GAP_MS else LiveScan.BG_GAP_MS
+        } catch (t: Throwable) {
+            log("live scan: $t"); return 5_000L
+        } finally { liveBusy.set(false) }
+    }
+
+    private fun liveSave(now: Long) {
+        liveSavedAt = now
+        try { val st0 = synchronized(liveLock) { liveEng.persist() }; p.write(LiveScan.FILE, Json.stringify(linkedMapOf("bg" to liveBg, "notify" to liveNotify, "state" to st0))) } catch (t: Throwable) {}
+    }
+
+    private fun liveRow(sym: String, q: LiveQuote?, r: LiveRef?): Map<String, Any?> = linkedMapOf("sym" to sym, "name" to r?.name, "ltp" to q?.ltp?.let { Fmt.r2(it) },
+        "pct" to q?.chgPct?.takeIf { !it.isNaN() }?.let { Fmt.r2(it) }, "src" to q?.src, "label" to r?.label, "rank" to r?.rank)
+
+    /** Recomputes the small summary served in getState (field liveScan). */
+    private fun liveSummary(now: Long) {
+        try {
+            synchronized(liveLock) {
+                val e = liveEng
+                var brk = 0; var zone = 0
+                val m = Clock.minuteOfDay(now)
+                for ((sym, q) in e.quotes) {
+                    if (now - q.at > LiveScan.FRESH_MS) continue
+                    val r = e.refs[sym] ?: continue
+                    val k = LiveScan.detect(r, q, m).map { it.first }
+                    if ("BREAKOUT" in k) brk++
+                    if ("ZONE" in k) zone++
+                }
+                val today = Clock.epochDay(now)
+                val evs = e.ring.filter { Clock.epochDay(it.at) == today }
+                liveSum = linkedMapOf("mode" to liveMode, "running" to (liveMode == "live" || liveMode == "background"), "at" to e.lastIngestAt,
+                    "swept" to e.fresh(now), "total" to e.refs.size, "breakouts" to brk, "inZone" to zone, "events" to evs.size,
+                    "relevant" to evs.count { it.rel }, "lastSweepMs" to e.lastSweepMs, "source" to e.tvNote(now), "bg" to liveBg,
+                    "latest" to (evs.filter { it.rel }.take(3) + evs.filter { !it.rel }.take(3)).take(3).map { it.toMap(e.refs[it.sym]?.name) })
+            }
+        } catch (t: Throwable) {}
+    }
+
+    /** UI open: keep the scan going from a small driver thread while the screen asks (the service may be stopped). */
+    private fun liveKick(now: Long) {
+        liveUiAt = now
+        if (!liveOpen(now)) return
+        if (p is SyncPlatform) { liveScanStep(true); return }
+        val d = liveDriver
+        if (d != null && d.isAlive) return
+        liveDriver = Thread({
+            try {
+                while (p.now() - liveUiAt <= LiveScan.UI_ACTIVE_MS && liveOpen(p.now())) {
+                    val wait = if (p.now() - liveStepAt < 700L) 700L else liveScanStep(true)
+                    Thread.sleep(wait.coerceIn(250L, 5_000L))
+                }
+            } catch (t: Throwable) {}
+        }, "live-scan-ui").apply { isDaemon = true; start() }
+    }
+
+    /** liveScan (read): full view for the Setups section. liveScanSet: {bg?, notify?}. */
+    private fun liveAction(name: String, argsJson: String): String {
+        return try {
+            val a = Json.parseObject(argsJson) ?: emptyMap()
+            val now = p.now()
+            if (name == "liveScanSet") {
+                if (a["bg"] is Boolean) liveBg = a["bg"] == true
+                if (a["notify"] is Boolean) liveNotify = a["notify"] == true
+                liveSave(now); liveSummary(now)
+                return Json.stringify(linkedMapOf("ok" to true, "bg" to liveBg, "notify" to liveNotify))
+            }
+            liveKick(now)
+            val out = LinkedHashMap<String, Any?>(liveSum ?: emptyMap())
+            synchronized(liveLock) {
+                val e = liveEng
+                val m = Clock.minuteOfDay(now)
+                val fresh = e.quotes.values.filter { now - it.at <= LiveScan.FRESH_MS && e.refs[it.sym]?.liquid == true && !it.chgPct.isNaN() }
+                val brk = ArrayList<Map<String, Any?>>(); val zone = ArrayList<Map<String, Any?>>()
+                for (q in e.quotes.values) {
+                    if (now - q.at > LiveScan.FRESH_MS) continue
+                    val r = e.refs[q.sym] ?: continue
+                    val k = LiveScan.detect(r, q, m).map { it.first }
+                    if ("BREAKOUT" in k && brk.size < 40) brk.add(liveRow(q.sym, q, r))
+                    if ("ZONE" in k && zone.size < 40) zone.add(liveRow(q.sym, q, r))
+                }
+                val t = e.table(now)
+                val nightly = e.refs
+                out["ok"] = true; out["at"] = now
+                out["eventList"] = e.ring.take(a.int("max").takeIf { it in 1..300 } ?: 60).map { it.toMap(e.refs[it.sym]?.name) }
+                out["movers"] = linkedMapOf("up" to fresh.sortedByDescending { it.chgPct }.take(5).map { liveRow(it.sym, it, e.refs[it.sym]) },
+                    "down" to fresh.sortedBy { it.chgPct }.take(5).map { liveRow(it.sym, it, e.refs[it.sym]) })
+                out["breakoutList"] = brk; out["inZoneList"] = zone
+                out["liveTop"] = (t?.ranked ?: emptyList()).filter { it.label == "BUY" }.take(10).map { x ->
+                    linkedMapOf("sym" to x.sym, "score" to x.score, "rank" to x.rank, "nightlyRank" to (nightly[x.sym]?.rank ?: 0), "ltp" to Fmt.r2(x.comp.close)) }
+                out["callsPerMin"] = e.callTimes.size; out["calls"] = e.calls; out["bytes"] = e.bytes
+                out["hot"] = e.hotList.size; out["notify"] = liveNotify; out["bg"] = liveBg
+                out["scoreNote"] = "Live score re-ranks 52-week-high and 52-week-low closeness with today's price; momentum parts stay at last night's values."
+            }
+            Json.stringify(out)
+        } catch (t: Throwable) { "{\"ok\":false,\"error\":\"live scan unavailable\"}" }
     }
 
     // =========================================================================================== snapshot

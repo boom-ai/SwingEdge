@@ -168,6 +168,7 @@
       if (name === 'flowSector') { onSector(res, ok, err); return; }
       if (name === 'fnoTicker' || name === 'fnoLab') { onLive(name, res, ok); return; }
       if (name === 'liveQuotes') { onStockLive(res, ok); return; }
+      if (name === 'liveScan' || name === 'liveScanSet') { onLiveScan(name, res, ok); return; }
       if (name === 'brokerStatus') { if (ok) { ui.broker = res; if (sheet && (sheet.kind === 'settings' || sheet.kind === 'broker') && !sheet.waiting) { var bb = document.getElementById('brokerbox'); if (sheet.kind === 'settings') { try { var sb = elSheet.querySelector('.sb'), y = sb ? sb.scrollTop : 0; paintSheet(true); if (sb) elSheet.querySelector('.sb').scrollTop = y; } catch (e) {} } } } return; }
       if (name === 'brokerConnect') { clearPending('brokerConnect', true);
         if (!ok) { sheetIdle(err || 'Could not connect'); return; }
@@ -646,6 +647,26 @@
     applyLive();
     if (sheet && sheet.kind === 'stock') { try { paintStock(['price']); } catch (e) {} } else if (!sheet) render(true);
   }
+  /* ---------- live whole-market scan (Setups section + Today line): poll the liveScan read action every 4 s on screen ---------- */
+  var lsAt = 0, lsBusy = 0;
+  function liveScanTick() {
+    try {
+      if (document.hidden || !S || sheet || (ui.tab !== 'setups' && ui.tab !== 'today')) return;
+      var t = Date.now(), gap = S.marketOpen === true ? 4000 : 60000;
+      if (t - lsAt < gap || (lsBusy && t - lsBusy < 8000)) return;
+      lsAt = t; lsBusy = t; bridge().action('liveScan', '{}');
+    } catch (e) { lsBusy = 0; }
+  }
+  setInterval(liveScanTick, 1000);
+  function onLiveScan(name, res, ok) {
+    if (name === 'liveScanSet') { clearPending('liveScanSet', true); if (ok && ui.liveScan) ui.liveScan.bg = res.bg === true; if (S.liveScan) S.liveScan.bg = res.bg === true; if (!ok) toast('Could not change the live scan setting', 'err'); render(true); lsAt = 0; return; }
+    lsBusy = 0; if (!ok || !res) return;
+    ui.liveScan = res; if (!sheet && (ui.tab === 'setups' || ui.tab === 'today')) render();
+  }
+  function liveScanCmd(c) {
+    if (c === 'live-all') { ui.liveAll = !ui.liveAll; render(true); return; }
+    var L = ui.liveScan || S.liveScan || {}; act('liveScanSet', { bg: L.bg !== true }, 'liveScanSet');
+  }
   function fnoPoll(on) {
     if (fnoTimer) { clearInterval(fnoTimer); fnoTimer = null; }
     if (on) fnoTimer = setInterval(function () {
@@ -1099,6 +1120,7 @@
       case 'opt-calc': ui.opt = ui.opt || { calc: {} }; optRead(); paintSheet(true); break;
       case 'index-open': ui.index = ui.index || {}; openSheet('index', {}, true); loadIndex(ui.index.sel || ''); break;
       case 'index-pick': loadIndex(id); break;
+      case 'live-bg': case 'live-all': liveScanCmd(c); break;
       case 'short-toggle': ui.showShort = !ui.showShort; render(); break;
       case 'fullcards': ui.fullCards = !ui.fullCards; try { localStorage.setItem('se.fullCards', ui.fullCards ? '1' : '0'); } catch (e) {} render(); break;
       case 'money-seg': if (ui.money) { ui.money.seg = id; render(); } break;

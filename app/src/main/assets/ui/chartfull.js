@@ -10,7 +10,7 @@
   var CM = root.CM, SE = root.SE, CI = root.CI;
   if (!CM) return;
 
-  var COL = { bg: '#0F1012', grid: '#212327', axis: '#7A8088', text: '#EDEEF0', up: '#31C48D', dn: '#F2555A', line: '#31C48D', cross: '#A9AEB5', panel: 'rgba(23,24,27,.96)' };
+  var COL = { bg: '#000000', grid: '#161616', axis: '#8A8A8A', text: '#ECECEC', up: '#1FD286', dn: '#FF4B4B', line: '#1FD286', cross: '#FFA028', panel: 'rgba(10,10,10,.96)' };
   var EMA_COL = { 10: '#E5B04C', 20: '#F08A5D', 50: '#6BA6FF', 100: '#4DC4D8', 200: '#B48CF2' };
   var EMA_KEYS = [200, 100, 50, 20, 10];                      // draw order: slowest first
   var LV = {
@@ -435,7 +435,26 @@
       }
     }
     function drawOverlays(A, io, i0, i1, X, Y) {
-      var i, half = Math.max(1, Math.min(16, st.geo.w / st.view.c * 0.7)) / 2;
+      var i, half = Math.max(1, Math.min(16, st.geo.w / st.view.c * 0.7)) / 2, G = st.geo;
+      /* baseline: close of the first visible bar; area above green, below red, with the change since then on the right */
+      if (io.base && st.C && i1 > i0) {
+        var bv = st.C[i0];
+        if (bv > 0) {
+          var by = Y(bv);
+          for (i = i0; i <= i1; i++) { var cv = st.C[i]; if (!(cv > 0)) continue; var cy = Y(cv); ctx.fillStyle = cv >= bv ? 'rgba(49,196,141,.07)' : 'rgba(242,85,90,.07)'; ctx.fillRect(X(i) - half - 0.5, Math.min(by, cy), half * 2 + 1, Math.abs(cy - by)); }
+          ctx.save(); ctx.setLineDash([2, 3]); ctx.strokeStyle = IC.grayA + '.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(G.l, Math.round(by) + 0.5); ctx.lineTo(G.r, Math.round(by) + 0.5); ctx.stroke(); ctx.restore();
+          var lc = st.C[i1], pc = lc > 0 ? (lc / bv - 1) * 100 : NaN;
+          if (pc === pc) label('Base ' + (pc >= 0 ? '+' : '') + pc.toFixed(1) + '%', G.l + 4, by - 9, pc >= 0 ? COL.up : COL.dn, 'left');
+        }
+      }
+      /* auto trendlines through the last two swing highs / lows, extended into the empty space after the last bar */
+      if (io.tl && A.tl) for (i = 0; i < A.tl.length; i++) {
+        var t = A.tl[i], xe = st.view.s + st.view.c, ye = t.a.p + t.slope * (xe - t.a.i);
+        if (t.a.i > i1) continue;
+        ctx.strokeStyle = t.kind === 'res' ? 'rgba(242,85,90,.85)' : 'rgba(49,196,141,.85)'; ctx.lineWidth = 1.3;
+        ctx.beginPath(); ctx.moveTo(X(t.a.i), Y(t.a.p)); ctx.lineTo(X(xe), Y(ye)); ctx.stroke();
+        ctx.fillStyle = ctx.strokeStyle; [t.a, t.b].forEach(function (q) { ctx.beginPath(); ctx.arc(X(q.i), Y(q.p), 2.5, 0, 6.283); ctx.fill(); });
+      }
       if (io.piv) {
         stepSeries(A.piv.r2, i0, i1, X, Y, half, 'rgba(242,85,90,.45)', 1, [3, 3]); stepSeries(A.piv.r1, i0, i1, X, Y, half, 'rgba(242,85,90,.7)', 1, [3, 3]);
         stepSeries(A.piv.s2, i0, i1, X, Y, half, 'rgba(49,196,141,.45)', 1, [3, 3]); stepSeries(A.piv.s1, i0, i1, X, Y, half, 'rgba(49,196,141,.7)', 1, [3, 3]);

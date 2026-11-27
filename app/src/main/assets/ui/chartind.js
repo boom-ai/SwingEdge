@@ -299,6 +299,22 @@
     return out;
   }
   function avgV(v, a, b) { var s = 0, k = 0; for (var i = Math.max(0, a); i <= b && i < v.length; i++) { s += v[i]; k++; } return k ? s / k : 0; }
+  /* auto trendlines: through the last two swing highs (resistance) and the last two swing lows (support) of a zigzag,
+     extended to the right. A line is dropped once price has closed through it by more than 1 ATR (it no longer matters). */
+  function trendlines(c, zz, atrNow) {
+    var out = [], n = len(c);
+    [1, -1].forEach(function (t) {
+      var pts = zz.filter(function (p) { return p.t === t; });
+      if (pts.length < 2) return;
+      var a = pts[pts.length - 2], b = pts[pts.length - 1];
+      if (!(b.i > a.i)) return;
+      var sl = (b.p - a.p) / (b.i - a.i), last = a.p + sl * (n - 1 - a.i), tol = ok(atrNow) ? atrNow : Math.abs(last) * 0.02;
+      if (t === 1 && c[n - 1] > last + tol) return;
+      if (t === -1 && c[n - 1] < last - tol) return;
+      out.push({ kind: t === 1 ? 'res' : 'sup', a: { i: a.i, p: a.p }, b: { i: b.i, p: b.p }, slope: sl });
+    });
+    return out;
+  }
   /* bull / bear flags: a sharp pole (zigzag leg ≥ minPole in ≤ 25 bars), then 3–20 bars that retrace ≤ 50% without making a new
      extreme, then a close beyond the flag. Returns [{dir, p0, p1, s, e, hi, lo, bo (index or -1 = forming)}] */
   function flags(h, l, c, zz, atrPct) {
@@ -413,13 +429,13 @@
   var GROUPS = [
     { t: 'Lower panes (max 2)', items: [['rsi', 'RSI 14'], ['rsi2', 'RSI 2'], ['macd', 'MACD'], ['atr', 'ATR 14']] },
     { t: 'Overlays', items: [['bb', 'Bollinger 20,2'], ['st', 'Supertrend 10,3'], ['piv', 'Pivots (week)'], ['cpr', 'CPR (day)'], ['hl52', '52W high/low'], ['vavg', 'Volume avg 20'], ['vwap', 'VWAP']] },
-    { t: 'Levels', items: [['sr', 'Auto support/resist.'], ['prev', 'Prev D/W/M high-low']] },
+    { t: 'Levels', items: [['sr', 'Auto support/resist.'], ['tl', 'Auto trendlines'], ['base', 'Baseline (change since first bar)'], ['prev', 'Prev D/W/M high-low']] },
     { t: 'Patterns', items: [['darvas', 'Darvas boxes'], ['vcp', 'VCP contraction'], ['flag', 'Bull/bear flags'], ['nr7', 'NR7 / inside bars'], ['dtb', 'Double top/bottom'], ['cup', 'Cup & handle'], ['b52', '52W breakout + vol'], ['gap', 'Gaps']] },
     { t: 'Strategy signals', items: [['sx', 'EMA 10/20 cross'], ['sst', 'Supertrend flip'], ['sr2', 'RSI(2) dip (Connors)'], ['sdv', 'Darvas breakouts']] }
   ];
   var PANES = ['rsi', 'rsi2', 'macd', 'atr'];
-  var DEFAULTS = { rsi: true, sr: true, vavg: true };
-  var LS_KEY = 'se_cf_ind', LS_INLINE = 'se_cx_ind';
+  var DEFAULTS = { rsi: true, sr: true, tl: true, base: true, vavg: true, darvas: true, flag: true, vcp: true, dtb: true, cup: true, b52: true, st: true };
+  var LS_KEY = 'se_cf_ind3', LS_INLINE = 'se_cx_ind3';   /* bumped when the defaults change */
   function ls() { try { return root.localStorage || null; } catch (e) { return null; } }
   function loadOpts() {
     var o = {}, k, s = ls(), j = null;
@@ -447,9 +463,9 @@
     return o;
   }
   function inlineOpts() {
-    var s = ls(), j = null, o = { rsi: true, lv: false, dv: false };
+    var s = ls(), j = null, o = { rsi: true, lv: true, dv: true };
     try { j = s ? JSON.parse(s.getItem(LS_INLINE) || 'null') : null; } catch (e) { j = null; }
-    if (j && typeof j === 'object') { o.rsi = j.rsi !== false; o.lv = j.lv === true; o.dv = j.dv === true; }
+    if (j && typeof j === 'object') { o.rsi = j.rsi !== false; o.lv = j.lv !== false; o.dv = j.dv !== false; }
     return o;
   }
   function toggleInline(id) {
@@ -498,7 +514,7 @@
     function ix(k) { return vi[k]; }
     if (m < 5) { A.rsi = A.rsi2 = A.atr = A.vavg = A.hi52 = A.lo52 = nanArr(n); A.macd = { m: nanArr(n), s: nanArr(n), h: nanArr(n) }; A.bb = { u: nanArr(n), m: nanArr(n), l: nanArr(n) }; A.st = { v: nanArr(n), dir: new Int8Array(n) };
       A.piv = { p: nanArr(n), r1: nanArr(n), s1: nanArr(n), r2: nanArr(n), s2: nanArr(n) }; A.cpr = { tc: nanArr(n), bc: nanArr(n), p: nanArr(n) }; A.vwap = null;
-      A.sr = { res: [], sup: [] }; A.prev = []; A.darvas = []; A.vcp = []; A.flags = []; A.dtb = []; A.cups = []; A.gaps = []; return A; }
+      A.sr = { res: [], sup: [] }; A.prev = []; A.darvas = []; A.tl = []; A.vcp = []; A.flags = []; A.dtb = []; A.cups = []; A.gaps = []; return A; }
 
     var r14 = rsi(C, 14), r2 = rsi(C, 2), at = atr(H, L, C, 14), mc = macd(C, 12, 26, 9), bb = bollinger(C, 20, 2), stt = supertrend(H, L, C, 10, 3);
     var va = sma(V, 20), h52 = rollMax(H, 252, false), l52 = rollMax(L, 252, true), s200 = sma(C, 200), s5 = sma(C, 5);
@@ -524,6 +540,7 @@
     var zzF = zigzag(H, L, Math.min(0.06, Math.max(0.025, atrPct * 1.3))), zzM = zigzag(H, L, Math.min(0.12, Math.max(0.05, atrPct * 2.5)));
     function mapP(p) { return { i: ix(p.i), p: p.p, t: p.t }; }
 
+    A.tl = trendlines(C, zzM, atrNow).map(function (t) { var a = mapP(t.a), b = mapP(t.b); return { kind: t.kind, a: a, b: b, slope: b.i > a.i ? (b.p - a.p) / (b.i - a.i) : 0 }; });
     var dv = darvas(H, L, C, Math.min(252, Math.max(20, m - 1)));
     A.darvas = dv.map(function (b) { return { s: ix(b.s), set: ix(b.set), e: ix(b.e), top: b.top, bot: b.bot, out: b.out }; });
     var vc = vcp(H, L, C, V, zzF);
@@ -615,6 +632,17 @@
         s += '<path class="' + (b.out > 0 ? 'dvu' : 'dvd') + '" d="M' + (ax - 3.5).toFixed(1) + ' ' + ay.toFixed(1) + 'L' + (ax + 3.5).toFixed(1) + ' ' + ay.toFixed(1) + 'L' + ax.toFixed(1) + ' ' + tip.toFixed(1) + 'Z"/>';
       }
     });
+    (A.flags || []).forEach(function (f) {
+      var fe = f.bo >= 0 ? f.bo : f.e, x0 = X(f.s) - half, x1 = X(fe) + half, y0 = Y(f.hi), y1 = Y(f.lo);
+      if (!(x1 > x0) || !ok(y0) || !ok(y1)) return;
+      s += '<path class="flp ' + (f.dir > 0 ? 'u' : 'd') + '" d="M' + X(f.p0.i).toFixed(1) + ' ' + Y(f.p0.p).toFixed(1) + 'L' + X(f.p1.i).toFixed(1) + ' ' + Y(f.p1.p).toFixed(1) + '"/>' +
+        '<rect class="flg ' + (f.dir > 0 ? 'u' : 'd') + '" x="' + x0.toFixed(1) + '" y="' + Math.min(y0, y1).toFixed(1) + '" width="' + (x1 - x0).toFixed(1) + '" height="' + Math.max(1, Math.abs(y1 - y0)).toFixed(1) + '"/>';
+    });
+    (A.tl || []).forEach(function (t) {
+      var xe = A.n - 1 + 3, ye = t.a.p + t.slope * (xe - t.a.i), ya = Y(t.a.p), yb = Y(ye);
+      if (!ok(ya) || !ok(yb)) return;
+      s += '<path class="tl ' + t.kind + '" d="M' + X(t.a.i).toFixed(1) + ' ' + ya.toFixed(1) + 'L' + X(xe).toFixed(1) + ' ' + yb.toFixed(1) + '"/>';
+    });
     return s;
   }
   /* RSI mini pane: returns {svg} drawn between top and top+h, x from L to L+pw */
@@ -643,7 +671,7 @@
     sma: sma, ema: ema, rsi: rsi, atr: atr, trueRange: trueRange, macd: macd, bollinger: bollinger, supertrend: supertrend, rollMax: rollMax,
     pivotsOf: pivotsOf, periodKeys: periodKeys, priorPeriod: priorPeriod, pivotSeries: pivotSeries, vwap: vwap,
     swings: swings, zigzag: zigzag, autoLevels: autoLevels, prevHL: prevHL,
-    darvas: darvas, vcp: vcp, flags: flags, doubleTB: doubleTB, cupHandle: cupHandle, gaps: gaps,
+    darvas: darvas, trendlines: trendlines, vcp: vcp, flags: flags, doubleTB: doubleTB, cupHandle: cupHandle, gaps: gaps,
     analyze: analyze, cached: cached, readout: readout, lowerBound: lowerBound, kindsOn: kindsOn,
     KINDS: KINDS, MARK_OF: MARK_OF, GROUPS: GROUPS, PANES: PANES, DEFAULTS: DEFAULTS,
     loadOpts: loadOpts, saveOpts: saveOpts, toggleOpt: toggleOpt, inlineOpts: inlineOpts, toggleInline: toggleInline,

@@ -11,7 +11,7 @@
 
 /* the toggle sheet, over the lower part of the chart stage */
 .cfim { position: absolute; left: 0; right: 0; bottom: 0; max-height: 82%; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain;
-  z-index: 3; background: var(--surface); border-radius: 12px 12px 0 0; box-shadow: 0 -8px 24px rgba(0, 0, 0, .5); padding: 0 12px 12px; }
+  z-index: 3; background: var(--surface); border-radius: var(--r) 12px 0 0; box-shadow: 0 -8px 24px rgba(0, 0, 0, .5); padding: 0 12px 12px; }
 .cfim[hidden] { display: none; }
 .cfimh { position: sticky; top: 0; display: flex; align-items: center; gap: 8px; background: var(--surface); padding: 8px 0 4px; z-index: 1; }
 .cfimh b { font-size: var(--t-body); font-weight: 600; }
@@ -53,3 +53,10 @@ svg.chart .rsit { fill: var(--muted); font: 600 8.5px var(--sans); }
 .xchip .el { display: block; font-size: var(--t-cap); color: var(--muted); white-space: nowrap; }
 .xchip .ev { display: block; margin-top: 2px; font-size: var(--t-sec); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .xchip:active { filter: brightness(1.25); }
+/* inline chart: flags and auto trendlines (chartind.svgBoxes) */
+svg.chart .flp { fill: none; stroke-width: 1.4; }
+svg.chart .flp.u { stroke: rgba(49, 196, 141, .75); } svg.chart .flp.d { stroke: rgba(242, 85, 90, .75); }
+svg.chart .flg { stroke-width: 1; stroke-dasharray: 3 2; }
+svg.chart .flg.u { fill: rgba(49, 196, 141, .08); stroke: rgba(49, 196, 141, .6); } svg.chart .flg.d { fill: rgba(242, 85, 90, .08); stroke: rgba(242, 85, 90, .6); }
+svg.chart .tl { fill: none; stroke-width: 1.2; }
+svg.chart .tl.res { stroke: rgba(242, 85, 90, .8); } svg.chart .tl.sup { stroke: rgba(49, 196, 141, .8); }

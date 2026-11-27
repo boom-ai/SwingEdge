@@ -130,6 +130,7 @@
     alerts: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" transform="translate(1.2 1.2) scale(.9)"/>',
     up: '<path d="M7 17 17 7M9 7h8v8"/>',
+    dl: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
     down: '<path d="M7 7l10 10M17 9v8H9"/>',
     half: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor"/>',
     scissors: '<circle cx="6.5" cy="7" r="2.5"/><circle cx="6.5" cy="17" r="2.5"/><path d="M8.6 8.4 20 17M8.6 15.6 20 7"/>',
@@ -344,7 +345,37 @@
   }
 
   /* ---------- Today ---------- */
+  /* ---------- in-app update (Updater.kt) ---------- */
+  function updNotes(u) { return texts(T(u.notes).split('\n')).map(function (x) { return x.replace(/^[-*]\s*/, '').trim(); }).filter(function (x) { return x; }).slice(0, 5); }
+  function updRow(ui) {
+    var u = O(ui.upd), cur = N(u.current), lat = N(u.latest);
+    if (u.dl) {
+      var pct = N(u.pct);
+      return '<div class="brow"><div><b>Downloading build ' + (lat || '') + '</b><span class="mut num">' + (pct !== null && pct >= 0 ? pct + '% · ' : '') + (N(u.got) ? (N(u.got) / 1048576).toFixed(1) + ' of ' + (N(u.total) / 1048576).toFixed(1) + ' MB' : 'starting…') + '</span></div></div>' +
+        '<div class="updbar"><i style="width:' + Math.max(2, Math.min(100, pct || 0)) + '%"></i></div>';
+    }
+    if (u.available) {
+      var nl = updNotes(u);
+      return '<div class="brow"><div><b>Update ready · build ' + lat + '</b><span class="mut">You have build ' + (cur || '?') + (N(u.sizeMb) ? ' · ' + N(u.sizeMb) + ' MB' : '') + '</span></div></div>' +
+        (nl.length ? '<ul class="updn">' + nl.map(function (x) { return '<li>' + esc(x.length > 90 ? x.slice(0, 88) + '…' : x) + '</li>'; }).join('') + '</ul>' : '') +
+        (T(u.error) ? '<p class="formerr">' + esc(T(u.error)) + '</p>' : '') +
+        '<div class="btns">' + btn('upd-go', null, 'Update now', 'sm', { icon: 'dl' }) + (u.needPermission ? btn('upd-perm', null, 'Allow installs', 'sm ghost', {}) : '') + '</div>';
+    }
+    return '<div class="brow"><div><b>SwingEdge' + (cur ? ' · build ' + cur : '') + '</b><span class="mut">' + (T(u.error) ? esc(T(u.error)) : u.checked ? 'You have the latest build.' : 'Updates install from here, no GitHub needed.') + '</span></div></div>' +
+      '<div class="btns">' + btn('upd-check', null, 'Check for updates', 'sm ghost', { busy: !!u.checking }) + '</div>';
+  }
+  function updBanner(ui) {
+    var u = O(ui.upd);
+    if (!(u.available || u.dl) || ui.updHidden) return '';
+    if (u.dl) return '<div class="banner upd"><div class="bh">' + ic('dl') + '<div class="bt"><b>Downloading update</b><span class="num">' + (N(u.pct) >= 0 ? N(u.pct) + '%' : 'starting…') + '</span></div></div><div class="updbar"><i style="width:' + Math.max(2, N(u.pct) || 0) + '%"></i></div></div>';
+    return '<div class="banner upd"><div class="bh">' + ic('dl') + '<div class="bt"><b>New version · build ' + N(u.latest) + '</b><span>' + esc(updNotes(u)[0] || 'Tap Update; Android asks you to confirm.') + '</span></div>' +
+      '<button type="button" class="x" data-c="upd-hide" aria-label="Later">' + ic('x') + '</button></div>' +
+      '<div class="btns">' + btn('upd-go', null, 'Update now', 'sm', {}) + '</div></div>';
+  }
   function banner(ui) {
+    return updBanner(ui) + phoneBanner(ui);
+  }
+  function phoneBanner(ui) {
     var iss = deviceIssues(ui.device);
     if (!iss.length || ui.bannerDismissed) return '';
     var b = '';
@@ -2630,6 +2661,7 @@
         '<div class="two">' + field('riskPct', 'Risk per trade', sv(s.riskPct), { post: '%', max: 5 }) + field('maxOpenTrades', 'Max open trades', sv(s.maxOpenTrades), { mode: 'numeric', max: 2 }) + '</div>' +
         field('costPct', 'Charges, round trip', sv(s.costPct), { post: '% of turnover', max: 5, enter: 'done', help: 'Brokerage, STT, stamp duty and other costs for one buy plus one sell. All results are shown after this.' }) +
         '<div class="calc" id="calc">' + settingsCalc(s.capital, s.riskPct) + '</div>' +
+        '<h3>App version</h3><div class="box" id="updbox">' + updRow(ui) + '</div>' +
         '<h3>Broker</h3><div class="box">' + brokerRow(ui) + priceRow(ui) + '</div>' +
         '<h3>Notifications</h3><div class="box">' +
         toggle('notifyBuy', s.notifyBuy !== false, 'Buy ideas', 'When a live strategy finds a setup') +
@@ -2686,7 +2718,7 @@
     stockPart: stockPart, searchBody: searchBody, view: view, sheet: sheet, deviceList: deviceList, deviceIssues: deviceIssues,
     takeCalc: takeCalc, closeCalc: closeCalc, settingsCalc: settingsCalc, isBusy: function (S) { return isBusy(O(S)); },
     actItems: function (S) { return actItems(O(S)); },
-    intradayView: function (S, ui) { return intradayView(O(S), O(ui)); },
+    intradayView: function (S, ui) { return intradayView(O(S), O(ui)); }, updRow: function (ui) { return updRow(O(ui)); }, updBanner: function (ui) { return updBanner(O(ui)); },
     fnoPart: fnoPart, tickTile: tickTile, tickLabel: function (S, ui) { return tickLabel(O(S), O(ui)); }, fmtIdx: fmtIdx, tickChg: tickChg, liveTicker: function (ui, big, S) { return liveTicker(O(ui), big, O(S)); },
     liveScanView: function (S, ui) { return liveScanView(O(S), O(ui)); }
   };

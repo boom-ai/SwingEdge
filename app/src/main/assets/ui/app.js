@@ -171,6 +171,7 @@
       if (name === 'liveQuotes') { onStockLive(res, ok); return; }
       if (name === 'liveScan' || name === 'liveScanSet') { onLiveScan(name, res, ok); return; }
       if (name === 'intraday') { ntBusy = 0; if (ok) { ui.intraday = res; ntAt = Date.now(); if (!sheet && ui.tab === 'today') render(true); } return; }
+      if (name === 'updateCheck' || name === 'updateProgress' || name === 'updateInstall') { onUpdate(name, res, ok, err); return; }
       if (name === 'brokerStatus') { if (ok) { ui.broker = res; if (sheet && (sheet.kind === 'settings' || sheet.kind === 'broker') && !sheet.waiting) { var bb = document.getElementById('brokerbox'); if (sheet.kind === 'settings') { try { var sb = elSheet.querySelector('.sb'), y = sb ? sb.scrollTop : 0; paintSheet(true); if (sb) elSheet.querySelector('.sb').scrollTop = y; } catch (e) {} } } } return; }
       if (name === 'brokerConnect') { clearPending('brokerConnect', true);
         if (!ok) { sheetIdle(err || 'Could not connect'); return; }
@@ -211,6 +212,22 @@
   };
 
   /* ---------- toasts ---------- */
+  /* ---------- in-app update ---------- */
+  function updPaint() {
+    if (sheet && sheet.kind === 'settings' && !sheet.waiting) { var box = document.getElementById('updbox'); if (box) box.innerHTML = SE.updRow(ui); return; }
+    if (!sheet) render(true);
+  }
+  function onUpdate(name, res, ok, err) {
+    var u = ui.upd || (ui.upd = {});
+    if (name === 'updateCheck') { u.checking = false; u.checked = true; if (ok) { var keep = u.dl; ui.upd = res; ui.upd.checked = true; ui.upd.dl = keep; } else { u.error = err || 'Could not check'; if (res && res.current) u.current = res.current; } updPaint(); return; }
+    if (name === 'updateProgress') { if (!u.dl) return; u.pct = res.pct; u.got = res.got; u.total = res.total; updPaint(); return; }
+    u.dl = false; u.pct = null;
+    if (ok) toast('Android will now ask you to confirm the update.', 'ok');
+    else { u.error = err || 'Update failed'; u.needPermission = !!(res && res.needPermission); toast(u.error, 'err'); }
+    updPaint();
+  }
+  function updCheck() { var u = ui.upd || (ui.upd = {}); if (u.checking) return; u.checking = true; u.error = ''; updPaint(); try { bridge().action('updateCheck', '{}'); } catch (e) { u.checking = false; } }
+  function updGo() { var u = ui.upd || (ui.upd = {}); if (u.dl) return; u.dl = true; u.pct = 0; u.got = 0; u.error = ''; updPaint(); try { bridge().action('updateInstall', '{}'); } catch (e) { u.dl = false; } }
   function brokerStatus() { try { bridge().action('brokerStatus', '{}'); } catch (e) {} }
   function toast(msg, kind) {
     try {
@@ -1177,6 +1194,10 @@
         try { bridge().pickHoldingsFile(); } catch (e) { toast('Could not open the file picker', 'err'); }
         break;
       case 'dismiss-banner': ui.bannerDismissed = true; render(true); break;
+      case 'upd-check': updCheck(); break;
+      case 'upd-go': updGo(); break;
+      case 'upd-perm': try { bridge().action('updatePermission', '{}'); } catch (e) {} break;
+      case 'upd-hide': ui.updHidden = true; render(true); break;
       case 'dismiss-import': ui.importResult = null; render(true); break;
       case 'dev-notif': device('requestNotifications'); break;
       case 'dev-battery': device('openBatterySettings'); break;

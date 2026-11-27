@@ -131,6 +131,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         OptionWatchService.ensure(this)
+        web?.postDelayed({ autoUpdateCheck() }, 4000)
         try {
             if (web == null && root != null) createWebView()
             web?.onResume()
@@ -213,6 +214,7 @@ class MainActivity : Activity() {
     }
 
     private fun runAction(name: String, argsJson: String) {
+        if (name == "updateCheck" || name == "updateInstall" || name == "updatePermission") { updateAction(name); return }
         try {
             // look-ups must not queue behind a scan/backtest or behind each other's network waits
             val exec = if (name == "search") searchExec else if (name == "stockInfo" || name == "getChart" || name == "refreshSymbols" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes" || name == "markets" || name == "priceHealth" || name == "liveScan" || name == "intraday") readExec else actionExec
@@ -229,6 +231,30 @@ class MainActivity : Activity() {
             Log.e(App.TAG, "runAction($name) failed", t)
             deliverResult(name, errorJson("Could not start the action"))
         }
+    }
+
+    // ------------------------------------------------------------ in-app update (Updater.kt)
+
+    private fun updateAction(name: String) {
+        val ctx = applicationContext
+        if (name == "updatePermission") { Updater.openInstallPermission(this); deliverResult(name, "{\"ok\":true}"); return }
+        updateExec.execute {
+            val r = try {
+                if (name == "updateCheck") Updater.check(ctx)
+                else Updater.downloadAndInstall(ctx) { pct, got, total ->
+                    deliverResult("updateProgress", JSONObject().put("ok", true).put("pct", pct).put("got", got).put("total", total).toString())
+                }
+            } catch (t: Throwable) { errorJson(t.message ?: "Update failed") }
+            deliverResult(name, r)
+        }
+    }
+
+    /** Quiet check on open, at most every 3 hours; the page shows a banner when a newer build exists. */
+    private fun autoUpdateCheck() {
+        try {
+            if (System.currentTimeMillis() - Updater.checkedAt(this) < 3 * 3600_000L) return
+            updateAction("updateCheck")
+        } catch (t: Throwable) { Log.w(App.TAG, "auto update check", t) }
     }
 
     // ------------------------------------------------------------ JS bridge
@@ -571,6 +597,7 @@ class MainActivity : Activity() {
         private val searchExec: ExecutorService = Executors.newSingleThreadExecutor { r ->
             Thread(r, "swingedge-search").apply { isDaemon = true }
         }
+        private val updateExec: ExecutorService = Executors.newSingleThreadExecutor { r -> Thread(r, "se-update").apply { isDaemon = true } }
         private val readExec: ExecutorService = Executors.newFixedThreadPool(3) { r ->
             Thread(r, "swingedge-read").apply { isDaemon = true }
         }

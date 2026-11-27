@@ -7,7 +7,7 @@ import java.io.File
 object NightTests {
     fun all(): List<Pair<String, () -> Unit>> = listOf(
         "night-holidays" to ::holidays, "night-schedule" to ::schedule, "night-rules" to ::rules, "night-csv" to ::csv,
-        "night-desk" to ::desk, "night-build" to ::buildSynthetic, "night-swing-rules" to ::swingRules, "night-fixture-backtest" to ::fixture).map { (n, f) -> n to { withHolidays(f) } }
+        "night-desk" to ::desk, "night-build" to ::buildSynthetic, "night-swing-rules" to ::swingRules, "night-conv" to ::convFit, "night-fixture-backtest" to ::fixture).map { (n, f) -> n to { withHolidays(f) } }
 
     /** Real NSE holidays on for the body (the harness switches them off for the legacy synthetic-calendar simulations). */
     private fun withHolidays(f: () -> Unit) { val was = Holidays.enabled; Holidays.enabled = true; try { f() } finally { Holidays.enabled = was } }
@@ -225,11 +225,15 @@ object NightTests {
         val d = NightCalls.build(stocks, setOf("S1", "S2"), emptyList(), Holidays.BUNDLED, 1L)
         T.eq(d.forDay, Holidays.nextTradingDay(d.asof, Holidays.BUNDLED), "for = next trading day after asof")
         T.check(d.rules.sumOf { it.trades } > 500, "back-test produced trades: " + d.rules.joinToString { it.id + "=" + it.trades })
-        T.check(d.setups.all { x -> d.rules.first { it.id == x.rule }.status == "TESTED+" }, "only positive tested rules are listed")
+        T.check(d.setups.all { it.convN > 0 && !it.conv.isNaN() }, "every listed setup carries its group's tested result")
         T.check(d.setups.count { it.kind == "intraday" } <= NightCalls.MAX_SETUPS && d.setups.filter { it.kind == "intraday" }.groupBy { it.rule }.all { it.value.size <= NightCalls.MAX_PER_RULE }, "caps")
         T.check(d.setups.filter { it.side == "BUY" || it.side == "SELL" }.all { it.qty > 0 && it.riskRs <= 1000.0 + 1e-6 }, "size within ₹1,000 risk")
-        val exps = d.setups.filter { it.kind == "intraday" }.map { x -> d.rules.first { it.id == x.rule }.avgR }
-        T.check(exps.zipWithNext().all { it.first >= it.second }, "ranked by tested expectancy")
+        val exps = d.setups.filter { it.kind == "intraday" }.map { it.conv }
+        T.check(exps.zipWithNext().all { it.first >= it.second }, "ranked by the group's tested result (conviction), not by size")
+        T.check(d.setups.all { !it.hc || it.conv > 0.1 }, "high conviction only on clearly positive groups")
+        val back = NightCalls.parse(NightCalls.encode(d))!!
+        T.check(back.setups.size == d.setups.size && back.setups.zip(d.setups).all { (a, b) -> a.convN == b.convN && a.hc == b.hc && Math.abs(a.conv - b.conv) < 1e-3 }, "conviction survives the file round trip")
+        T.check(back.conv.keys == d.conv.keys, "per-rule conviction models in the file")
         T.check(NightCalls.parse(NightCalls.encode(d)) != null, "built file parses")
     }
 
@@ -272,5 +276,19 @@ object NightTests {
         T.check(dv.stop > 0 && dv.target == 2 * dv.stop && dv.stop <= 3 * f.atr[i] + 1e-9, "Darvas stop at the box bottom capped at 3 ATR, target 2R")
         T.check(NightCalls.swingSignals(f, i - 3, 85.0).none { it.rule == "brk" || it.rule == "darvas" }, "no breakout inside the box")
         T.check(NightCalls.priorMax(doubleArrayOf(1.0, 5.0, 2.0, 3.0, 1.0), 5, 2).drop(2).toList() == listOf(5.0, 5.0, 3.0), "priorMax excludes the current bar")
+    }
+
+    /** a planted trait: trades with high x[2] win, low lose -> model picks feature 2, validates, top bucket high conviction */
+    fun convFit() {
+        val rnd = java.util.Random(5)
+        val recs = (0 until 1200).map { k -> val x = DoubleArray(6) { rnd.nextDouble() }; TRec(k / 4, x, (x[2] - 0.5) * 2 + rnd.nextGaussian() * 0.5) }
+        val m = NightCalls.fitConv(recs)
+        T.check(m.feat == 2 && m.dir == 1 && m.validated, "finds the trait that separates winners and confirms it on newer trades (feat ${m.feat})")
+        T.check(m.mean[2] > 0.4 && m.mean[0] < -0.4 && m.hc(2) && !m.hc(0), "top third high conviction, bottom third not")
+        T.check(m.bucket(0.95) == 2 && m.bucket(0.05) == 0 && m.bucket(Double.NaN) == 1, "buckets")
+        val noise = (0 until 1200).map { k -> TRec(k / 4, DoubleArray(6) { rnd.nextDouble() }, rnd.nextGaussian()) }
+        val mn = NightCalls.fitConv(noise)
+        T.check(!mn.hc(0) && !mn.hc(1) && !mn.hc(2), "pure noise: nothing is high conviction")
+        T.check(NightCalls.fitConv(recs.take(100)).feat == -1, "too few trades: one group, the rule's overall record")
     }
 }

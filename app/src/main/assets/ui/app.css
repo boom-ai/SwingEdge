@@ -1558,3 +1558,6 @@ a, .lnk { color: var(--link); }
 .rbar .rt i.p { background: var(--green); } .rbar .rt i.n { background: var(--red); }
 .rbar .rp { text-align: right; color: var(--muted); }
 details.rfac { margin: 8px 0; } details.rfac summary { color: var(--accent); font-size: var(--t-sec); font-weight: 600; padding: 8px 0; cursor: pointer; }
+.hcb { font-style: normal; font-size: 9px; font-weight: 800; letter-spacing: .08em; color: #000; background: var(--accent); padding: 1px 4px; border-radius: 2px; vertical-align: 2px; margin-left: 4px; }
+.lrow small.why { color: var(--text-2); font-size: var(--t-cap); }
+.hcb { white-space: nowrap; }

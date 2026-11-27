@@ -673,23 +673,26 @@
   }
   /* ---------- Setups: tonight's back-tested list (intraday.csv) with filters ---------- */
   var SF_PRICE = [['any', 'Any price'], ['lt200', 'Under ₹200'], ['m', '₹200–1,000'], ['gt1k', 'Over ₹1,000']];
-  function sfOpts(ui) { var f = O(ui.sf); return { type: T(f.type) || 'all', fno: f.fno === true, price: T(f.price) || 'any', lose: f.lose === true }; }
+  function sfOpts(ui) { var f = O(ui.sf); return { type: T(f.type) || 'hc', fno: f.fno === true, price: T(f.price) || 'any', lose: f.lose === true }; }
   function sfPriceOk(p, k) { var n = N(p); if (k === 'any' || n === null || n <= 0) return k === 'any'; return k === 'lt200' ? n < 200 : k === 'm' ? n >= 200 && n <= 1000 : n > 1000; }
   function setupRows(d, f) {
     var st = {}; A(d.rules).forEach(function (r) { st[T(r.id)] = O(r); });
     var seen = {};
     return A(d.setups).filter(function (x) {
       x = O(x); var r = st[T(x.rule)] || {}, kind = T(x.kind);
-      if (!f.lose && T(r.status) === 'TESTED-') return false;
+      var grp = x.group === true;
+      if (!f.lose && (grp ? !(N(x.avgR) > 0) : T(r.status) === 'TESTED-')) return false;
+      if (f.type === 'hc' && x.hc !== true) return false;
       if (f.type === 'intraday' && kind !== 'intraday') return false;
       if (f.type === 'swing' && kind !== 'swing') return false;
-      if (f.type !== 'all' && f.type !== 'intraday' && f.type !== 'swing' && T(x.rule) !== f.type) return false;
+      if (f.type !== 'all' && f.type !== 'intraday' && f.type !== 'swing' && f.type !== 'hc' && T(x.rule) !== f.type) return false;
       if (f.fno && x.fno !== true) return false;
       if (!sfPriceOk(T(x.side) === 'IF GAP' ? x.trigger : x.trigger, f.price)) return false;
-      if (f.type === 'all' || f.type === 'intraday' || f.type === 'swing') { if (seen[T(x.sym)]) return false; seen[T(x.sym)] = 1; }
+      if (f.type === 'all' || f.type === 'intraday' || f.type === 'swing' || f.type === 'hc') { if (seen[T(x.sym)]) return false; seen[T(x.sym)] = 1; }
       return true;
-    });
+    }).sort(function (a, b) { return (N(O(b).avgR) || -9) - (N(O(a).avgR) || -9); });
   }
+  function sg(v) { v = N(v); return v === null ? DASH : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2); }
   function nightRow(x) {
     x = O(x);
     var side = T(x.side), sw = T(x.kind) === 'swing', gap = side === 'IF GAP', av = N(x.avgR);
@@ -697,9 +700,10 @@
     var lead = gap ? 'If gap ≥ ' + cp(x.trigger) : side === 'SELL' ? 'Sell < ' + cp(x.trigger) : (sw ? 'Buy ≈ ' : 'Buy > ') + cp(x.trigger);
     var lv = gap ? 'at the open' : 'SL ' + cp(x.stop) + (N(x.target) > 0 ? ' · T ' + cp(x.target) : '');
     var q = (N(x.qty) > 0 ? (N(x.qty) | 0) + ' sh · ' : '') + (sw ? T(x.exit) : 'exit 15:15');
-    var rec = (N(x.trades) || 0) + ' tests · ' + (N(x.winPct) === null ? DASH : Math.round(N(x.winPct)) + '%') + ' · ' + (av === null ? DASH : (av > 0 ? '+' : av < 0 ? '−' : '') + Math.abs(av).toFixed(2) + 'R');
+    var rec = (N(x.trades) || 0) + (x.group === true ? ' like it · ' : ' tests · ') + (N(x.winPct) === null ? DASH : Math.round(N(x.winPct)) + '%') + ' · ' + (av === null ? DASH : (av > 0 ? '+' : av < 0 ? '−' : '') + Math.abs(av).toFixed(2) + 'R');
     return '<button type="button" class="lrow nr" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
-      '<span class="l"><b>' + tx(x.sym) + (x.fno === true ? ' <i class="qt">F&amp;O</i>' : '') + '</b><small class="rtag">' + esc(T(x.ruleName).replace(/ \(swing\)$/, '')) + '</small>' +
+      '<span class="l"><b>' + tx(x.sym) + (x.hc === true ? ' <i class="hcb" title="High conviction">★ HC</i>' : '') + (x.fno === true ? ' <i class="qt">F&amp;O</i>' : '') + '</b><small class="rtag">' + esc(T(x.ruleName).replace(/ \(swing\)$/, '')) + '</small>' +
+      (T(x.why) ? '<small class="why">' + esc(T(x.why)) + '</small>' : '') +
       '<small class="num ' + (av !== null && av < 0 ? 'down' : '') + '">' + esc(rec) + '</small>' + (gap ? '<small class="ntw">' + tx(x.when) + '</small>' : '') + '</span>' +
       '<span class="r"><b class="num ' + (side === 'SELL' ? 'down' : gap ? '' : 'up') + '">' + esc(lead) + '</b><small class="num">' + esc(lv) + '</small><small class="mut">' + esc(q) + '</small></span></button>';
   }
@@ -721,7 +725,8 @@
     setupRows(d, { type: 'swing', fno: f.fno, price: f.price, lose: f.lose }).forEach(function () { kinds.swing++; });
     all.forEach(function (x) { x = O(x); if (setupRows({ rules: rules, setups: [x] }, { type: T(x.rule), fno: f.fno, price: f.price, lose: f.lose }).length) cnt[T(x.rule)] = (cnt[T(x.rule)] || 0) + 1; });
     var nAll = setupRows(d, f0).length;
-    var t1 = chip('sf-type', 'all', 'All', f.type === 'all', ' <em class="num">' + nAll + '</em>') + chip('sf-type', 'intraday', 'Intraday', f.type === 'intraday', ' <em class="num">' + kinds.intraday + '</em>') +
+    var nHc = setupRows(d, { type: 'hc', fno: f.fno, price: f.price, lose: f.lose }).length;
+    var t1 = chip('sf-type', 'hc', 'High conviction', f.type === 'hc', ' <em class="num">' + nHc + '</em>') + chip('sf-type', 'all', 'All', f.type === 'all', ' <em class="num">' + nAll + '</em>') + chip('sf-type', 'intraday', 'Intraday', f.type === 'intraday', ' <em class="num">' + kinds.intraday + '</em>') +
       chip('sf-type', 'swing', 'Swing', f.type === 'swing', ' <em class="num">' + kinds.swing + '</em>');
     rules.forEach(function (r) {
       r = O(r); var id = T(r.id), lost = T(r.status) === 'TESTED-';
@@ -732,14 +737,17 @@
     t1 += chip('sf-type', 'leaders', 'Trend leaders', f.type === 'leaders', ' <em class="num">' + A(S.ideas).length + '</em>');
     var pl = SF_PRICE.filter(function (p) { return p[0] === f.price; })[0] || SF_PRICE[0];
     var t2 = chip('sf-fno', null, 'F&amp;O only', f.fno) + chip('sf-price', null, esc(pl[1]) + ' ▾', f.price !== 'any') + chip('sf-lose', null, 'Show losing types', f.lose) +
-      (f.fno || f.price !== 'any' || f.lose || f.type !== 'all' ? chip('sf-clear', null, 'Clear', false) : '');
+      (f.fno || f.price !== 'any' || f.lose || f.type !== 'hc' ? chip('sf-clear', null, 'Clear', false) : '');
     h += '<div class="chips sfch">' + t1 + '</div><div class="chips sfch2">' + t2 + '</div>';
     if (f.type === 'leaders') return h + ideasBlock(S, 'setups', ui);
     if (f.type === 'rated') return h + ratedList(ui, f);
     var cur = O(rules.filter(function (r) { return T(O(r).id) === f.type; })[0]);
-    if (T(cur.id)) h += '<div class="hint hintpad">' + ic(T(cur.status) === 'TESTED-' ? 'warn' : 'info') + '<span class="t"><b>' + tx(cur.name) + '.</b> ' + tx(cur.text) + ' Tested ' + (N(cur.trades) || 0) + ' times: ' + Math.round(N(cur.winPct) || 0) + '% won, average ' + ((N(cur.avgR) || 0) >= 0 ? '+' : '−') + Math.abs(N(cur.avgR) || 0).toFixed(2) + 'R.</span></div>';
+    var cm = O(A(d.conv).filter(function (c) { return T(O(c).rule) === T(cur.id); })[0]);
+    var cl = cm.validated === true ? ' Best separating trait: <b>' + esc(T(cm.trait)) + '</b> (confirmed on the newest 40% of trades): top third ' + sg(cm.top) + 'R, bottom third ' + sg(cm.bottom) + 'R.' : T(cm.rule) ? ' No trait separated winners reliably, so every setup carries the rule’s overall record.' : '';
+    if (T(cur.id)) h += '<div class="hint hintpad">' + ic(T(cur.status) === 'TESTED-' ? 'warn' : 'info') + '<span class="t"><b>' + tx(cur.name) + '.</b> ' + tx(cur.text) + ' Tested ' + (N(cur.trades) || 0) + ' times: ' + Math.round(N(cur.winPct) || 0) + '% won, average ' + ((N(cur.avgR) || 0) >= 0 ? '+' : '−') + Math.abs(N(cur.avgR) || 0).toFixed(2) + 'R.' + cl + '</span></div>';
+    if (f.type === 'hc') h += '<div class="hint hintpad">' + ic('info') + '<span class="t">High conviction = setups whose tested group (same rule, same trait band) earned at least +0.1R per trade even at the low end of its 90% confidence range. Ranked by that tested result across the whole market, not by company size.</span></div>';
     var rows = setupRows(d, f), max = ui.sfMore === true ? rows.length : 25;
-    if (!rows.length) return h + '<p class="none">' + (all.length ? 'Nothing matches these filters.' : 'No setup type has a positive tested record tonight. Sitting out is a position.') + '</p>';
+    if (!rows.length) return h + '<p class="none">' + (f.type === 'hc' && all.length ? 'No high-conviction setup tonight: nothing cleared the bar. Check Intraday or All for weaker ones.' : all.length ? 'Nothing matches these filters.' : 'No setup type has a positive tested record tonight. Sitting out is a position.') + '</p>';
     h += '<div class="card mv nt">' + rows.slice(0, max).map(nightRow).join('') + '</div>';
     if (rows.length > max) h += '<div class="btns hintpad">' + btn('sf-more', null, 'Show all ' + rows.length, 'sm ghost') + '</div>';
     if (d.stale === true) h += '<div class="hint hintpad">' + ic('clock') + '<span class="t">This list was for ' + esc(T(d.forLabel)) + '. Tonight’s list arrives after about 8:15 PM.</span></div>';

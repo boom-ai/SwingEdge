@@ -122,8 +122,23 @@ class RuleStat(val id: String, val kind: String, val name: String, val text: Str
 class NightSetup(
     val sym: String, val name: String, val rule: String, val kind: String, val side: String,
     val trigger: Double, val stop: Double, val target: Double, val exit: String, val qty: Int, val riskRs: Double,
-    val fno: Boolean, val cond: String, val score: Double
+    val fno: Boolean, val cond: String, val score: Double,
+    /** conviction: tested average R / win % / trades of past setups of this rule in the same group as this one; [hc] = high conviction */
+    var conv: Double = Double.NaN, var convWin: Double = Double.NaN, var convN: Int = 0, var hc: Boolean = false, var why: String = ""
 )
+
+/** One historical trade of a rule with the traits of the stock on the signal day. */
+class TRec(val p: Int, val x: DoubleArray, val r: Double)
+
+/**
+ * Conviction model of one rule: the trait that best split winners from losers on the older 60% of trades,
+ * kept only if its top third also beat the rule on the newer 40%. Buckets: 0 bottom third, 1 middle, 2 top.
+ */
+class ConvModel(val feat: Int, val dir: Int, val lo: Double, val hi: Double, val n: IntArray, val mean: DoubleArray, val win: DoubleArray, val se: DoubleArray,
+                val validated: Boolean, val testTop: Double, val testAll: Double) {
+    fun bucket(v: Double): Int = if (feat < 0) 1 else if (v.isNaN()) 1 else { val x = dir * v; if (x >= hi) 2 else if (x >= lo) 1 else 0 }
+    fun hc(b: Int): Boolean = n[b] >= 60 && mean[b] - 1.65 * se[b] >= 0.1
+}
 
 /** Index levels for the next session (classic floor pivots + CPR). */
 class IndexLevels(val name: String, val pdh: Double, val pdl: Double, val pdc: Double) {
@@ -139,7 +154,8 @@ class IndexLevels(val name: String, val pdh: Double, val pdl: Double, val pdc: D
 
 class NightData(
     val asof: Int, val forDay: Int, val builtAt: Long, val sessions: Int, val stocks: Int,
-    val rules: List<RuleStat>, val setups: List<NightSetup>, val index: List<IndexLevels>, val notes: List<String>
+    val rules: List<RuleStat>, val setups: List<NightSetup>, val index: List<IndexLevels>, val notes: List<String>,
+    val conv: Map<String, ConvModel> = emptyMap()
 )
 
 object NightCalls {
@@ -151,9 +167,10 @@ object NightCalls {
     const val RISK_PCT = 1.0
     /** a rule needs at least this many back-test trades before its record counts */
     const val MIN_TRADES = 30
-    const val MAX_SETUPS = 15
-    const val MAX_PER_RULE = 5
-    const val MAX_SWING = 40
+    const val MAX_SETUPS = 60
+    const val MAX_PER_RULE = 10
+    const val MAX_SWING = 60
+    @Volatile var convModels: Map<String, ConvModel> = emptyMap()
     const val MAX_PER_SWING_RULE = 8
     const val COST_INTRADAY = 0.001
     const val COST_SWING = 0.0025
@@ -416,6 +433,59 @@ object NightCalls {
         return rOf(true, entry, s.c[k - 1], r, COST_SWING)
     }
 
+    /** traits used by the conviction model (signal day) */
+    val CONV_FEATS = listOf("volatility", "6-month strength", "volume vs average", "traded value", "nearness to the 52-week high", "distance above the 50-day average")
+    val CONV_HI = listOf("high volatility", "strong 6-month strength", "heavy volume", "large traded value", "near the 52-week high", "well above the 50-day average")
+    val CONV_LO = listOf("low volatility", "weak 6-month strength", "light volume", "smaller traded value", "far below the 52-week high", "below / near the 50-day average")
+    fun convFeats(f: Feat, i: Int, rs: Double): DoubleArray {
+        val s = f.s; val c = s.c[i]
+        return doubleArrayOf(
+            if (c > 0 && f.atr[i] > 0) f.atr[i] / c else Double.NaN,
+            rs,
+            if (f.vavg[i] > 0) s.v[i] / f.vavg[i] else Double.NaN,
+            if (f.to20[i] > 0) Math.log(f.to20[i]) else Double.NaN,
+            f.hi252[i].let { if (it > 0) c / it else Double.NaN },
+            f.sma50[i].let { if (it > 0) c / it - 1 else Double.NaN })
+    }
+    private fun cut(v: List<Double>, q: Double): Double { val a = v.sorted(); return a[minOf(a.size - 1, (q * a.size).toInt())] }
+    private fun bstats(rs: List<Double>): DoubleArray {   // n, mean, win %, se
+        if (rs.isEmpty()) return doubleArrayOf(0.0, 0.0, 0.0, 1.0)
+        val m = rs.average(); val sd = if (rs.size > 1) Math.sqrt(rs.sumOf { (it - m) * (it - m) } / (rs.size - 1)) else 1.0
+        return doubleArrayOf(rs.size.toDouble(), m, rs.count { it > 0 } * 100.0 / rs.size, sd / Math.sqrt(rs.size.toDouble()))
+    }
+    fun fitConv(recs: List<TRec>): ConvModel {
+        val all = bstats(recs.map { it.r })
+        fun flat() = ConvModel(-1, 1, 0.0, 0.0, intArrayOf(0, all[0].toInt(), 0), doubleArrayOf(0.0, all[1], 0.0), doubleArrayOf(0.0, all[2], 0.0), doubleArrayOf(1.0, all[3], 1.0), false, Double.NaN, all[1])
+        if (recs.size < 300) return flat()
+        val byTime = recs.sortedBy { it.p }; val split = (byTime.size * 0.6).toInt()
+        val train = byTime.subList(0, split); val test = byTime.subList(split, byTime.size)
+        var best: Triple<Int, Int, Double>? = null; var bestTop = Double.NEGATIVE_INFINITY
+        for (k in CONV_FEATS.indices) for (dir in intArrayOf(1, -1)) {
+            val tv = train.filter { !it.x[k].isNaN() }; if (tv.size < 150) continue
+            val hi = cut(tv.map { dir * it.x[k] }, 2.0 / 3)
+            val top = tv.filter { dir * it.x[k] >= hi }; if (top.size < 50) continue
+            val m = top.map { it.r }.average()
+            if (m > bestTop) { bestTop = m; best = Triple(k, dir, hi) }
+        }
+        val b = best ?: return flat()
+        val (k, dir, hiTrain) = b
+        val tt = test.filter { !it.x[k].isNaN() }
+        val testTop = tt.filter { dir * it.x[k] >= hiTrain }.map { it.r }
+        val testAll = test.map { it.r }.average()
+        if (testTop.size < 30 || testTop.average() <= testAll) return flat().let { ConvModel(-1, 1, 0.0, 0.0, it.n, it.mean, it.win, it.se, false, if (testTop.isEmpty()) Double.NaN else testTop.average(), testAll) }
+        val vals = recs.filter { !it.x[k].isNaN() }.map { dir * it.x[k] }
+        val lo = cut(vals, 1.0 / 3); val hi = cut(vals, 2.0 / 3)
+        val bk = Array(3) { ArrayList<Double>() }
+        for (r in recs) { val v = r.x[k]; val q = if (v.isNaN()) 1 else { val x = dir * v; if (x >= hi) 2 else if (x >= lo) 1 else 0 }; bk[q].add(r.r) }
+        val st = bk.map { bstats(it) }
+        return ConvModel(k, dir, lo, hi, IntArray(3) { st[it][0].toInt() }, DoubleArray(3) { st[it][1] }, DoubleArray(3) { st[it][2] }, DoubleArray(3) { st[it][3] }, true, testTop.average(), testAll)
+    }
+    fun convWhy(m: ConvModel, b: Int): String = if (m.feat < 0) "" else when (b) {
+        2 -> if (m.dir > 0) CONV_HI[m.feat] else CONV_LO[m.feat]
+        0 -> if (m.dir > 0) CONV_LO[m.feat] else CONV_HI[m.feat]
+        else -> "middle " + CONV_FEATS[m.feat]
+    }
+
     /** Long from the open of bar [e]; stop / target at fixed distances; else exit at the close of day [maxDays]. */
     fun simLevels(f: Feat, e: Int, stopDist: Double, tgtDist: Double, maxDays: Int): Double? {
         val s = f.s
@@ -505,6 +575,9 @@ object NightCalls {
 
         val live = ArrayList<Pair<NightSetup, String>>()
         val gapLive = ArrayList<Pair<NightSetup, Double>>()
+        val recs = HashMap<String, ArrayList<TRec>>()
+        val liveX = java.util.IdentityHashMap<NightSetup, DoubleArray>()
+        fun rec(rule: String, f: Feat, i: Int, p: Int, r: Double) { recs.getOrPut(rule) { ArrayList() }.add(TRec(p, convFeats(f, i, rsPct(p, f.r126[i])), r)) }
         for ((x, f) in feats) {
             if (x.exch != Bhav.NSE || (x.series != "EQ" && x.series != "BE")) continue
             val s = f.s
@@ -516,23 +589,23 @@ object NightCalls {
                 // intraday stop-entry rules
                 if (liquid) {
                     val sigs = stopSignals(f, i)
-                    if (i < last) for (sg in sigs) simStop(sg, s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1])?.let { stats[sg.rule]!!.add(it, simStop(sg, s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1], true) ?: it) }
-                    else for (sg in sigs) live.add(Pair(setup(x, sg, fno), sg.rule))
+                    if (i < last) for (sg in sigs) simStop(sg, s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1])?.let { stats[sg.rule]!!.add(it, simStop(sg, s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1], true) ?: it); rec(sg.rule, f, i, p, it) }
+                    else for (sg in sigs) { val ns = setup(x, sg, fno); liveX[ns] = convFeats(f, i, rsPct(p, f.r126[i])); live.add(Pair(ns, sg.rule)) }
                     val gc = gapCandidates(f, i)
                     if (i < last) {
-                        if ("gapfade" in gc) simGapFade(s.c[i], s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1])?.let { stats["gapfade"]!!.add(it, simGapFade(s.c[i], s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1], true) ?: it) }
-                        if ("gapgo" in gc) simGapGo(s.c[i], s.h[i], f.atr[i], s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1])?.let { stats["gapgo"]!!.add(it, simGapGo(s.c[i], s.h[i], f.atr[i], s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1], true) ?: it) }
+                        if ("gapfade" in gc) simGapFade(s.c[i], s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1])?.let { stats["gapfade"]!!.add(it, simGapFade(s.c[i], s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1], true) ?: it); rec("gapfade", f, i, p, it) }
+                        if ("gapgo" in gc) simGapGo(s.c[i], s.h[i], f.atr[i], s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1])?.let { stats["gapgo"]!!.add(it, simGapGo(s.c[i], s.h[i], f.atr[i], s.o[i + 1], s.h[i + 1], s.l[i + 1], s.c[i + 1], true) ?: it); rec("gapgo", f, i, p, it) }
                     } else {
-                        val pdc = s.c[i]; val a = f.atr[i]
+                        val pdc = s.c[i]; val a = f.atr[i]; val gx = convFeats(f, i, rsPct(p, f.r126[i]))
                         if ("gapfade" in gc) {
                             val lo = tick(pdc * 1.003); val hi = tick(pdc * 1.01)
                             gapLive.add(Pair(NightSetup(x.sym, x.name, "gapfade", "intraday", "IF GAP", tick(pdc), 0.0, tick(pdc), "15:15", qty(pdc * 1.006, pdc * 1.012), 0.0, x.sym in fno,
-                                "If it opens ₹${fmt(lo)}–₹${fmt(hi)} (0.3–1% up): sell at 9:30, target ₹${fmt(tick(pdc))}, stop = open + gap. If it opens 0.3–1% down: buy, target ₹${fmt(tick(pdc))}.", f.to20[i]), f.to20[i]))
+                                "If it opens ₹${fmt(lo)}–₹${fmt(hi)} (0.3–1% up): sell at 9:30, target ₹${fmt(tick(pdc))}, stop = open + gap. If it opens 0.3–1% down: buy, target ₹${fmt(tick(pdc))}.", f.to20[i]).also { liveX[it] = gx }, f.to20[i]))
                         }
                         if ("gapgo" in gc && a > 0) {
                             val gmin = tick(maxOf(pdc * 1.015, s.h[i] + 0.05))
                             gapLive.add(Pair(NightSetup(x.sym, x.name, "gapgo", "intraday", "IF GAP", gmin, 0.0, 0.0, "15:15", qty(gmin + 0.1 * a, gmin - 0.3 * a), r2(0.4 * a), x.sym in fno,
-                                "If it opens at or above ₹${fmt(gmin)}: buy above open + ₹${fmt(r2(0.1 * a))} after 9:30, stop open − ₹${fmt(r2(0.3 * a))}, target 2R, exit 15:15.", f.to20[i]), f.to20[i]))
+                                "If it opens at or above ₹${fmt(gmin)}: buy above open + ₹${fmt(r2(0.1 * a))} after 9:30, stop open − ₹${fmt(r2(0.3 * a))}, target 2R, exit 15:15.", f.to20[i]).also { liveX[it] = gx }, f.to20[i]))
                         }
                     }
                 }
@@ -541,11 +614,11 @@ object NightCalls {
                     val rsN = rsPct(p, f.r126[i])
                     for (sg in swingSignals(f, i, rsN)) {
                         val md = sg.cond.toInt()
-                        if (i < last) simLevels(f, i + 1, sg.stop, sg.target, md)?.let { stats[sg.rule]!!.add(it) }
+                        if (i < last) simLevels(f, i + 1, sg.stop, sg.target, md)?.let { stats[sg.rule]!!.add(it); rec(sg.rule, f, i, p, it) }
                         else {
                             val e = s.c[i]; val st = tick(e - sg.stop); val tg = tick(e + sg.target); val q = qty(e, st)
                             live.add(Pair(NightSetup(x.sym, x.name, sg.rule, "swing", "BUY", tick(e), st, tg, "max $md days", q, r2(q * (e - st)), x.sym in fno,
-                                "Buy at the open (near ₹${fmt(tick(e))})", if (rsN.isNaN()) 0.0 else rsN), sg.rule))
+                                "Buy at the open (near ₹${fmt(tick(e))})", if (rsN.isNaN()) 0.0 else rsN).also { liveX[it] = convFeats(f, i, rsN) }, sg.rule))
                         }
                     }
                 }
@@ -559,44 +632,49 @@ object NightCalls {
                     if (mr > 10 && rs >= 90 && f.rsi2[i] <= 1) modes.add("daily")
                     for (m in modes) {
                         val (sa, ta, md, rx) = when (m) { "washout" -> Quad(2.0, 3.0, 8, false); "quick" -> Quad(3.0, Double.NaN, 5, true); else -> Quad(3.0, Double.NaN, 5, true) }
-                        if (i < last) simSwing(f, i + 1, a, sa, ta, md, rx)?.let { stats[m]!!.add(it) }
+                        if (i < last) simSwing(f, i + 1, a, sa, ta, md, rx)?.let { stats[m]!!.add(it); rec(m, f, i, p, it) }
                         else {
                             val e = s.c[i]; val st = tick(e - sa * a); val tg = if (ta.isNaN()) 0.0 else tick(e + ta * a)
                             val frac = if (m == "daily") 0.5 else 1.0
                             val q = qty(e, st, frac)
                             live.add(Pair(NightSetup(x.sym, x.name, m, "swing", "BUY", tick(e), st, tg, "max $md days" + if (rx) " or RSI(2) > 70" else "", q, r2(q * (e - st)), x.sym in fno,
-                                "Buy at the open (near ₹${fmt(tick(e))})" + if (frac < 1) ", half size" else "", f.to20[i]), m))
+                                "Buy at the open (near ₹${fmt(tick(e))})" + if (frac < 1) ", half size" else "", f.to20[i]).also { liveX[it] = convFeats(f, i, rs) }, m))
                         }
                     }
                 }
             }
         }
-        // rank: rules with a positive tested record only, best expectancy first; within a rule F&O then most liquid
-        fun ok(rule: String) = stats[rule]!!.status == "TESTED+"
-        fun exp(rule: String) = stats[rule]!!.avgR
-        val intra = (live.filter { !isSwing(it.second) }.map { it.first } + gapLive.map { it.first })
-            .filter { ok(it.rule) }
-            .sortedWith(compareByDescending<NightSetup> { exp(it.rule) }.thenByDescending { it.fno }.thenByDescending { it.score }.thenBy { it.sym })
-        val per = HashMap<String, Int>(); val seen = HashSet<String>()
-        val pick = ArrayList<NightSetup>()
-        for (x in intra) {
-            if (pick.size >= MAX_SETUPS) break
-            if ((per[x.rule] ?: 0) >= MAX_PER_RULE || !seen.add(x.sym)) continue
-            per[x.rule] = (per[x.rule] ?: 0) + 1; pick.add(x)
+        // conviction: per rule, the trait that split winners from losers (validated on the newest 40% of trades);
+        // every live setup gets the tested result of its group; ranking is by that, never by size
+        val models = HashMap<String, ConvModel>()
+        for ((id, _, _) in RULES) models[id] = fitConv(recs[id] ?: emptyList())
+        convModels = models
+        val all = live.map { it.first } + gapLive.map { it.first }
+        for (x in all) {
+            val m = models[x.rule] ?: continue
+            val bq = m.bucket(liveX[x]?.getOrNull(m.feat) ?: Double.NaN)
+            x.conv = m.mean[bq]; x.convWin = m.win[bq]; x.convN = m.n[bq]; x.hc = m.hc(bq); x.why = convWhy(m, bq)
         }
-        // swing: every rule with enough tests is listed (the app hides the ones that lost money unless asked), best record first,
-        // up to MAX_PER_SWING_RULE per rule; within a rule the strongest stocks (6-month strength percentile) first
-        val swPer = HashMap<String, Int>()
-        val swing = live.filter { isSwing(it.second) && stats[it.second]!!.status != "FEW" }.map { it.first }
-            .sortedWith(compareByDescending<NightSetup> { exp(it.rule) }.thenByDescending { it.score }.thenBy { it.sym })
-            .filter { val k = swPer[it.rule] ?: 0; if (k >= MAX_PER_SWING_RULE) false else { swPer[it.rule] = k + 1; true } }
-            .take(MAX_SWING)
+        fun capPerRule(xs: List<NightSetup>, per: Int, total: Int): List<NightSetup> {
+            val cnt = HashMap<String, Int>(); val seen = HashSet<String>(); val out = ArrayList<NightSetup>()
+            for (x in xs) {
+                if (out.size >= total) break
+                val k = cnt[x.rule] ?: 0
+                if (k >= per || !seen.add(x.rule + "|" + x.sym)) continue
+                cnt[x.rule] = k + 1; out.add(x)
+            }
+            return out
+        }
+        val byConv = compareByDescending<NightSetup> { if (it.conv.isNaN()) -9.0 else it.conv }.thenByDescending { it.hc }.thenBy { it.sym }
+        // intraday: tested groups with enough trades, best first (groups that lost are kept for "show losing", capped)
+        val pick = capPerRule(all.filter { !isSwing(it.rule) && it.convN >= 60 }.sortedWith(byConv), MAX_PER_RULE, MAX_SETUPS)
+        val swing = capPerRule(all.filter { isSwing(it.rule) && it.convN >= 30 }.sortedWith(byConv), MAX_PER_SWING_RULE, MAX_SWING)
         val notes = listOf(
             "Back-test on ${nd} sessions of NSE bhavcopies (daily bars). Fill/exit order from the OHLC path assumption (up-close day: open-low-high-close; down-close day: open-high-low-close); a gap through the trigger fills at the open; no stop/target hit = exit at the close (15:15 proxy). Costs 0.10% (intraday) / 0.25% (swing) per round trip.",
             "Only rules with >= $MIN_TRADES back-test trades and a positive average R (path model) are listed; the worst-case column assumes the stop was hit whenever the day reached it. Past results on one year of data are not a promise. Size: ₹1,00,000 capital, 1% (₹1,000) risk per trade.",
             "Market proxy for the swing modes: equal-weight index of liquid NSE stocks (not the official Nifty 500)."
         )
-        return NightData(asof, forDay, builtAt, nd, feats.size, stats.values.toList(), pick + swing, index, notes)
+        return NightData(asof, forDay, builtAt, nd, feats.size, stats.values.toList(), pick + swing, index, notes, models)
     }
 
     private data class Quad(val a: Double, val b: Double, val c: Int, val d: Boolean)
@@ -651,6 +729,8 @@ object NightCalls {
     private fun q(s: String): String = if (s.contains(',') || s.contains('"') || s.contains('\n')) "\"" + s.replace("\n", " ").replace("\"", "\"\"") + "\"" else s
     private fun iso(d: Int) = if (d > 0) java.time.LocalDate.ofEpochDay(d.toLong()).toString() else ""
     val COLS = listOf("RANK", "SYMBOL", "NAME", "RULE", "KIND", "SIDE", "TRIGGER", "STOP", "TARGET", "EXIT", "QTY", "RISK_RS", "FNO", "WHEN")
+    /** optional columns (older files lack them): conviction of the setup's group */
+    val COLS_X = listOf("CONV", "CONV_WIN", "CONV_N", "HC", "WHY")
 
     fun encode(d: NightData): String {
         val sb = StringBuilder()
@@ -662,9 +742,13 @@ object NightCalls {
         for (x in d.index) sb.append("#INDEX,").append(x.name).append(',').append(listOf(x.pdh, x.pdl, x.pdc, x.pivot, x.bc, x.tc, x.r1, x.s1, x.r2, x.s2).joinToString(",") { r2(it).toString() })
             .append(',').append(Math.round(x.cprPct * 1000) / 1000.0).append('\n')
         for (n in d.notes) sb.append("#NOTE,").append(q(n)).append('\n')
-        sb.append(COLS.joinToString(",")).append('\n')
+        for ((id, m) in d.conv) sb.append("#CONV,").append(id).append(',').append(m.feat).append(',').append(m.dir).append(',').append(if (m.validated) 1 else 0)
+            .append(',').append(if (m.testTop.isNaN()) "" else (Math.round(m.testTop * 1000) / 1000.0).toString()).append(',').append(Math.round(m.testAll * 1000) / 1000.0)
+            .append(',').append((0..2).joinToString(",") { "${m.n[it]}," + (Math.round(m.mean[it] * 1000) / 1000.0) + "," + r2(m.win[it]) }).append('\n')
+        sb.append((COLS + COLS_X).joinToString(",")).append('\n')
         for ((k, x) in d.setups.withIndex()) sb.append(listOf((k + 1).toString(), x.sym, q(x.name), x.rule, x.kind, x.side, r2(x.trigger).toString(), r2(x.stop).toString(), r2(x.target).toString(),
-            q(x.exit), x.qty.toString(), r2(x.riskRs).toString(), if (x.fno) "1" else "0", q(x.cond)).joinToString(",")).append('\n')
+            q(x.exit), x.qty.toString(), r2(x.riskRs).toString(), if (x.fno) "1" else "0", q(x.cond),
+            if (x.conv.isNaN()) "" else (Math.round(x.conv * 1000) / 1000.0).toString(), if (x.convWin.isNaN()) "" else r2(x.convWin).toString(), x.convN.toString(), if (x.hc) "1" else "0", q(x.why)).joinToString(",")).append('\n')
         return sb.toString()
     }
 
@@ -679,6 +763,7 @@ object NightCalls {
             val asof = Bhav.parseDay(meta["asof"]); val forDay = Bhav.parseDay(meta["for"])
             if (asof <= 0 || forDay <= asof) return null
             val rules = ArrayList<RuleStat>(); val index = ArrayList<IndexLevels>(); val notes = ArrayList<String>(); val setups = ArrayList<NightSetup>()
+            val conv = LinkedHashMap<String, ConvModel>()
             var ix: Map<String, Int>? = null
             for (l in lines.drop(1)) {
                 if (l.isBlank()) continue
@@ -694,6 +779,11 @@ object NightCalls {
                     }
                     l.startsWith("#INDEX,") -> { val v = r.drop(2).map { it.toDoubleOrNull() ?: 0.0 }; if (v.size >= 3 && v[0] > 0) index.add(IndexLevels(r[1], v[0], v[1], v[2])) }
                     l.startsWith("#NOTE,") -> notes.add(r.getOrElse(1) { "" })
+                    l.startsWith("#CONV,") -> try {
+                        val v = r.drop(2); val bn = IntArray(3); val bm = DoubleArray(3); val bw = DoubleArray(3)
+                        for (k in 0..2) { bn[k] = v[5 + 3 * k].toInt(); bm[k] = v[6 + 3 * k].toDouble(); bw[k] = v[7 + 3 * k].toDouble() }
+                        conv[r[1]] = ConvModel(v[0].toInt(), v[1].toInt(), 0.0, 0.0, bn, bm, bw, DoubleArray(3) { 1.0 }, v[2] == "1", v[3].toDoubleOrNull() ?: Double.NaN, v[4].toDouble())
+                    } catch (t: Throwable) {}
                     l.startsWith("#") -> {}
                     ix == null -> { val m = HashMap<String, Int>(); for ((k, h) in r.withIndex()) m[h.trim()] = k; if (!COLS.all { m.containsKey(it) }) return null; ix = m }
                     else -> {
@@ -702,12 +792,16 @@ object NightCalls {
                         fun d(c: String) = s(c).toDoubleOrNull() ?: 0.0
                         val sym = s("SYMBOL").uppercase(); if (sym.isEmpty() || sym.length > 25) continue
                         setups.add(NightSetup(sym, s("NAME").ifEmpty { sym }, s("RULE"), s("KIND"), s("SIDE"), d("TRIGGER"), d("STOP"), d("TARGET"), s("EXIT"),
-                            s("QTY").toIntOrNull() ?: 0, d("RISK_RS"), s("FNO") == "1", s("WHEN"), 0.0))
+                            s("QTY").toIntOrNull() ?: 0, d("RISK_RS"), s("FNO") == "1", s("WHEN"), 0.0).also { ns ->
+                            fun o(c: String) = m[c]?.let { r.getOrNull(it)?.trim() } ?: ""
+                            ns.conv = o("CONV").toDoubleOrNull() ?: Double.NaN; ns.convWin = o("CONV_WIN").toDoubleOrNull() ?: Double.NaN
+                            ns.convN = o("CONV_N").toIntOrNull() ?: 0; ns.hc = o("HC") == "1"; ns.why = o("WHY")
+                        })
                     }
                 }
             }
             if (ix == null) return null
-            return NightData(asof, forDay, meta["builtAt"]?.toLongOrNull() ?: 0L, meta["sessions"]?.toIntOrNull() ?: 0, meta["stocks"]?.toIntOrNull() ?: 0, rules, setups, index, notes)
+            return NightData(asof, forDay, meta["builtAt"]?.toLongOrNull() ?: 0L, meta["sessions"]?.toIntOrNull() ?: 0, meta["stocks"]?.toIntOrNull() ?: 0, rules, setups, index, notes, conv)
         } catch (t: Throwable) { return null }
     }
 
@@ -722,7 +816,11 @@ object NightCalls {
             "rules" to d.rules.map { linkedMapOf("id" to it.id, "kind" to it.kind, "name" to it.name, "text" to it.text, "trades" to it.trades, "winPct" to r2(it.winPct), "avgR" to Math.round(it.avgR * 100) / 100.0, "avgWorst" to Math.round(it.avgWorst * 100) / 100.0, "status" to it.status) },
             "setups" to d.setups.map { x -> linkedMapOf("sym" to x.sym, "name" to x.name, "rule" to x.rule, "ruleName" to (names[x.rule]?.name ?: x.rule), "kind" to x.kind, "side" to x.side,
                 "trigger" to x.trigger, "stop" to x.stop, "target" to x.target, "exit" to x.exit, "qty" to x.qty, "riskRs" to x.riskRs, "fno" to x.fno, "when" to x.cond,
-                "winPct" to r2(names[x.rule]?.winPct ?: 0.0), "avgR" to Math.round((names[x.rule]?.avgR ?: 0.0) * 100) / 100.0, "trades" to (names[x.rule]?.trades ?: 0)) },
+                "winPct" to r2(if (x.convN > 0) x.convWin else names[x.rule]?.winPct ?: 0.0), "avgR" to Math.round((if (x.convN > 0) x.conv else names[x.rule]?.avgR ?: 0.0) * 100) / 100.0,
+                "trades" to (if (x.convN > 0) x.convN else names[x.rule]?.trades ?: 0), "hc" to x.hc, "why" to x.why, "group" to (x.convN > 0)) },
+            "conv" to d.conv.map { (id, m) -> linkedMapOf("rule" to id, "trait" to (if (m.feat >= 0) CONV_FEATS[m.feat] else ""), "validated" to m.validated,
+                "testTop" to (if (m.testTop.isNaN()) null else Math.round(m.testTop * 100) / 100.0), "testAll" to Math.round(m.testAll * 100) / 100.0,
+                "top" to Math.round(m.mean[2] * 100) / 100.0, "bottom" to Math.round(m.mean[0] * 100) / 100.0) },
             "index" to d.index.map { linkedMapOf("name" to it.name, "pdh" to r2(it.pdh), "pdl" to r2(it.pdl), "pdc" to r2(it.pdc), "pivot" to r2(it.pivot), "bc" to r2(minOf(it.bc, it.tc)), "tc" to r2(maxOf(it.bc, it.tc)),
                 "r1" to r2(it.r1), "s1" to r2(it.s1), "cprPct" to Math.round(it.cprPct * 1000) / 1000.0) },
             "notes" to d.notes, "nextHoliday" to nextHoliday(today))
@@ -738,7 +836,7 @@ object NightCalls {
 
     fun body(d: NightData): String {
         if (d.setups.isEmpty()) return "No rule has a positive back-test record right now — sit out tomorrow."
-        val top = d.setups.take(3).joinToString(" · ") { (if (it.side == "SELL") "sell " else if (it.side == "IF GAP") "gap " else "buy ") + it.sym + (if (it.trigger > 0 && it.side != "IF GAP") " " + fmt(it.trigger) else "") }
+        val top = d.setups.filter { it.convN == 0 || it.conv > 0 }.sortedByDescending { if (it.conv.isNaN()) 0.0 else it.conv }.take(3).joinToString(" · ") { (if (it.side == "SELL") "sell " else if (it.side == "IF GAP") "gap " else "buy ") + it.sym + (if (it.trigger > 0 && it.side != "IF GAP") " " + fmt(it.trigger) else "") }
         return "$top. Untested live; back-tested on ${d.sessions} sessions. Exit intraday by 15:15."
     }
 }

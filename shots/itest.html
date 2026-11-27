@@ -18,7 +18,7 @@ document.getElementById('f').onload=async()=>{
   await sleep(2500);ok(qa('#view .fstrip .lti').length===5,'live ticker: Nifty, Bank Nifty, Fin Nifty, Midcap Nifty, VIX');
   {ok(calls.includes('intraday')||!!q('#view .card.nt'),'Today asks the app for tomorrow\'s intraday calls');
    const nt=q('#view .card.nt');ok(!!nt&&/Tomorrow · \w{3} \d+ \w{3}/.test(nt.textContent)&&nt.querySelectorAll('.lrow').length===6,'Tomorrow card: date + first 6 setups');
-   ok(!!nt&&/Buy &gt;|Buy >/.test(nt.innerHTML)&&/stop ₹/.test(nt.textContent)&&/NIFTY pivot/.test(nt.textContent.replace(/\s+/g,' ')),'Tomorrow card: trigger, stop and Nifty levels');
+   ok(!!nt&&/Buy &gt;|Buy >/.test(nt.innerHTML)&&/SL ₹/.test(nt.textContent)&&/NIFTY pivot/.test(nt.textContent.replace(/\s+/g,' ')),'Tomorrow card: trigger, stop and Nifty levels');
    click('#view [data-c="night-more"]');await sleep(100);const n2=q('#view .card.nt');ok(n2.querySelectorAll('.lrow').length===12&&/Worst/.test(n2.textContent),'Show all lists every setup and the rule record');
    click('#view [data-c="night-more"]');await sleep(100);ok(q('#view .card.nt').querySelectorAll('.lrow').length===6,'Show fewer');}
   click('#view .fstrip');await sleep(1500);
@@ -70,7 +70,7 @@ document.getElementById('f').onload=async()=>{
   click('[data-c="close"][data-id="tr-1"]');ok(Math.abs(+q('[name=price]').value-6198.5)<20,'close prefilled with the (live) price');click('#sheet-root [data-c="submit"]');await sleep(800);
   ok(st().trades.find(t=>t.id==='tr-1').status==='CLOSED','trade closed');ok(/Trade closed/.test(toasts()),'toast '+toasts());
   // portfolio add: validation, error from app, success
-  click('[data-c="tab"][data-id="portfolio"]');click('[data-c="add"]');
+  click('[data-c="tab"][data-id="portfolio"]');click('[data-c="pseg"][data-id="holdings"]');click('[data-c="add"]');
   type('sym','fail');ok(q('[name=sym]').value==='FAIL','symbol uppercased');click('#sheet-root [data-c="submit"]');ok(qa('#sheet-root .fld.bad').length===2,'qty+avg validation');
   type('qty','10');type('avg','100');click('#sheet-root [data-c="submit"]');await sleep(800);
   ok(!q('#sheet-root').hidden&&/not in the NSE list/.test(q('#formerr').textContent),'app error shown in sheet: '+q('#formerr').textContent);ok(!q('#sheet-root [data-c="submit"]').disabled,'submit re-enabled after error');
@@ -200,12 +200,12 @@ document.getElementById('f').onload=async()=>{
   ok(typeof w.Touch==='function'&&typeof w.TouchEvent==='function','Touch and TouchEvent constructors exist in this browser');
   await sect('today ideas / hit rows',async()=>{
     click('[data-c="tab"][data-id="today"]');await sleep(80);
-    ok(/Best setups now/.test(q('#view').textContent)&&qa('#view .srow.idea2').length===5,'Today shows the top 5 ideas: '+qa('#view .srow.idea2').length);
-    ok(!!q('#view .srow.idea2 .ring, #view .srow.idea2 svg'),'idea rows carry a score gauge and a sparkline');
+    ok(/Top rated stocks/.test(q('#view').textContent)&&qa('#view #rated ~ .card .rrow, #view .rrow').length>=5,'Today shows the top 5 factor-rated stocks: '+qa('#view .rrow').length);
+    ok(!!q('#view .rrow .rbadge b'),'rated rows carry the 0-100 rating');
     ok(/TARGET HIT/.test(q('#view').textContent)&&/STOP HIT/.test(q('#view').textContent),'Today shows the hit target and the hit stop in Act now');
-    const pos=t=>q('#view').innerHTML.indexOf(t);
-    ok(pos('TARGET HIT')<pos('Best setups now')&&pos('TARGET HIT')<pos('class="sym"><span class="tag buy">BUY')||pos('TARGET HIT')<pos('Best setups now'),'hit rows come before the ideas');
-    const first=q('#view .srow.idea2');const sym=first.getAttribute('data-id');first.click();await sleep(150);ok(stockOpen()&&q('#st-head').textContent.indexOf(sym)>=0,'tapping an idea opens the stock page for '+sym);await closeAll();
+    ok(q('#view').innerHTML.indexOf('TARGET HIT')<q('#view').innerHTML.indexOf('Top rated stocks'),'hit rows come before the ratings');
+    const first=q('#view .rrow');const sym=first.getAttribute('data-id');first.click();await sleep(250);ok(stockOpen()&&q('#st-head').textContent.indexOf(sym)>=0,'tapping a rated stock opens the stock page for '+sym);
+    await sleep(200);ok(/Factor rating/.test(q('#sheet-root').textContent)&&qa('#sk-rating .rbar').length>=3,'stock page shows the factor rating with its drivers');await closeAll();
     click('#view [data-c="tab"][data-id="setups"]');await sleep(80);click('#view [data-c="sf-type"][data-id="leaders"]');await sleep(40);
     ok(qa('#view .srow.idea2').length>5&&/screen|guarantee/i.test(q('#view').textContent),'Setups lists the full ranked list ('+qa('#view .srow.idea2').length+') with the explanation line');
     ok(q('#view').innerHTML.indexOf('Best setups now')<q('#view').innerHTML.indexOf('EMA'),'ideas sit above the EMA crossovers');
@@ -482,11 +482,11 @@ document.getElementById('f').onload=async()=>{
     click('#view [data-c="sf-type"][data-id="swing"]');ok(rows().length===5&&rows().every(r=>/≈/.test(r.textContent)),'Swing filter: only buy-at-open swing setups ('+rows().length+')');
     click('#view [data-c="sf-type"][data-id="darvas"]');ok(rows().length===2&&/Darvas/.test(q('#view .hint').textContent),'Darvas filter shows its rule and record ('+rows().length+')');
     click('#view [data-c="sf-fno"]');ok(rows().length===1&&rows()[0].getAttribute('data-id')==='CGPOWER','F&O only narrows to F&O stocks');
-    click('#view [data-c="sf-clear"]');click('#view [data-c="sf-lose"]');ok(!!q('#view .lrow.nr[data-id="DIXON"]'),'Show losing types reveals them');
+    click('#view [data-c="sf-clear"]');click('#view [data-c="sf-type"][data-id="all"]');click('#view [data-c="sf-lose"]');ok(!!q('#view .lrow.nr[data-id="DIXON"]'),'Show losing types reveals them');
     click('#view [data-c="sf-lose"]');click('#view [data-c="sf-price"]');ok(rows().every(r=>{const m=/[≈>≥<] ₹([\d,.]+)/.exec(r.textContent);return m&&parseFloat(m[1].replace(/,/g,''))<200;}),'price filter: under ₹200');
     ok(/"price":"lt200"/.test(w.localStorage.getItem('se_sf')||''),'filters remembered');
     click('#view [data-c="sf-clear"]');click('#view [data-c="sf-type"][data-id="leaders"]');ok(!!q('#view #ideas'),'Trend leaders shows the old ranked list');
-    click('#view [data-c="sf-clear"]');ok(rows().length===12,'Clear resets');
+    click('#view [data-c="sf-clear"]');ok(!!q('#view [data-c="sf-type"][data-id="hc"].on')&&rows().length===4&&rows().every(r=>!!r.querySelector('.hcb')),'Clear resets to High conviction ('+rows().length+')');
   });
   await sect('track record screen',async()=>{
     const open=async(how)=>{await how();await sleep(300);};

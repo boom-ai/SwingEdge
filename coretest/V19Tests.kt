@@ -312,16 +312,15 @@ object V19Tests {
     fun orders() {
         val (p, s) = mk(); val b = MStock(p); b.connect(KEY, "AB1234", PW, "", "654321")
         b.loadMasterCached()
+        // read-only hardening: order endpoints are not on the allow-list, so nothing is ever sent
+        val n = p.reqs.size
         val r = b.placeOrder("regular", "UP02", true, "LIMIT", 5, "CNC", "DAY", 100.5, "t1")
-        T.check(r.ok && r.data == "1131241001100", "order id returned")
-        val q = p.reqs.last()
-        T.eq(q.url, BASE + "orders/regular", "order url"); T.eq(q.method, "POST", "POST")
-        T.check(q.body!!.contains("tradingsymbol=UP02-EQ") && q.body!!.contains("transaction_type=BUY") && q.body!!.contains("quantity=5") && q.body!!.contains("product=CNC"), "order form fields")
+        T.check(!r.ok && r.error.contains("only reads"), "order blocked: ${r.error}")
+        T.check(!b.orders().ok, "order book blocked too")
+        T.eq(p.reqs.size, n, "no order request left the app")
+        T.check(p.reqs.none { it.url.contains("/orders") }, "no /orders url")
         T.check(!b.placeOrder("regular", "UP02", true, "LIMIT", 0, "CNC", "DAY", 100.0).ok, "qty validated")
-        T.check(!b.placeOrder("regular", "UP02", true, "LIMIT", 1, "CNC", "DAY", 0.0).ok, "limit needs a price")
         T.check(!b.placeOrder("weird", "UP02", true, "MARKET", 1, "CNC", "DAY", 0.0).ok, "variety validated")
-        T.check(!b.placeOrder("regular", "bad sym", true, "MARKET", 1, "CNC", "DAY", 0.0).ok, "symbol validated")
-        T.check(b.orders().ok && b.orders().data!!.size == 1, "order book readable")
         T.check(s.holdings.isNotEmpty(), "fixture sanity")
     }
 }

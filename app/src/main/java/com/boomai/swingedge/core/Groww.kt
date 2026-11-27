@@ -25,7 +25,7 @@ object Groww {
             val v = num(r["value"]) ?: return@mapNotNull null
             if (v <= 0) return@mapNotNull null
             linkedMapOf("name" to name, "sym" to sym, "last" to v, "chg" to Fno.r2(num(r["dayChange"]) ?: 0.0), "pct" to Fno.r2(num(r["dayChangePerc"]) ?: 0.0),
-                "high" to num(r["high"]), "low" to num(r["low"]), "ts" to ((num(r["tsInMillis"]) ?: 0.0) * 1000).toLong())
+                "high" to num(r["high"]), "low" to num(r["low"]), "ts" to PriceHub.normTs(num(r["tsInMillis"])))
         }
     } catch (t: Throwable) { emptyList() }
 
@@ -40,7 +40,7 @@ object Groww {
             val close = num(r["close"])
             val chg = num(r["dayChange"]) ?: if (close != null && close > 0) l - close else 0.0
             val pct = num(r["dayChangePerc"]) ?: if (close != null && close > 0) (l - close) / close * 100 else 0.0
-            out[k.toString()] = linkedMapOf("ltp" to l, "chg" to Fno.r2(chg), "pct" to Fno.r2(pct), "ts" to ((num(r["tsInMillis"]) ?: 0.0) * 1000).toLong())
+            out[k.toString()] = linkedMapOf("ltp" to l, "chg" to Fno.r2(chg), "pct" to Fno.r2(pct), "ts" to PriceHub.normTs(num(r["tsInMillis"])))
         }
         out
     } catch (t: Throwable) { emptyMap() }
@@ -67,10 +67,39 @@ object Groww {
             val m = v as? Map<*, *> ?: continue
             val l = num(m["ltp"]) ?: continue
             if (l <= 0) continue
-            out[k] = Triple(l, ((num(m["lastTradeTime"]) ?: num(m["tsInMillis"]) ?: 0.0) * 1000).toLong(), num(m["dayChange"]) ?: 0.0)
+            out[k] = Triple(l, PriceHub.normTs(num(m["lastTradeTime"]) ?: num(m["tsInMillis"])), num(m["dayChange"]) ?: 0.0)
         }
         out
     } catch (t: Throwable) { emptyMap() }
+
+    /**
+     * Batch quote reply (stocks and indices) -> hub samples. prevClose = close (Groww's close is the previous close),
+     * else last - dayChange. Exchange time comes in seconds and is normalised.
+     */
+    fun samples(text: String?, now: Long): List<PriceHub.PQ> = try {
+        val nse = ((Json.parseObject(text ?: "")?.get("exchangeAggRespMap") as? Map<*, *>)?.get("NSE") as? Map<*, *>) ?: emptyMap<Any, Any>()
+        val out = ArrayList<PriceHub.PQ>()
+        for ((mk, kind) in listOf("priceLivePointsMap" to PriceHub.EQ, "indexLivePointsMap" to PriceHub.IDX)) for ((k, v) in (nse[mk] as? Map<*, *>).orEmpty()) {
+            val r = v as? Map<*, *> ?: continue
+            val l = num(r["ltp"]) ?: num(r["value"]) ?: continue
+            if (l <= 0) continue
+            val dc = num(r["dayChange"])
+            val pc = num(r["close"])?.takeIf { it > 0 } ?: dc?.takeIf { it != 0.0 }?.let { l - it } ?: 0.0
+            val ts = PriceHub.normTs(num(r["tsInMillis"]))
+            val sym = k.toString().uppercase()
+            out.add(PriceHub.PQ(if (kind == PriceHub.EQ) PriceHub.eqKey(sym) else PriceHub.idxKey(sym), kind, l, PriceHub.GROWW, if (ts > 0) ts else now, now, ts > 0,
+                prevClose = pc, chg = dc ?: Double.NaN, pct = num(r["dayChangePerc"]) ?: Double.NaN,
+                open = num(r["open"]) ?: 0.0, high = num(r["high"]) ?: 0.0, low = num(r["low"]) ?: 0.0))
+        }
+        out
+    } catch (t: Throwable) { emptyList() }
+
+    /** One option contract price from [parsePrices] -> hub sample for [key]. */
+    fun optSample(key: String, v: Triple<Double, Long, Double>, now: Long): PriceHub.PQ {
+        val ts = PriceHub.normTs(v.second.toDouble())
+        return PriceHub.PQ(key, PriceHub.OPT, v.first, PriceHub.GROWW, if (ts > 0) ts else now, now, ts > 0,
+            prevClose = if (v.third != 0.0 && v.first - v.third > 0) v.first - v.third else 0.0, chg = v.third)
+    }
 
     /** NSE chain + live last prices -> a fresh chain. Bid/ask keep NSE's spread around the live price (tick 0.05). */
     fun overlay(base: FnoChain, spot: Double?, live: Map<Int, Pair<Triple<Double, Long, Double>?, Triple<Double, Long, Double>?>>, now: Long, ts: String): FnoChain {

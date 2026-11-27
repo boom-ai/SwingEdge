@@ -25,8 +25,18 @@ class MStock(private val p: Platform) {
     class BHolding(val sym: String, val name: String, val isin: String, val qty: Double, val avg: Double, val ltp: Double, val prevClose: Double, val token: Long)
     class BPosition(val sym: String, val exchange: String, val product: String, val qty: Double, val avg: Double, val ltp: Double, val pnl: Double, val m2m: Double)
     class BFunds(val available: Double, val used: Double, val clear: Double, val total: Double, val rows: List<Map<String, Any?>>)
-    class BQuote(val ltp: Double, val open: Double, val high: Double, val low: Double, val prevClose: Double)
+    /** Live quote. bid/ask/oi/vol/ts/circuits are 0 when the response does not carry them (the documented OHLC mode does not). */
+    class BQuote(val ltp: Double, val open: Double, val high: Double, val low: Double, val prevClose: Double,
+                 val bid: Double = 0.0, val ask: Double = 0.0, val oi: Double = 0.0, val vol: Double = 0.0, val ts: Long = 0L,
+                 val upper: Double = 0.0, val lower: Double = 0.0) {
+        val depth: Boolean get() = bid > 0 && ask >= bid
+    }
     class MasterRow(val token: Long, val tradingSymbol: String, val name: String)
+    /** An NFO/BFO option (CE/PE) or future (FUT) of a near expiry. [under] is the underlying (NIFTY, RELIANCE, SENSEX ...). */
+    class DerivRow(val token: Long, val tradingSymbol: String, val under: String, val exchange: String, val expDay: Int, val strike: Double,
+                   val type: String, val lot: Int, val tick: Double) {
+        val exchKey: String get() = "$exchange:$tradingSymbol"
+    }
 
     // ---- state (persisted in FILE, never logged) ----
     @Volatile private var apiKey = ""
@@ -39,6 +49,8 @@ class MStock(private val p: Platform) {
     private val lock = Any()
     @Volatile private var master: Map<String, MasterRow>? = null            // app symbol -> row
     @Volatile private var masterByToken: Map<Long, String> = emptyMap()
+    @Volatile private var derivs: Map<String, DerivRow> = emptyMap()          // UNDER|expDay|strike|side -> row
+    @Volatile private var derivBySym: Map<String, DerivRow> = emptyMap()      // trading symbol -> row
 
     init { load() }
 
@@ -91,9 +103,14 @@ class MStock(private val p: Platform) {
                 synchronized(lock) { apiKey = k; if (c.isNotEmpty()) clientCode = c }
                 return finish(k, form("api_key" to k, "request_token" to otp.trim(), "checksum" to checksum.ifEmpty { CHECKSUM }), "session/token")
             }
-            if (c.isEmpty()) return Res.bad("Enter your mStock client code (login ID).")
-            if (password.isEmpty()) return Res.bad("Enter your mStock password.")
             if (totp.isNotEmpty() && !totp.trim().matches(Regex("[0-9]{4,10}"))) return Res.bad("The TOTP should be the digits shown in your authenticator app.")
+            if (totp.isNotEmpty() && password.isEmpty()) {
+                // recommended path: session/verifytotp with api_key + totp returns the access token directly (no password, no checksum)
+                synchronized(lock) { apiKey = k; if (c.isNotEmpty()) clientCode = c; persist() }
+                return finish(k, form("api_key" to k, "totp" to totp.trim()), "session/verifytotp")
+            }
+            if (c.isEmpty()) return Res.bad("Enter your mStock client code (login ID).")
+            if (password.isEmpty()) return Res.bad("Enter your mStock password, or the 6-digit code from your authenticator app.")
             synchronized(lock) { apiKey = k; clientCode = c; persist() }
             val r = rawCall("POST", "connect/login", form("username" to c, "password" to password), authed = false, key = k)
             val j = r.data
@@ -234,16 +251,59 @@ class MStock(private val p: Platform) {
                 if (ltp <= 0) continue
                 val ts = k.substringAfter(':').uppercase()
                 val sym = byKey[ts] ?: HoldingsImport.cleanSymbol(ts).takeIf { chunk.contains(it) } ?: continue
-                val o = m.obj("ohlc")
-                out[sym] = BQuote(ltp, o.num("open"), o.num("high"), o.num("low"), o.num("close"))
+                out[sym] = parseQuote(m, ltp)
             }
         }
         return if (okCount == 0 && err.isNotEmpty()) Res.bad(err) else Res.good(Unit)
     }
 
+    /** One quote object: documented fields (last_price, ohlc) plus depth / OI / volume / time / circuits when present. */
+    internal fun parseQuote(m: Map<String, Any?>, ltp: Double): BQuote {
+        val o = m.obj("ohlc")
+        val d = m.obj("depth")
+        fun best(side: String): Double = d.list(side).firstOrNull().asObj().num("price")
+        val bid = best("buy").takeIf { it > 0 } ?: m.num("best_bid_price").takeIf { it > 0 } ?: best("bid")
+        val ask = best("sell").takeIf { it > 0 } ?: m.num("best_ask_price").takeIf { it > 0 } ?: best("ask")
+        val oi = m.num("oi").takeIf { it > 0 } ?: m.num("open_interest")
+        val vol = m.num("volume").takeIf { it > 0 } ?: m.num("volume_traded")
+        val ts = PriceHub.normTs(m.num("last_trade_time").takeIf { it > 0 } ?: m.num("exchange_timestamp").takeIf { it > 0 } ?: m.num("timestamp"))
+        return BQuote(ltp, o.num("open"), o.num("high"), o.num("low"), o.num("close"), if (ask >= bid) bid else 0.0, if (ask >= bid) ask else 0.0,
+            oi, vol, ts, m.num("upper_circuit_limit").takeIf { it > 0 } ?: m.num("upper_circuit"), m.num("lower_circuit_limit").takeIf { it > 0 } ?: m.num("lower_circuit"))
+    }
+
+    /**
+     * Live quotes for F&O contracts of the cached master (NFO/BFO), [MAX_PER_CALL] per OHLC request.
+     * Result is keyed by trading symbol. Contracts mStock did not price are absent.
+     */
+    fun contractQuotes(rows: List<DerivRow>): Res<Map<String, BQuote>> {
+        val want = rows.distinctBy { it.exchKey }.take(MAX_TOTAL)
+        if (want.isEmpty()) return Res.good(emptyMap())
+        if (!connected()) return Res.bad(notConnectedText())
+        val out = LinkedHashMap<String, BQuote>()
+        var err = ""; var okCount = 0
+        for (chunk in want.chunked(MAX_PER_CALL)) {
+            val r = authedGet("instruments/quote/ohlc", chunk.joinToString("&") { "i=" + enc(it.exchKey) })
+            val j = r.data
+            if (j == null) { if (err.isEmpty()) err = r.error; if (!connected()) break; continue }
+            okCount++
+            val byKey = HashMap<String, DerivRow>(); for (x in chunk) byKey[x.exchKey.uppercase()] = x
+            for ((k, v) in j.obj("data")) {
+                val m = v.asObj(); val ltp = m.num("last_price")
+                if (ltp <= 0) continue
+                val row = byKey[k.uppercase()] ?: byKey.values.firstOrNull { it.tradingSymbol.equals(k.substringAfter(':'), true) } ?: continue
+                out[row.tradingSymbol] = parseQuote(m, ltp)
+            }
+        }
+        if (okCount == 0 && err.isNotEmpty()) return Res.bad(err)
+        return Res.good(out)
+    }
+
     // =========================================================================== orders (client only, NOT an app action)
 
-    /** Places an order. Deliberately not reachable from the app; kept for a later, explicitly confirmed feature. */
+    /**
+     * Places an order. Blocked: every call goes through the read-only path allow-list ([ALLOWED]), which has no order
+     * endpoint, so this only validates and returns an error. Kept for a later, explicitly confirmed feature.
+     */
     fun placeOrder(variety: String, sym: String, buy: Boolean, orderType: String, qty: Int, product: String, validity: String, price: Double, tag: String = ""): Res<String> {
         if (variety != "regular" && variety != "amo") return Res.bad("Order type must be regular or amo.")
         if (!sym.uppercase().matches(SYM_OK)) return Res.bad("That symbol is not valid.")
@@ -268,13 +328,14 @@ class MStock(private val p: Platform) {
     fun loadMasterCached(): Boolean {
         try {
             val day = Clock.epochDay(now())
-            if (master != null && masterDay == day) return true
+            if (master != null && masterDay == day && (derivBySym.isNotEmpty() || !connected() || dlDay == day)) return true
             if (master == null) {
                 val txt = try { p.read(MASTER_FILE) } catch (t: Throwable) { null }
                 if (txt != null) {
                     val d = txt.substringBefore('\n').removePrefix("#day=").trim().toIntOrNull()
-                    val rows = if (d != null) parseMaster(txt.substringAfter('\n', "")) else emptyMap()
-                    if (d != null && rows.isNotEmpty()) { setMaster(rows, d); if (d == day) return true }
+                    val body = txt.substringAfter('\n', "")
+                    val rows = if (d != null) parseMaster(body) else emptyMap()
+                    if (d != null && rows.isNotEmpty()) { setMaster(rows, d); setDerivs(parseDerivs(body, d)); if (d == day && (derivBySym.isNotEmpty() || !connected() || dlDay == day)) return true }
                 }
             }
             if (!connected()) return master != null
@@ -287,13 +348,17 @@ class MStock(private val p: Platform) {
             val rows = parseMaster(csv)
             if (rows.isEmpty()) return master != null
             setMaster(rows, day)
-            try { p.write(MASTER_FILE, writeCache(day, rows)) } catch (t2: Throwable) {}
+            val dv = parseDerivs(csv, day)
+            setDerivs(dv)
+            dlDay = day
+            try { p.write(MASTER_FILE, writeCache(day, rows, dv)) } catch (t2: Throwable) {}
             return true
         } catch (t: Throwable) { return master != null }
     }
 
     @Volatile private var masterDay = -1
     @Volatile private var lastMasterTry = 0L
+    @Volatile private var dlDay = -1
     private fun setMaster(m: Map<String, MasterRow>, day: Int) {
         val bt = HashMap<Long, String>(m.size * 2)
         for ((k, v) in m) bt[v.token] = k
@@ -303,12 +368,30 @@ class MStock(private val p: Platform) {
     }
 
     fun masterSize(): Int = master?.size ?: 0
+    fun derivCount(): Int = derivBySym.size
 
-    private fun writeCache(day: Int, rows: Map<String, MasterRow>): String {
-        val sb = StringBuilder(rows.size * 40 + 20)
+    private fun setDerivs(rows: List<DerivRow>) {
+        val a = HashMap<String, DerivRow>(rows.size * 2); val b = HashMap<String, DerivRow>(rows.size * 2)
+        for (r in rows) { a[derivKey(r.under, r.expDay, r.strike, r.type)] = r; b[r.tradingSymbol.uppercase()] = r }
+        derivs = a; derivBySym = b
+    }
+
+    /** Option (side CE/PE) or future (side FUT, strike 0) of [under] expiring on IST epoch day [expDay]; NSE (NFO) preferred over BSE (BFO). */
+    fun deriv(under: String, expDay: Int, strike: Double, side: String): DerivRow? { loadMasterCached(); return derivs[derivKey(under, expDay, strike, side)] }
+    fun derivBySymbol(tradingSymbol: String): DerivRow? { loadMasterCached(); return derivBySym[tradingSymbol.uppercase()] }
+    /** Underlying -> lot size, from the cached near-expiry F&O rows. */
+    fun lots(): Map<String, Int> { val m = HashMap<String, Int>(); for (r in derivBySym.values) if (r.exchange == "NFO" && r.lot > 0) m.putIfAbsent(r.under, r.lot); return m }
+    /** Near expiries (IST epoch days, ascending) cached for [under]. */
+    fun expiries(under: String): List<Int> = derivBySym.values.filter { it.under == under.uppercase() && it.type != "FUT" }.map { it.expDay }.distinct().sorted()
+
+    private fun writeCache(day: Int, rows: Map<String, MasterRow>, dv: List<DerivRow> = emptyList()): String {
+        val sb = StringBuilder(rows.size * 40 + dv.size * 60 + 20)
         sb.append("#day=").append(day).append('\n')
         sb.append("instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,instrument_type,segment,exchange\n")
         for ((_, r) in rows) sb.append(r.token).append(",,").append(csvCell(r.tradingSymbol)).append(',').append(csvCell(r.name)).append(",,,,,,EQ,EQ,NSE\n")
+        for (r in dv) sb.append(r.token).append(",,").append(csvCell(r.tradingSymbol)).append(',').append(r.under).append(",,")
+            .append(java.time.LocalDate.ofEpochDay(r.expDay.toLong())).append(',').append(FnoUniverse.strikeText(r.strike)).append(',').append(r.tick).append(',')
+            .append(r.lot).append(',').append(if (r.type == "FUT") "FUT" else r.type).append(',').append(if (r.type == "FUT") "FUT" else "OPT").append(',').append(r.exchange).append('\n')
         return sb.toString()
     }
 
@@ -346,6 +429,56 @@ class MStock(private val p: Platform) {
         return out
     }
 
+    /**
+     * NFO/BFO options and futures of the nearest [NEAR_EXPIRIES] option expiries (and [NEAR_FUTURES] future expiries) per
+     * underlying, from [today] on. The underlying comes from the trading symbol (NIFTY2672124150CE, RELIANCE26NOV1360CE,
+     * NIFTY26DECFUT), falling back to the name column. Unknown rows are skipped. Never throws.
+     */
+    fun parseDerivs(csv: String, today: Int): List<DerivRow> {
+        val all = ArrayList<DerivRow>()
+        try {
+            var hdr: List<String>? = null
+            var iTok = -1; var iSym = -1; var iName = -1; var iType = -1; var iExch = -1; var iExp = -1; var iK = -1; var iLot = -1; var iTick = -1; var iSeg = -1
+            for (line in csv.lineSequence()) {
+                if (line.isBlank()) continue
+                val raw = line.trimEnd('\r')
+                if (hdr == null) {
+                    val cells = HoldingsImport.splitLine(raw, ',')
+                    hdr = cells.map { it.trim().lowercase() }
+                    iTok = hdr.indexOf("instrument_token"); iSym = hdr.indexOf("tradingsymbol"); iName = hdr.indexOf("name"); iType = hdr.indexOf("instrument_type")
+                    iExch = hdr.indexOf("exchange"); iExp = hdr.indexOf("expiry"); iK = hdr.indexOf("strike"); iLot = hdr.indexOf("lot_size")
+                    iTick = hdr.indexOf("tick_size"); iSeg = hdr.indexOf("segment")
+                    if (iTok < 0 || iSym < 0 || iExch < 0 || iExp < 0) return emptyList()
+                    continue
+                }
+                val tail = raw.takeLast(4)
+                if (!tail.contains("FO", true)) continue                           // cheap pre-filter: exchange is the last column (NFO/BFO)
+                val cells = HoldingsImport.splitLine(raw, ',')
+                fun cell(i: Int) = if (i >= 0 && i < cells.size) cells[i].trim() else ""
+                val exch = cell(iExch).uppercase()
+                if (exch != "NFO" && exch != "BFO") continue
+                val ed = parseExpiry(cell(iExp)); if (ed < today) continue
+                val it0 = cell(iType).uppercase(); val seg = cell(iSeg).uppercase()
+                val type = when { it0 == "CE" || it0 == "PE" -> it0; it0 == "FUT" || seg.startsWith("FUT") -> "FUT"; else -> continue }
+                val k = if (type == "FUT") 0.0 else (cell(iK).toDoubleOrNull()?.takeIf { it > 0 } ?: continue)
+                val ts = cell(iSym).uppercase(); if (ts.isEmpty()) continue
+                val under = underlyingOf(ts, type, k) ?: cell(iName).uppercase().takeIf { it.matches(SYM_OK) } ?: continue
+                val tok = cell(iTok).toDoubleOrNull()?.toLong() ?: continue
+                all.add(DerivRow(tok, ts, under, exch, ed, k, type, cell(iLot).toDoubleOrNull()?.toInt() ?: 0, cell(iTick).toDoubleOrNull() ?: 0.05))
+            }
+        } catch (t: Throwable) { return emptyList() }
+        // keep near expiries only (per underlying and exchange)
+        val out = ArrayList<DerivRow>()
+        for ((_, g) in all.groupBy { it.exchange + "|" + it.under }) {
+            val optDays = g.filter { it.type != "FUT" }.map { it.expDay }.distinct().sorted().take(NEAR_EXPIRIES).toHashSet()
+            val futDays = g.filter { it.type == "FUT" }.map { it.expDay }.distinct().sorted().take(NEAR_FUTURES).toHashSet()
+            for (r in g) if (if (r.type == "FUT") r.expDay in futDays else r.expDay in optDays) out.add(r)
+        }
+        // NSE rows win over BSE rows for the same key
+        out.sortBy { if (it.exchange == "NFO") 1 else 0 }
+        return out
+    }
+
     // =========================================================================== http plumbing
 
     private class Raw(val ok: Boolean, val data: Map<String, Any?>?, val text: String?, val error: String)
@@ -368,6 +501,8 @@ class MStock(private val p: Platform) {
         if (sessionExpired()) "Your mStock session ended at midnight. Connect again to refresh it." else "mStock is not connected yet."
 
     private fun rawCall(method: String, path: String, body: String?, authed: Boolean, key: String, maxBytes: Int = 2_000_000, wantText: Boolean = false): Raw {
+        // read-only hardening: only allow-listed endpoints are ever requested (no order endpoint is reachable)
+        if (ALLOWED[path.substringBefore('?')] != method) return Raw(false, null, null, "This app only reads from mStock; orders are not available.")
         val h = LinkedHashMap<String, String>()
         h["X-Mirae-Version"] = "1"
         h["Accept"] = if (wantText) "text/csv, */*" else "application/json"
@@ -459,5 +594,42 @@ class MStock(private val p: Platform) {
         const val OTP_WINDOW_MS = 10 * 60_000L
         const val MASTER_MAX_BYTES = 40_000_000
         private val SYM_OK = Regex("^[A-Z0-9&][A-Z0-9&\\-]{0,24}$")
+        const val NEAR_EXPIRIES = 3
+        const val NEAR_FUTURES = 2
+        /** The only endpoints this client may call (path -> method). Read-only plus login/session; no order endpoints. */
+        val ALLOWED = mapOf("connect/login" to "POST", "session/token" to "POST", "session/verifytotp" to "POST", "logout" to "GET",
+            "portfolio/holdings" to "GET", "portfolio/positions" to "GET", "user/fundsummary" to "GET",
+            "instruments/quote/ohlc" to "GET", "instruments/quote/ltp" to "GET", "instruments/scriptmaster" to "GET")
+        private val MON = listOf("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
+        private val EXP_CODE = Regex("^(.+?)(\\d{2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|[1-9OND]\\d{2})$")
+
+        fun derivKey(under: String, expDay: Int, strike: Double, side: String) = under.uppercase() + "|" + expDay + "|" + FnoUniverse.strikeText(strike) + "|" + side.uppercase()
+
+        /** Underlying of an F&O trading symbol: strip CE/PE + strike (or FUT), then the YY+MON / YY+M+DD expiry code. */
+        fun underlyingOf(ts: String, type: String, strike: Double): String? {
+            var x = ts.uppercase().trim()
+            if (type == "FUT") { if (!x.endsWith("FUT")) return null; x = x.dropLast(3) }
+            else {
+                if (!x.endsWith(type)) return null
+                x = x.dropLast(2)
+                val st = FnoUniverse.strikeText(strike)
+                if (!x.endsWith(st)) return null
+                x = x.dropLast(st.length)
+            }
+            val m = EXP_CODE.find(x) ?: return null
+            return m.groupValues[1].takeIf { it.matches(SYM_OK) }
+        }
+
+        /** Expiry cell -> IST epoch day: 2026-12-29, 2026-12-29 00:00:00, 29-Dec-2026, 29DEC2026, 29/12/2026; -1 when unreadable. */
+        fun parseExpiry(s0: String): Int {
+            val s = s0.trim().substringBefore(' ').substringBefore('T')
+            try {
+                Regex("^(\\d{4})-(\\d{1,2})-(\\d{1,2})$").find(s)?.let { val g = it.groupValues; return java.time.LocalDate.of(g[1].toInt(), g[2].toInt(), g[3].toInt()).toEpochDay().toInt() }
+                Regex("^(\\d{1,2})[-/ ]?([A-Za-z]{3})[-/ ]?(\\d{2,4})$").find(s)?.let { val g = it.groupValues; val mo = MON.indexOf(g[2].uppercase()); if (mo < 0) return -1
+                    val y = g[3].toInt().let { y -> if (y < 100) 2000 + y else y }; return java.time.LocalDate.of(y, mo + 1, g[1].toInt()).toEpochDay().toInt() }
+                Regex("^(\\d{1,2})/(\\d{1,2})/(\\d{4})$").find(s)?.let { val g = it.groupValues; return java.time.LocalDate.of(g[3].toInt(), g[2].toInt(), g[1].toInt()).toEpochDay().toInt() }
+            } catch (t: Throwable) {}
+            return -1
+        }
     }
 }

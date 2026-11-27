@@ -2553,7 +2553,7 @@
         '<div class="two">' + field('riskPct', 'Risk per trade', sv(s.riskPct), { post: '%', max: 5 }) + field('maxOpenTrades', 'Max open trades', sv(s.maxOpenTrades), { mode: 'numeric', max: 2 }) + '</div>' +
         field('costPct', 'Charges, round trip', sv(s.costPct), { post: '% of turnover', max: 5, enter: 'done', help: 'Brokerage, STT, stamp duty and other costs for one buy plus one sell. All results are shown after this.' }) +
         '<div class="calc" id="calc">' + settingsCalc(s.capital, s.riskPct) + '</div>' +
-        '<h3>Broker</h3><div class="box">' + brokerRow(ui) + '</div>' +
+        '<h3>Broker</h3><div class="box">' + brokerRow(ui) + priceRow(ui) + '</div>' +
         '<h3>Notifications</h3><div class="box">' +
         toggle('notifyBuy', s.notifyBuy !== false, 'Buy ideas', 'When a live strategy finds a setup') +
         toggle('notifySell', s.notifySell !== false, 'Sell and exit calls', 'Stop-loss, targets, time exits, portfolio sells') +
@@ -2576,15 +2576,21 @@
     return '<div class="brow"><div><b>m.Stock (Mirae Asset)</b><span class="mut">' + (T(b.message) ? esc(T(b.message)) : 'Not connected. Syncs your holdings, positions, funds and gives live prices.') + '</span></div></div>' +
       '<div class="btns">' + btn('broker-open', null, b.otpPending ? 'Enter OTP' : 'Connect', 'sm', {}) + '</div>';
   }
+  /** Live-price source in use and its health (from brokerStatus.prices). Empty when nothing was fetched yet. */
+  function priceRow(ui) {
+    var pr = O(O(ui.broker).prices);
+    if (!T(pr.text)) return '';
+    return '<div class="brow"><div><b>Live prices</b><span class="mut">' + esc(T(pr.text)) + '</span></div></div>';
+  }
   function brokerSheet(ui) {
     var b = O(ui.broker);
     if (b.otpPending === true) return shell('Enter the OTP', '<p class="lead">m.Stock sent an OTP to your phone by SMS.</p>' + field('otp', 'OTP', '', { mode: 'numeric', max: 8, enter: 'done' }) + '<div class="formerr" id="formerr" hidden></div>',
       btn('sheet-close', null, 'Cancel', 'ghost') + btn('submit', null, 'Connect', 'pri'));
-    return shell('Connect m.Stock', '<p class="lead">Get your API key at trade.mstock.com → Key Products → Trading APIs. Your password is used once to log in and is never saved. Sessions end at midnight, so you log in once a day.</p>' +
+    return shell('Connect m.Stock', '<p class="lead">Get your API key at trade.mstock.com → Key Products → Trading APIs. With an authenticator (TOTP) set up there, the API key and the 6-digit code are all you need. Sessions end at midnight, so you log in once a day.</p>' +
       field('apiKey', 'API key', '', { mode: 'text', secret: true, ph: b.apiKeySaved ? 'Saved (leave blank to keep)' : 'Paste your API key', max: 120 }) +
-      field('clientCode', 'Client code (login ID)', T(b.clientCode), { mode: 'text', max: 30 }) +
-      field('password', 'Password', '', { mode: 'text', max: 64, ph: 'Used once, not saved', secret: true }) +
-      field('totp', 'Authenticator code (optional)', '', { mode: 'numeric', max: 8, ph: 'Leave blank to get an SMS OTP', enter: 'done' }) +
+      field('totp', 'Authenticator code (recommended)', '', { mode: 'numeric', max: 8, ph: '6 digits from your authenticator app', enter: 'done' }) +
+      field('clientCode', 'Client code (login ID)', T(b.clientCode), { mode: 'text', max: 30, ph: 'Only needed for SMS OTP' }) +
+      field('password', 'Password (only for SMS OTP)', '', { mode: 'text', max: 64, ph: 'Used once, not saved', secret: true }) +
       '<div class="formerr" id="formerr" hidden></div>', btn('sheet-close', null, 'Cancel', 'ghost') + btn('submit', null, 'Continue', 'pri'));
   }
   function settingsCalc(capital, riskPct) {

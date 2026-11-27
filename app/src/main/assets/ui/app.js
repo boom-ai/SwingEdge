@@ -13,7 +13,7 @@
     });
   } catch (e) { /* ignore */ }
 
-  var TABS = { today: 1, setups: 1, money: 1, funds: 1, bot: 1, trades: 1, portfolio: 1, alerts: 1 };
+  var TABS = { today: 1, setups: 1, money: 1, markets: 1, funds: 1, bot: 1, trades: 1, portfolio: 1, alerts: 1 };
   var S = {}, lastJson = null, lastDevJson = null;
   var ui = { tab: TABS[qs.tab] ? qs.tab : 'today', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now(),
     recent: loadRecent(), search: { q: '', sent: null, shown: '', results: null, loading: false, err: '', filter: 'all', newList: null, newErr: '' }, emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, watchEdit: false, stock: null, pnl: {}, vOpen: {}, listMeta: null,
@@ -165,6 +165,7 @@
       }
       if (name === 'stockInfo') { onInfoResult(res, ok, err); return; }
       if (name === 'moneyFlow') { onMoney(res, ok, err); return; }
+      if (name === 'markets') { mkResult(res, ok, err); return; }
       if (name === 'flowSector') { onSector(res, ok, err); return; }
       if (name === 'fnoTicker' || name === 'fnoLab') { onLive(name, res, ok); return; }
       if (name === 'liveQuotes') { onStockLive(res, ok); return; }
@@ -528,13 +529,13 @@
     m.loading = true; m.err = '';
     try { bridge().action('moneyFlow', JSON.stringify({ force: force === true })); }
     catch (e) { m.loading = false; m.err = 'Could not reach the app. Try again.'; }
-    if (ui.tab === 'money') render();
+    if (ui.tab === 'money' || ui.tab === 'markets') render();
   }
   function onMoney(res, ok, err) {
     var m = ui.money || (ui.money = { seg: 'together' });
     m.loading = false;
     if (ok) { m.res = res; m.err = ''; m.at = Date.now(); } else { m.err = err; }
-    if (ui.tab === 'money') render();
+    if (ui.tab === 'money' || ui.tab === 'markets') render();
   }
   var fnoTimer = null, fnoBusy = false;
   function fnoArgs(extra) { var a = { sym: ui.fno.sym || 'NIFTY', expiry: ui.fno.exp || '', width: ui.fno.width || 8 }; for (var k in extra) a[k] = extra[k]; return a; }
@@ -1071,8 +1072,9 @@
   });
 
   function command(c, id, el) {
+    if (c.indexOf('mk-') === 0 && mkCommand(c, id)) return;
     switch (c) {
-      case 'tab': if (id === 'fno') { ui.fno = ui.fno || { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); fnoPoll(true); break; } setTab(id); if (id === 'money') loadMoney(false); if (id === 'funds') loadFunds(false); break;
+      case 'tab': if (id === 'fno') { ui.fno = ui.fno || { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); fnoPoll(true); break; } setTab(id); if (id === 'money') loadMoney(false); if (id === 'markets') mkLoad(false); if (id === 'funds') loadFunds(false); break;
       case 'money-refresh': loadMoney(true); break;
       case 'fno-open': ui.fno = ui.fno || { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); fnoPoll(true); break;
       case 'fno-symgo': fnoSymGo(); break;
@@ -1236,11 +1238,72 @@
   window.addEventListener('focus', function () { readDevice(); render(); });
   setInterval(function () { if (!document.hidden) render(); }, 30000);   // keeps "3 min ago" fresh; no-op when nothing changed
 
+  /* ===================================================================== MARKETS TERMINAL (markets dept) =====
+     Markets tab: one `markets` action per poll; sections are patched in place by id (no full redraw, scroll kept). */
+  var mkBusy = 0, mkAt = 0;
+  function mkState() { return ui.mk || (ui.mk = { seg: 'overview', res: null, err: '', loading: false, at: 0, prev: {}, mv: 'gainers', hl: 'highs', ev: 'all' }); }
+  function mkLoad(force) {
+    var m = mkState(), t = Date.now();
+    if (mkBusy && t - mkBusy < 8000 && !force) return;
+    mkBusy = t; mkAt = t; if (force) m.loading = true;
+    try { bridge().action('markets', JSON.stringify({ seg: m.seg, force: force === true })); }
+    catch (e) { mkBusy = 0; m.loading = false; m.err = 'Could not reach the app. Try again.'; }
+    if (force && ui.tab === 'markets') render(true);
+    if (m.seg === 'money') loadMoney(force === true);
+  }
+  function mkResult(res, ok, err) {
+    var m = mkState(); mkBusy = 0;
+    var wasLoading = m.loading; m.loading = false;
+    if (ok) {
+      var pv = {}, o = m.res || {};
+      SE.A(o.india).forEach(function (x) { if (typeof x.last === 'number') pv['i:' + x.name] = x.last; });
+      if (o.gift && typeof o.gift.last === 'number') pv['i:' + o.gift.name] = o.gift.last;
+      SE.A(o.global).forEach(function (x) { if (typeof x.last === 'number') pv['g:' + x.sym] = x.last; });
+      m.prev = pv; m.res = res; m.err = ''; m.at = Date.now();
+    } else if (!m.res) m.err = err;
+    if (ui.tab !== 'markets' || sheet) return;
+    if (wasLoading || !ok || !mkPatch()) render(true);
+  }
+  /* patch every part of the current segment that changed; false when the screen is not the markets layout */
+  function mkPatch() {
+    if (ui.tab !== 'markets' || touching) return true;
+    var parts = SE.mkParts(ui), st = $('mk-status'); if (!st) return false;
+    ui.now = Date.now();
+    var h0 = SE.mkPart('status', S, ui); if (st._h !== h0 && st.innerHTML !== h0) { st.innerHTML = h0; } st._h = h0;
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] === 'status') continue;
+      var el = $('mk-' + parts[i]); if (!el) return false;
+      var h = SE.mkPart(parts[i], S, ui);
+      if (el._h !== h && el.innerHTML !== h) el.innerHTML = h;
+      el._h = h;
+    }
+    try { cache.view = SE.view(S, ui); } catch (e) { /* ignore */ }
+    return true;
+  }
+  function mkCommand(c, id) {
+    var m = mkState();
+    if (c === 'mk-seg') { if (!id) return true; if (ui.tab !== 'markets') setTab('markets'); if (m.seg !== id) { m.seg = id; elView.scrollTop = 0; } render(true); mkLoad(false); return true; }
+    if (c === 'mk-refresh') { mkLoad(true); return true; }
+    if (c === 'mk-mv' || c === 'mk-hl' || c === 'mk-ev') { m[c.slice(3)] = id; if (!mkPatch()) render(true); return true; }
+    return false;
+  }
+  function mkLoop() {
+    try {
+      if (document.hidden || ui.tab !== 'markets' || sheet) return;
+      var m = mkState(), t = Date.now(), r = m.res || {}, open = r.marketOpen === true || S.marketOpen === true;
+      var gap = !m.res || r.loading === true ? 1500 : m.seg === 'news' ? 60000 : m.seg === 'calendar' ? 120000 : (open ? 3000 : 20000);
+      if (t - mkAt >= gap) mkLoad(false);
+    } catch (e) { mkBusy = 0; }
+  }
+  setInterval(mkLoop, 500);
+  /* ===================================================================== end MARKETS TERMINAL ===== */
+
   /* ---------- boot ---------- */
   try { ui.fullCards = localStorage.getItem('se.fullCards') === '1'; } catch (e) {}
   if (qs.full === '1') ui.fullCards = true;   /* screenshots / tests: open the detailed view directly */
   pull();
   if (ui.tab === 'money') loadMoney(false);
+  if (ui.tab === 'markets') { if (qs.seg) mkState().seg = qs.seg; render(true); mkLoad(false); }
   if (ui.tab === 'funds') loadFunds(false);
   else if (qs.sheet === 'fno') { ui.fno = { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); }
   else if (qs.sheet === 'opt') { ui.opt = { calc: { prem: 120 } }; openSheet('opt', {}, true); try { bridge().action('options', '{}'); } catch (e) {} }

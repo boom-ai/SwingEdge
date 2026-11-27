@@ -328,7 +328,7 @@
     }
     return h;
   }
-  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['money', 'Money'], ['funds', 'Funds'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['fno', 'F&O']];
+  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['markets', 'Markets'], ['funds', 'Funds'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['fno', 'F&O']];
   function tabbar(S, ui) {
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
@@ -1219,6 +1219,7 @@
     if (ui.tab === 'alerts') return alerts(S, ui);
     if (ui.tab === 'setups') return setups(S, ui);
     if (ui.tab === 'money') return money(S, ui);
+    if (ui.tab === 'markets') return marketsView(S, ui);
     if (ui.tab === 'funds') return fundsView(S, ui);
     if (ui.tab === 'bot') return today(S, ui);
     return today(S, ui);
@@ -2605,6 +2606,255 @@
     actItems: function (S) { return actItems(O(S)); },
     fnoPart: fnoPart, tickTile: tickTile, tickLabel: function (S, ui) { return tickLabel(O(S), O(ui)); }, fmtIdx: fmtIdx, tickChg: tickChg, liveTicker: function (ui, big, S) { return liveTicker(O(ui), big, O(S)); }
   };
+
+  /* ===================================================================== MARKETS TERMINAL (markets dept) =====
+     Top-level Markets tab: segments Overview · Sectors/Money · Breadth · Calendar · News. Every section is a part
+     (<section id="mk-NAME">) so app.js patches them in place on each live tick (scroll kept). Data: the `markets`
+     action (core/Terminal.kt), kept in ui.mk.res. */
+  IC.markets = '<rect x="3.5" y="4" width="17" height="13" rx="2"/><path d="M7 13l3-3 2.5 2L17 8"/><path d="M9 20.5h6M12 17v3.5"/>';
+  var MK_SEGS = [['overview', 'Overview'], ['money', 'Sectors'], ['breadth', 'Breadth'], ['calendar', 'Calendar'], ['news', 'News']];
+  var MK_PARTS = { overview: ['status', 'india', 'global', 'pulse', 'heat', 'movers', 'fii', 'events', 'headlines'], money: ['status', 'heat', 'secagg'],
+    breadth: ['status', 'breadth', 'movers', 'hilo'], calendar: ['status', 'holidays', 'events', 'econ'], news: ['status', 'news'] };
+  function mkSeg(ui) { var s = T(O(ui.mk).seg); return MK_PARTS[s] ? s : 'overview'; }
+  function mkNum(v, d) {
+    var n = N(v); if (n === null) return DASH;
+    var a = Math.abs(n), f = a.toFixed(d).split('.');
+    return (n < 0 ? '−' : '') + grp(f[0]) + (f[1] ? '.' + f[1] : '');
+  }
+  function mkDec(v, unit) { var a = Math.abs(N(v) || 0); return unit === 'yld' ? 3 : unit === 'inr' ? 3 : a >= 10000 ? 0 : a >= 100 ? 2 : a >= 10 ? 2 : 3; }
+  function mkPct(v) { var n = N(v); return n === null ? DASH : (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(2) + '%'; }
+  function mkChg(x) {
+    var c = N(x.chg); if (c === null) return '';
+    if (T(x.unit) === 'yld') return (c > 0 ? '+' : c < 0 ? '−' : '') + Math.abs(c * 100).toFixed(1) + ' bp';
+    return (c > 0 ? '+' : c < 0 ? '−' : '') + mkNum(Math.abs(c), mkDec(x.last, T(x.unit)));
+  }
+  function mkFlash(ui, key, v) { var p = O(O(ui.mk).prev)[key], n = N(v); return typeof p === 'number' && n !== null && n !== p ? (n > p ? ' fup' : ' fdn') : ''; }
+  function mkSpark(vals, dir) {
+    var v = (Array.isArray(vals) ? vals : []).map(N).filter(function (x) { return x !== null; });
+    if (v.length < 3) return '<span class="mk-sp"></span>';
+    var lo = Math.min.apply(null, v), hi = Math.max.apply(null, v), r = hi - lo || 1, w = 48, h = 16;
+    var pts = v.map(function (y, i) { return (i * w / (v.length - 1)).toFixed(1) + ',' + (h - 1 - (y - lo) / r * (h - 2)).toFixed(1); }).join(' ');
+    return '<svg class="mk-sp ' + dir + '" viewBox="0 0 48 16" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts + '"/></svg>';
+  }
+  function mkAgo(t, now) { var x = ts(t); return x === null ? '' : rel(x, now); }
+  function mkEmpty(msg) { return '<p class="none">' + msg + '</p>'; }
+  function mkSec(title, o, ui) { return sech(title, o || {}, ui); }
+
+  function mkStatus(r, ui) {
+    var s = O(r.src), bits = [];
+    if (ts(s.india)) bits.push('<span class="mk-dot' + (r.marketOpen === true ? ' on' : '') + '"></span>India ' + (r.marketOpen === true ? 'live' : 'closed') + ' · ' + esc(hm(s.india)));
+    if (ts(s.global)) bits.push('Global ' + esc(hm(s.global)));
+    if (T(s.stocks) === 'tv') bits.push('Stocks ' + (N(s.delayMin) || 15) + '-min delayed' + (ts(s.stocksAt) ? ' · ' + esc(hm(s.stocksAt)) : ''));
+    else if (T(s.stocks) === 'scan') bits.push('Stocks: close of ' + esc(isoDate(s.stocksAsof)));
+    if (!bits.length) return r.loading === true || !isObj(r) || !Object.keys(r).length ? '<span class="mk-st"><span class="spin"></span>Loading markets…</span>' : '<span class="mk-st">No live data yet. Pull to refresh.</span>';
+    return '<span class="mk-st">' + bits.join('<i>·</i>') + '</span>';
+  }
+  function mkTile(x, ui, key) {
+    x = O(x); var d = tone(x.pct), nm = T(x.name);
+    return '<div class="mk-t ' + d + mkFlash(ui, key + nm, x.last) + '"><span class="n">' + esc(nm) + '</span><b class="num">' + mkNum(x.last, mkDec(x.last, T(x.unit))) + '</b><span class="num c">' + mkPct(x.pct) + '</span></div>';
+  }
+  function mkIndia(r, ui) {
+    var l = A(r.india), g = O(r.gift), tiles = [];
+    if (N(g.last) > 0) tiles.push(mkTile(g, ui, 'i:'));
+    l.forEach(function (x) { tiles.push(mkTile(x, ui, 'i:')); });
+    if (!tiles.length) return mkSec('India', {}, ui) + (r.loading === true ? '<div class="mk-grid">' + '<div class="mk-t sk"></div>'.repeat(6) + '</div>' : mkEmpty('Index prices are not available right now.'));
+    return mkSec('India', { right: N(g.last) > 0 ? '<span class="sr2">GIFT Nifty ~15 min delayed</span>' : '' }, ui) + '<div class="mk-grid">' + tiles.join('') + '</div>';
+  }
+  function mkGlobal(r, ui) {
+    var l = A(r.global);
+    if (!l.length) return mkSec('Global', {}, ui) + (r.loading === true ? '<div class="mk-tb">' + '<div class="mk-r sk"></div>'.repeat(5) + '</div>' : mkEmpty('Global prices are not available right now.'));
+    var h = '', grpName = '';
+    l.forEach(function (x) {
+      var g = T(x.grp);
+      if (g !== grpName) { grpName = g; h += '<div class="mk-gh">' + esc(g) + '</div>'; }
+      var d = tone(x.pct);
+      h += '<div class="mk-r' + mkFlash(ui, 'g:' + T(x.sym), x.last) + '"><span class="n">' + tx(x.name) + '</span>' + mkSpark(x.spark, d) +
+        '<b class="num l">' + (T(x.unit) === 'yld' ? mkNum(x.last, 3) + '%' : mkNum(x.last, mkDec(x.last, T(x.unit)))) + '</b><span class="num c ' + d + '">' + esc(mkChg(x)) + '</span><span class="num p ' + d + '">' + mkPct(x.pct) + '</span></div>';
+    });
+    return mkSec('Global', { info: ['mkglob', 'Futures and global markets from Yahoo Finance; prices can lag by up to 15 minutes. Change is against the previous session’s close. US 10Y is the yield, change in basis points.'] }, ui) + '<div class="mk-tb">' + h + '</div>';
+  }
+  function mkAdBar(b) {
+    var a = N(b.adv) || 0, d = N(b.dec) || 0, u = N(b.unch) || 0, t = a + d + u;
+    if (!t) return '';
+    return '<div class="mk-ad" role="img" aria-label="' + a + ' up, ' + d + ' down, ' + u + ' unchanged"><i class="up" style="width:' + (a * 100 / t).toFixed(1) + '%"></i><i class="fl" style="width:' + (u * 100 / t).toFixed(1) + '%"></i><i class="down" style="width:' + (d * 100 / t).toFixed(1) + '%"></i></div>';
+  }
+  function mkPulse(r, ui) {
+    var b = O(r.breadth);
+    if (!N(b.total)) return mkSec('Breadth', {}, ui) + mkEmpty(r.loading === true ? 'Loading…' : 'Breadth needs the stock list; it is not available yet.');
+    return mkSec('Breadth', { cnt: grp(String(N(b.total))) + ' NSE stocks', right: '<button type="button" class="mk-more" data-c="mk-seg" data-id="breadth">More</button>' }, ui) +
+      '<div class="mk-pulse">' + mkAdBar(b) + '<div class="mk-adl"><span class="up num">' + grp(String(N(b.adv) || 0)) + ' up</span><span class="mut num">' + grp(String(N(b.unch) || 0)) + ' flat</span><span class="down num">' + grp(String(N(b.dec) || 0)) + ' down</span></div>' +
+      '<div class="mk-kv"><span>Above 50 DMA<b class="num">' + (N(b.above50) === null ? DASH : Math.round(N(b.above50)) + '%') + '</b></span><span>Above 200 DMA<b class="num">' + (N(b.above200) === null ? DASH : Math.round(N(b.above200)) + '%') + '</b></span>' +
+      '<span>52W highs<b class="num up">' + (N(b.hi52) || 0) + '</b></span><span>52W lows<b class="num down">' + (N(b.lo52) || 0) + '</b></span></div></div>';
+  }
+  function mkHeatTiles(l) {
+    var max = 0; l.forEach(function (x) { max = Math.max(max, Math.abs(N(x.pct) || 0)); });
+    return '<div class="mk-heat">' + l.map(function (x) {
+      var p = N(x.pct) || 0, k = max > 0 ? Math.min(4, Math.max(1, Math.ceil(Math.abs(p) / max * 4))) : 1;
+      return '<div class="mk-h ' + (p > 0 ? 'u' : p < 0 ? 'd' : 'z') + k + '"><span class="n">' + tx(x.name) + '</span><b class="num">' + mkPct(x.pct) + '</b>' +
+        (N(x.adv) !== null && N(x.dec) !== null ? '<span class="a num">' + N(x.adv) + '↑ ' + N(x.dec) + '↓</span>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function mkHeat(r, ui) {
+    var l = A(r.sectors), seg = mkSeg(ui);
+    if (!l.length) l = A(r.sectorAgg).slice(0, 12);
+    if (!l.length) return mkSec('Sectors', {}, ui) + mkEmpty(r.loading === true ? 'Loading…' : 'Sector prices are not available right now.');
+    return mkSec('Sectors', { cnt: l.length, info: ['mkheat', A(r.sectors).length ? 'NSE sectoral indices, % change today. Darker = bigger move. ↑↓ = stocks up and down in the index.' : 'From NSE stocks grouped by sector, % change weighted by size.'],
+      right: seg === 'overview' ? '<button type="button" class="mk-more" data-c="mk-seg" data-id="money">Money flow</button>' : '' }, ui) + mkHeatTiles(seg === 'overview' ? l.slice(0, 9) : l);
+  }
+  function mkSecAgg(r, ui) {
+    var l = A(r.sectorAgg);
+    if (!l.length) return '';
+    var max = 0; l.forEach(function (x) { max = Math.max(max, Math.abs(N(x.pct) || 0)); });
+    return mkSec('All sectors, from stocks', { cnt: l.length, info: ['mkagg', 'Every NSE stock grouped by sector: % change today weighted by size, and how many stocks are up and down.'] }, ui) +
+      '<div class="mk-tb">' + l.map(function (x) {
+        var p = N(x.pct) || 0, w = max > 0 ? Math.abs(p) / max * 100 : 0;
+        return '<div class="mk-r sa"><span class="n">' + tx(x.name) + '</span><span class="mk-bar"><i class="' + (p >= 0 ? 'up' : 'down') + '" style="width:' + w.toFixed(0) + '%"></i></span><span class="num a"><span class="up">' + (N(x.adv) || 0) + '</span>/<span class="down">' + (N(x.dec) || 0) + '</span></span><span class="num p ' + tone(p) + '">' + mkPct(p) + '</span></div>';
+      }).join('') + '</div>' + '<div class="mk-div"></div>';
+  }
+  function mkRow(x) {
+    x = O(x); var vx = N(x.volX);
+    return '<button type="button" class="mk-sr" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '"><span class="s"><b>' + tx(x.sym) + '</b><span class="nm">' + tx(x.name, '') + '</span></span>' +
+      (vx !== null ? '<span class="num vx">' + vx.toFixed(1) + '×</span>' : '') + '<span class="num l">' + pxBare(x.ltp) + '</span><span class="num p ' + tone(x.pct) + '">' + mkPct(x.pct) + '</span></button>';
+  }
+  function mkMini(x) {
+    x = O(x);
+    return '<button type="button" class="mk-mi" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '"><b>' + tx(x.sym) + '</b><span class="num ' + tone(x.pct) + '">' + mkPct(x.pct) + '</span></button>';
+  }
+  var MK_MV = [['gainers', 'Gainers'], ['losers', 'Losers'], ['volume', 'Volume shockers']];
+  function mkChips(cmd, list, on, counts) {
+    return '<div class="rc segs" role="group">' + list.map(function (g) {
+      var n = counts ? counts[g[0]] : null;
+      return '<button type="button" class="rchip' + (g[0] === on ? ' on' : '') + '" data-c="' + cmd + '" data-id="' + g[0] + '" aria-pressed="' + (g[0] === on) + '"><span>' + esc(g[1]) + (n ? ' · ' + n : '') + '</span></button>';
+    }).join('') + '</div>';
+  }
+  function mkMovers(r, ui) {
+    var m = O(r.movers), mk = O(ui.mk);
+    if (!isObj(r.movers)) return mkSec('Top movers', {}, ui) + mkEmpty(r.loading === true ? 'Loading…' : 'Movers need the stock list; it is not available yet.');
+    var info = ['mkmv', 'NSE stocks with at least ₹5 crore traded today. Volume shockers trade 2.5× or more of their 30-day average volume (× = times normal).'];
+    if (mkSeg(ui) === 'overview') {
+      var g = A(m.gainers).slice(0, 5), l = A(m.losers).slice(0, 5);
+      return mkSec('Top movers', { info: info, right: '<button type="button" class="mk-more" data-c="mk-seg" data-id="breadth">All</button>' }, ui) +
+        '<div class="mk-2c"><div><div class="mk-gh">Gainers</div>' + (g.map(mkMini).join('') || mkEmpty('None')) + '</div><div><div class="mk-gh">Losers</div>' + (l.map(mkMini).join('') || mkEmpty('None')) + '</div></div>';
+    }
+    var on = MK_MV.some(function (x) { return x[0] === T(mk.mv); }) ? T(mk.mv) : 'gainers', lst = A(m[on]);
+    return mkSec('Top movers', { info: info }, ui) + mkChips('mk-mv', MK_MV, on, null) +
+      (lst.length ? '<div class="card mv">' + lst.map(mkRow).join('') + '</div>' : mkEmpty('No stock qualifies right now.'));
+  }
+  function mkBreadth(r, ui) {
+    var b = O(r.breadth), s = O(r.src);
+    if (!N(b.total)) return mkSec('Market breadth', {}, ui) + mkEmpty(r.loading === true ? 'Loading…' : 'Breadth needs the stock list; it is not available yet.');
+    function bar(lbl, v, n) {
+      var p = N(v);
+      return '<div class="mk-dm"><span class="n">' + lbl + '</span><span class="mk-bar"><i class="' + (p !== null && p >= 50 ? 'up' : 'down') + '" style="width:' + (p === null ? 0 : Math.max(0, Math.min(100, p))).toFixed(0) + '%"></i><em></em></span><b class="num">' + (p === null ? DASH : Math.round(p) + '%') + '</b><span class="mut num">' + grp(String(N(n) || 0)) + '</span></div>';
+    }
+    var adr = N(b.adRatio);
+    return mkSec('Market breadth', { cnt: grp(String(N(b.total))) + ' NSE stocks', info: ['mkbr', 'Advances and declines across every NSE stock today' + (T(s.stocks) === 'tv' ? ' (TradingView, about 15 minutes delayed)' : ' (close of ' + esc(isoDate(s.stocksAsof)) + ')') + '. DMA = day moving average; the line marks 50%. 52-week highs/lows: stocks that touched their 52-week high or low today' + (O(r.src).lowApprox === true ? ' (lows: within 1% of it, from the closing price)' : '') + '.'] }, ui) +
+      '<div class="mk-pulse">' + mkAdBar(b) + '<div class="mk-adl"><span class="up num">' + grp(String(N(b.adv) || 0)) + ' advancing</span><span class="mut num">' + grp(String(N(b.unch) || 0)) + '</span><span class="down num">' + grp(String(N(b.dec) || 0)) + ' declining</span></div>' +
+      '<div class="mk-kv"><span>A/D ratio<b class="num ' + (adr === null ? '' : adr >= 1 ? 'up' : 'down') + '">' + (adr === null ? DASH : adr.toFixed(2)) + '</b></span><span>52W highs<b class="num up">' + (N(b.hi52) || 0) + '</b></span><span>52W lows<b class="num down">' + (N(b.lo52) || 0) + '</b></span></div>' +
+      bar('Above 50 DMA', b.above50, b.n50) + bar('Above 200 DMA', b.above200, b.n200) + '</div>';
+  }
+  function mkHilo(r, ui) {
+    var m = O(r.movers), mk = O(ui.mk), on = T(mk.hl) === 'lows' ? 'lows' : 'highs', lst = A(m[on]);
+    if (!isObj(r.movers)) return '';
+    return mkSec('52-week highs &amp; lows', {}, ui) + mkChips('mk-hl', [['highs', 'New highs'], ['lows', 'New lows']], on, { highs: A(m.highs).length + (A(m.highs).length >= 40 ? '+' : ''), lows: A(m.lows).length + (A(m.lows).length >= 40 ? '+' : '') }) +
+      (lst.length ? '<div class="card mv">' + lst.map(mkRow).join('') + '</div>' : mkEmpty(on === 'highs' ? 'No stock made a new 52-week high today.' : 'No stock is at a 52-week low today.'));
+  }
+  function mkCr(v) { var n = N(v); if (n === null) return DASH; return (n > 0 ? '+' : n < 0 ? '−' : '') + '₹' + grp(String(Math.round(Math.abs(n)))) + ' cr'; }
+  function mkFii(r, ui) {
+    var f = O(r.fii);
+    if (f.ready !== true) return mkSec('FII / DII', {}, ui) + mkEmpty('FII and DII cash figures come after 6 pm on trading days; none saved yet.');
+    var days = A(f.days).slice(0, 10).reverse(), max = 0;
+    days.forEach(function (x) { max = Math.max(max, Math.abs(N(x.fii) || 0), Math.abs(N(x.dii) || 0)); });
+    var bars = days.map(function (x) {
+      var a = N(x.fii) || 0, b = N(x.dii) || 0, ha = max ? Math.abs(a) / max * 20 : 0, hb = max ? Math.abs(b) / max * 20 : 0;
+      return '<span class="mk-fb" title="' + esc(isoDate(x.date)) + '"><i class="' + (a >= 0 ? 'up' : 'down') + '" style="height:' + ha.toFixed(1) + 'px;' + (a >= 0 ? 'bottom:20px' : 'top:20px') + '"></i><i class="d ' + (b >= 0 ? 'up' : 'down') + '" style="height:' + hb.toFixed(1) + 'px;' + (b >= 0 ? 'bottom:20px' : 'top:20px') + '"></i></span>';
+    }).join('');
+    return mkSec('FII / DII cash', { right: '<span class="sr2">' + esc(isoDate(f.date)) + '</span>', info: ['mkfii', 'Net buying (+) or selling (−) in the cash market by foreign (FII/FPI) and domestic (DII: mutual funds, insurers, banks) institutions, ₹ crore, provisional NSE figures. Bars: last 10 days, FII left, DII right (faded).'] }, ui) +
+      '<div class="mk-fii"><div class="mk-kv f"><span>FII today<b class="num ' + tone(f.fii) + '">' + mkCr(f.fii) + '</b></span><span>DII today<b class="num ' + tone(f.dii) + '">' + mkCr(f.dii) + '</b></span>' +
+      '<span>FII 5 days<b class="num ' + tone(f.fii5) + '">' + mkCr(f.fii5) + '</b></span><span>DII 5 days<b class="num ' + tone(f.dii5) + '">' + mkCr(f.dii5) + '</b></span></div>' +
+      (days.length > 1 ? '<div class="mk-fbs" aria-hidden="true">' + bars + '</div>' : '') + '</div>';
+  }
+  var MK_KIND = { RESULTS: 'Results', BOARD: 'Board meeting', DIVIDEND: 'Dividend', BONUS: 'Bonus', SPLIT: 'Split', RIGHTS: 'Rights', BUYBACK: 'Buyback', ACTION: 'Corporate action' };
+  var MK_EV = [['all', 'All'], ['results', 'Results'], ['actions', 'Dividends & actions']];
+  function mkDayLbl(iso, now) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(T(iso)); if (!m) return DASH;
+    var t = Date.UTC(+m[1], +m[2] - 1, +m[3]), today = dayNo(ts(now) || Date.now()), d = Math.round(t / DAYMS) - today;
+    var wd = WD[new Date(t).getUTCDay()] + ' ' + (+m[3]) + ' ' + MON[+m[2] - 1];
+    return d === 0 ? 'Today · ' + wd : d === 1 ? 'Tomorrow · ' + wd : wd;
+  }
+  function mkEvents(r, ui) {
+    var all = A(r.events), mk = O(ui.mk), ov = mkSeg(ui) === 'overview';
+    var on = MK_EV.some(function (x) { return x[0] === T(mk.ev); }) ? T(mk.ev) : 'all';
+    var l = ov ? all : all.filter(function (x) { var k = T(x.kind); return on === 'all' || (on === 'results' ? (k === 'RESULTS' || k === 'BOARD') : (k !== 'RESULTS' && k !== 'BOARD')); });
+    if (ov) l = l.slice(0, 6);
+    var head = mkSec(ov ? 'Coming up' : 'Results &amp; corporate actions', { cnt: ov ? '' : l.length, info: ov ? null : ['mkev', 'Board meetings and results dates from NSE and TradingView; dividends, bonuses, splits and rights by ex-date (buy before the ex-date to be entitled). Updated every evening.'],
+      right: ov ? '<button type="button" class="mk-more" data-c="mk-seg" data-id="calendar">Calendar</button>' : '' }, ui) + (ov ? '' : mkChips('mk-ev', MK_EV, on, null));
+    if (!l.length) return head + mkEmpty(all.length ? 'Nothing in this group.' : 'No upcoming results or corporate actions saved yet.');
+    var h = '', day = '';
+    l.forEach(function (x) {
+      if (T(x.date) !== day) { day = T(x.date); h += '<div class="mk-gh">' + esc(mkDayLbl(day, ui.now)) + '</div>'; }
+      var k = T(x.kind);
+      h += '<button type="button" class="mk-ev" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '"><b>' + tx(x.sym) + '</b><span class="k">' + esc(MK_KIND[k] || 'Event') + '</span><span class="d">' + tx(x.detail, '') + '</span></button>';
+    });
+    return head + '<div class="mk-tb">' + h + '</div>';
+  }
+  function mkHolidays(r, ui) {
+    var l = A(r.holidays);
+    if (!l.length) return '';
+    return mkSec('Market holidays', { cnt: l.length }, ui) + '<div class="mk-tb">' + l.slice(0, 8).map(function (x) {
+      return '<div class="mk-r hd"><span class="n">' + esc(mkDayLbl(x.date, ui.now)) + '</span><span class="mut">' + tx(x.name, 'NSE closed') + '</span></div>';
+    }).join('') + '</div>';
+  }
+  function mkEcon(r, ui) {
+    var l = A(r.econ);
+    if (!l.length) return '';
+    var h = '', day = '';
+    l.forEach(function (x) {
+      var t = ts(x.at); if (t === null) return;
+      var d = dm(t, ui.now); if (d !== day) { day = d; h += '<div class="mk-gh">' + esc(WD[ist(t).getUTCDay()] + ' ' + d) + '</div>'; }
+      var act = T(x.actual).trim();
+      h += '<div class="mk-r ec"><span class="num tm">' + esc(hm(t)) + '</span><span class="cc' + (T(x.impact) === 'High' ? ' hi' : '') + '">' + tx(x.ccy) + '</span><span class="n">' + tx(x.title) + '</span><span class="num v">' + (act ? esc(act) : T(x.forecast).trim() ? 'f ' + esc(T(x.forecast).trim()) : '') + '</span></div>';
+    });
+    return mkSec('World economy this week', { info: ['mkecon', 'High- and medium-impact releases for the US, China, Europe, Japan and UK (Forex Factory). Times are IST; f = forecast; a filled value is the actual. Strong colour = high impact.'] }, ui) + '<div class="mk-tb">' + h + '</div>';
+  }
+  function mkNewsRows(l, now) {
+    return l.map(function (x) {
+      var u = T(x.url); if (!/^https:\/\//.test(u)) return '';
+      return '<a class="mk-nw" href="' + esc(u) + '" rel="noopener noreferrer"><span class="t">' + tx(x.title) + '</span><span class="m">' + tx(x.src, '') + (ts(x.at) ? (T(x.src) ? ' · ' : '') + esc(rel(x.at, now)) : '') + '</span></a>';
+    }).join('');
+  }
+  function mkHeadlines(r, ui) {
+    var l = A(r.news).slice(0, 5);
+    if (!l.length) return '';
+    return mkSec('Headlines', { right: '<button type="button" class="mk-more" data-c="mk-seg" data-id="news">All news</button>' }, ui) + '<div class="card mv">' + mkNewsRows(l, ui.now) + '</div>';
+  }
+  function mkNews(r, ui) {
+    var l = A(r.news);
+    if (!l.length) return mkSec('Market news', {}, ui) + (r.loading === true || !ts(O(r.src).news) ? '<div class="card mv">' + '<div class="mk-nw sk"></div>'.repeat(6) + '</div>' : mkEmpty('No headlines right now. Pull to refresh.'));
+    return mkSec('Market news', { cnt: l.length, info: ['mknews', 'Headlines from Google News about Indian markets in the last day. Tap one to read it in your browser.'] }, ui) + '<div class="card mv">' + mkNewsRows(l, ui.now) + '</div>';
+  }
+  var MK_FN = { status: mkStatus, india: mkIndia, global: mkGlobal, pulse: mkPulse, heat: mkHeat, secagg: mkSecAgg, movers: mkMovers, breadth: mkBreadth, hilo: mkHilo,
+    fii: mkFii, events: mkEvents, holidays: mkHolidays, econ: mkEcon, headlines: mkHeadlines, news: mkNews };
+  function mkPart(p, S, ui) {
+    ui = O(ui); var f = MK_FN[p]; if (!f) return '';
+    try { return f(O(O(ui.mk).res), ui); } catch (e) { return ''; }
+  }
+  function marketsView(S, ui) {
+    var mk = O(ui.mk), seg = mkSeg(ui), r = O(mk.res);
+    var h = '<div class="phead mk-head"><div class="pt"><h1>Markets</h1><span class="ps" id="mk-status">' + mkPart('status', S, ui) + '</span></div>' +
+      '<button type="button" class="iconbtn" data-c="mk-refresh" aria-label="Refresh markets"' + (mk.loading === true ? ' disabled' : '') + '>' + (mk.loading === true ? '<span class="spin"></span>' : ic('refresh')) + '</button></div>';
+    h += '<div class="mk-segs" role="tablist">' + MK_SEGS.map(function (g) {
+      return '<button type="button" role="tab" class="mk-seg' + (g[0] === seg ? ' on' : '') + '" data-c="mk-seg" data-id="' + g[0] + '" aria-selected="' + (g[0] === seg) + '">' + g[1] + '</button>';
+    }).join('') + '</div>';
+    if (!isObj(mk.res) && T(mk.err).trim()) h += '<div class="empty" role="alert"><div class="ei">' + ic('warn') + '</div><h3>Could not load markets</h3><p>' + esc(T(mk.err).trim()) + '</p><div class="btns">' + btn('mk-refresh', null, 'Try again', 'sm', { icon: 'refresh' }) + '</div></div>';
+    h += MK_PARTS[seg].filter(function (p) { return p !== 'status'; }).map(function (p) { return '<section class="mk-part" id="mk-' + p + '">' + mkPart(p, S, ui) + '</section>'; }).join('');
+    if (seg === 'money') h += '<div class="mk-money">' + money(S, ui) + '</div>';
+    return h;
+  }
+  api.marketsView = function (S, ui) { return marketsView(O(S), O(ui)); };
+  api.mkPart = function (p, S, ui) { return mkPart(String(p), O(S), O(ui)); };
+  api.mkParts = function (ui) { var s = mkSeg(O(ui)); return MK_PARTS[s].slice(); };
+  /* ===================================================================== end MARKETS TERMINAL ===== */
   root.SE = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : this);

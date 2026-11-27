@@ -22,6 +22,8 @@ object StockList {
     const val SAVED_FILE = "symbols_live.csv"
     const val EQ = "EQ"
     const val SME = "SME"
+    /** a BSE-only stock (from the whole-market scan; not in NSE's lists) */
+    const val BSE = "BSE"
     const val SRC_NSE = "nse"
     const val SRC_GITHUB = "github"
     const val SRC_SAVED = "saved"

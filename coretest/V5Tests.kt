@@ -51,6 +51,7 @@ object V5Tests {
         override fun httpGetAll(urls: List<String>): List<String?> {
             if (urls.none { it.startsWith("https://nsearchives.") || it.startsWith("https://raw.githubusercontent.") }) return base.httpGetAll(urls)
             if (urls.all { it == SwingApp.CHANGES_URL }) { changeHits.addAll(urls); return urls.map { synchronized(served) { served[it] } } }
+            if (urls.all { it == MarketScan.URL }) return urls.map { synchronized(served) { served[it] } }   // the whole-market scan is not a list download
             listHits.addAll(urls)
             if (delayMs > 0) Thread.sleep(delayMs)
             return urls.map { synchronized(served) { served[it] } }

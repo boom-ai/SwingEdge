@@ -31,7 +31,10 @@ object Yahoo {
     val alt = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /** NSE symbol -> Yahoo ticker ("^NSEI" stays an index, a stock found elsewhere uses that, everything else gets ".NS"). */
-    fun ticker(sym: String): String = if (sym.startsWith("^")) sym else alt[sym] ?: "$sym.NS"
+    /** BSE-only stocks of the whole-market scan: symbol -> "<scrip code>.BO" (replaced as a whole when a scan is installed; not persisted). */
+    @Volatile var market: Map<String, String> = emptyMap()
+
+    fun ticker(sym: String): String = if (sym.startsWith("^")) sym else alt[sym] ?: market[sym] ?: "$sym.NS"
 
     fun url(host: String, sym: String, range: String, interval: String): String = tickerUrl(host, ticker(sym), range, interval)
 

@@ -1,0 +1,93 @@
+name: whole-market scan
+# Every NSE (EQ/BE/BZ/SM/ST) + BSE-only equity, scored with the app's own Kotlin code -> data/scan.csv + data/scan_meta.json.
+# Daily bhavcopies are kept in the Actions cache (rolling ~275 sessions); a lost cache is simply re-downloaded.
+on:
+  schedule:
+    - cron: "45 14 * * 1-5"   # 20:15 IST, after NSE and BSE publish the day's bhavcopy
+    - cron: "15 2 * * 2-6"    # 07:45 IST catch-up for a late or failed evening run
+  workflow_dispatch:
+    inputs:
+      sessions:
+        description: "sessions of history to keep (>= 253 for 12-month scores)"
+        default: "275"
+permissions:
+  contents: write
+concurrency: { group: scan, cancel-in-progress: false }
+env:
+  KOTLIN_VERSION: "2.0.21"
+  BHAV_DIR: /tmp/bhavall
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+
+      - name: Restore bhavcopy cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.BHAV_DIR }}
+          key: bhavall-${{ github.run_id }}
+          restore-keys: bhavall-
+
+      - name: Download missing bhavcopies (NSE + BSE)
+        timeout-minutes: 100
+        run: |
+          python3 -u tools/bhavsync.py "$BHAV_DIR" "${{ github.event.inputs.sessions || '275' }}" || echo "bhavsync failed; using what is cached"
+          ls "$BHAV_DIR" | wc -l
+
+      - name: Save bhavcopy cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BHAV_DIR }}
+          key: bhavall-${{ github.run_id }}
+
+      - name: Kotlin compiler (cached)
+        id: kc
+        uses: actions/cache@v4
+        with:
+          path: /tmp/kotlinc
+          key: kotlinc-${{ env.KOTLIN_VERSION }}
+      - name: Install Kotlin compiler
+        if: steps.kc.outputs.cache-hit != 'true'
+        run: |
+          for i in 1 2 3; do
+            curl -fsSL -o /tmp/kc.zip "https://github.com/JetBrains/kotlin/releases/download/v${KOTLIN_VERSION}/kotlin-compiler-${KOTLIN_VERSION}.zip" && break; sleep 10
+          done
+          unzip -q /tmp/kc.zip -d /tmp && ls /tmp/kotlinc/bin/kotlinc
+
+      - name: Scanner jar (cached per source hash)
+        id: jar
+        uses: actions/cache@v4
+        with:
+          path: /tmp/scanjar
+          key: scanjar-${{ env.KOTLIN_VERSION }}-${{ hashFiles('app/src/main/java/com/boomai/swingedge/core/*.kt', 'scan/*.kt') }}
+      - name: Compile scanner (the app's core + scan/ScanMain.kt)
+        if: steps.jar.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/scanjar
+          /tmp/kotlinc/bin/kotlinc app/src/main/java/com/boomai/swingedge/core/*.kt scan/*.kt -include-runtime -nowarn -d /tmp/scanjar/scan.jar
+
+      - name: Scan the whole market
+        id: scan
+        run: |
+          set +e
+          java -Xmx6g -cp /tmp/scanjar/scan.jar com.boomai.swingedge.scan.ScanMainKt "$BHAV_DIR" data/symbols.csv data/industries.csv \
+            data/scan.csv data/scan_meta.json "${{ github.event.inputs.sessions || '275' }}"
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          if [ $rc -eq 2 ]; then echo "::warning::scan not written (too little data or older than the current file) - keeping the last good data/scan.csv"; exit 0; fi
+          exit $rc
+
+      - name: Commit if changed
+        if: steps.scan.outputs.rc == '0'
+        run: |
+          head -c 300 data/scan_meta.json; echo
+          git config user.name "swingedge-bot"; git config user.email "actions@users.noreply.github.com"
+          git add data/scan.csv data/scan_meta.json
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -qm "Whole-market scan $(python3 -c 'import json;print(json.load(open("data/scan_meta.json"))["asof"])')"
+          for i in 1 2 3 4 5; do git pull -q --rebase origin main && git push -q origin main && break; sleep $((i * 5)); done

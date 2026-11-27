@@ -578,6 +578,7 @@ class SwingApp(private val p: Platform) {
         if (inWindow) makeSignals(now, day)
         try { computeWatch() } catch (e: Throwable) { p.log("watch: " + e) }
         try { scanCtx = buildScanCtx() ?: scanCtx } catch (e: Throwable) { log("scan context: $e") }
+        try { marketData(manual, fetch = true) } catch (e: Throwable) { log("market scan: $e") }
         try { buildScores(now) } catch (e: Throwable) { log("score table: $e") }
         try { trackStep(day, min) } catch (e: Throwable) { log("track: $e") }
 
@@ -586,7 +587,7 @@ class SwingApp(private val p: Platform) {
             universe.isEmpty() -> "Stock list missing — only holdings were checked"
             okCount == 0 -> "Price feed not responding — showing last data"
             else -> "OK · $okCount/${universe.size} stocks"
-        }
+        } + (marketSummary?.let { ms -> " · whole market " + ms["stocks"] + " stocks (NSE " + ms["nse"] + " + BSE " + ms["bse"] + ")" } ?: "")
         return true
     }
 
@@ -738,16 +739,32 @@ class SwingApp(private val p: Platform) {
     private fun buildScores(now: Long) {
         val have = ArrayList<Series>()
         for (sym in universe) live[sym]?.let { if (it.n > 0) have.add(it) }
-        if (have.isEmpty()) return
-        val count = HashMap<Int, Int>()
-        for (x in have) count[x.lastDay()] = (count[x.lastDay()] ?: 0) + 1
-        val ref = count.entries.maxWith(compareBy<Map.Entry<Int, Int>> { it.value }.thenBy { it.key }).key
+        // SCAN: the whole-market scan (data/scan.csv, NSE + BSE, scored by the daily job with this same code)
+        val ms = try { marketData(false, fetch = false) } catch (e: Throwable) { null }
+        val useMarket = ms != null && ms.day >= Clock.epochDay(now) - MARKET_MAX_AGE_DAYS
+        if (have.isEmpty() && !useMarket) return
         val items = ArrayList<Pair<String, ScoreComp>>()
         val bySym = HashMap<String, Series>()
-        for (x in have) {
-            if (x.lastDay() < ref) continue
-            items.add(Pair(x.sym, SetupScore.compute(x)))
-            bySym[x.sym] = x
+        if (have.isNotEmpty()) {
+            val count = HashMap<Int, Int>()
+            for (x in have) count[x.lastDay()] = (count[x.lastDay()] ?: 0) + 1
+            val ref = count.entries.maxWith(compareBy<Map.Entry<Int, Int>> { it.value }.thenBy { it.key }).key
+            for (x in have) {
+                if (x.lastDay() < ref) continue
+                items.add(Pair(x.sym, SetupScore.compute(x)))
+                bySym[x.sym] = x
+            }
+        }
+        var fromMarket = 0
+        if (useMarket) {
+            // the phone's own (fresher, possibly intraday) bar wins for its stocks; the job's row fills everything else
+            val mine = HashMap<String, Int>()
+            for ((k, it) in items.withIndex()) mine[it.first] = k
+            for ((sym, comp) in ms!!.items()) {
+                val k = mine[sym]
+                if (k == null) { items.add(Pair(sym, comp)); fromMarket++ }
+                else if (comp.day > items[k].second.day) { items[k] = Pair(sym, comp); bySym.remove(sym) }
+            }
         }
         val t = SetupScore.buildTable(items, now)
         val proven = trackProof?.upgraded == true
@@ -756,19 +773,104 @@ class SwingApp(private val p: Platform) {
             val fd = flowData(false, fetch = false)
             if (fd.ok) { val secs = MoneyFlow.sectors(fd, MoneyFlow.moneyIn(fd)).take(MoneyFlow.HOT_SECTORS).map { it.name }.toHashSet(); { s: String -> fd.ind[s]?.sector?.takeIf { it in secs } } } else null
         } catch (e: Throwable) { null }
-        val gate = MarketGate.open(have)
+        val gate = MarketGate.open(have) ?: (if (useMarket) ms!!.gate else null)
         marketGate = gate
-        val cands = if (gate == false) emptyList() else SetupScore.topBuys(t, Params.IDEAS_MAX * 4)
         // REPORT9: qualifying names fill slots in order of Clenow trend quality (eligibility unchanged); unscorable last
-        val ordered = cands.sortedWith(compareByDescending<ScoreEntry> { Clenow.score(bySym[it.sym]).let { c -> if (c.isNaN()) -1e9 else c } }.thenByDescending { it.score }.thenBy { it.sym })
-        val rows = ordered.take(Params.IDEAS_MAX).map { e ->
-            val m = LinkedHashMap(BuyCall.idea(e, nameOf(e.sym), bySym[e.sym], proven))
+        val clen = { sym: String -> bySym[sym]?.let { Clenow.score(it) } ?: (if (useMarket) ms!!.bySym[sym]?.clenow else null) ?: Double.NaN }
+        val ordered = if (gate == false) emptyList() else MarketScan.ideaOrder(t, clen, Params.IDEAS_MAX)
+        val rows = ordered.map { e ->
+            val mr = if (useMarket) ms!!.bySym[e.sym] else null
+            val s = bySym[e.sym]
+            val m = LinkedHashMap(BuyCall.idea(e, if (names.containsKey(e.sym) || mr == null) nameOf(e.sym) else mr.name, s, proven))
+            if (s == null && mr != null) m["spark"] = mr.spark.map { it }
             m["hotSector"] = hot?.invoke(e.sym) ?: ""
             m["horizonDays"] = HOLD_MAX_DAYS          // FINAL: trail 5 ATR below the highest close, sell after at most 120 sessions
+            m["exch"] = mr?.exch ?: Bhav.NSE
+            m["wholeMarket"] = s == null            // ranked from the daily whole-market scan, not the phone's own scan
             m
         }
         scoreTable = t
         ideaItems = rows
+        marketSummary = if (useMarket) linkedMapOf("asof" to StockPage.yyyymmdd(ms!!.day), "stocks" to ms.rows.size, "nse" to ms.nseCount, "bse" to ms.bseCount,
+            "rated" to t.rated, "added" to fromMarket, "buys" to t.ranked.count { it.label == "BUY" }, "ideasFromMarket" to rows.count { it["wholeMarket"] == true },
+            "fetchedAt" to marketFetchedAt, "gate" to ms.gate) else null
+    }
+
+    // ------------------------------------------------------------------ whole-market scan (data/scan.csv)
+
+    @Volatile private var market: MarketScanData? = null
+    @Volatile private var marketLoaded = false
+    @Volatile private var marketFetchedAt = 0L
+    @Volatile private var marketSummary: Map<String, Any?>? = null
+    private val marketLock = Any()
+    private val marketLoadLock = Any()
+
+    /**
+     * The whole-market scan: the saved copy, refreshed from GitHub when older than MARKET_STALE_MS (forced: at most every
+     * FLOW_FORCE_MS). A download replaces the saved copy only when it parses, has at least MarketScan.MIN_ROWS rows and is
+     * not older than the copy; anything else keeps the last good file. Never throws; null when there is none.
+     */
+    private fun marketData(force: Boolean, fetch: Boolean = true): MarketScanData? {
+        marketLoad()
+        if (!fetch) return market
+        synchronized(marketLock) {
+            try {
+                val now = p.now()
+                val age = now - marketFetchedAt
+                if (age >= MARKET_STALE_MS || ((force || market == null) && age >= FLOW_FORCE_MS) || age < 0) {
+                    marketFetchedAt = now
+                    try { p.write(MARKET_META, now.toString()) } catch (t: Throwable) {}
+                    val text = httpAll(listOf(MarketScan.URL)).firstOrNull()
+                    val got = MarketScan.parse(text, MarketScan.MIN_ROWS)
+                    val cur = market
+                    if (got != null && (cur == null || got.day > cur.day || (got.day == cur.day && got.builtAt >= cur.builtAt))) {
+                        try { p.write(MarketScan.FILE, text!!) } catch (t: Throwable) { log("scan.csv not saved: $t") }
+                        install(got)
+                        log("whole-market scan: ${got.rows.size} stocks as of ${StockPage.yyyymmdd(got.day)}")
+                    } else if (text != null && got == null) log("whole-market scan: download rejected (${text.length} bytes)")
+                }
+            } catch (t: Throwable) {
+                log("market scan: $t")
+            }
+            return market
+        }
+    }
+
+    /** The saved copy, once (disk only; never waits for a download, so search and stock pages stay quick). */
+    private fun marketLoad() {
+        if (marketLoaded) return
+        synchronized(marketLoadLock) {
+            if (marketLoaded) return
+            try {
+                marketFetchedAt = try { p.read(MARKET_META)?.trim()?.toLongOrNull() ?: 0L } catch (t: Throwable) { 0L }
+                MarketScan.parse(try { p.read(MarketScan.FILE) } catch (t: Throwable) { null })?.let { if (market == null) install(it) }
+            } catch (t: Throwable) { log("saved market scan: $t") }
+            marketLoaded = true
+        }
+    }
+
+    private fun install(d: MarketScanData) {
+        market = d
+        val bo = HashMap<String, String>()
+        for (r in d.rows) if (r.exch == Bhav.BSE && r.code.isNotEmpty()) bo[r.sym] = r.code + ".BO"
+        Yahoo.market = bo
+        symIndex = null           // the search index is rebuilt with the new stocks on its next use
+    }
+
+    /** The stock list plus the scan's stocks it lacks (BSE-only ones as board BSE), for the search index. */
+    private fun withMarket(rows: List<ListRow>): List<ListRow> {
+        val d = try { marketData(false, fetch = false) } catch (t: Throwable) { null } ?: return rows
+        val have = HashSet<String>(rows.size * 2); for (r in rows) have.add(r.sym)
+        val out = ArrayList<ListRow>(rows.size + d.bseCount + 16); out.addAll(rows)
+        for (r in d.rows) if (have.add(r.sym)) out.add(ListRow(r.sym, r.name, 0,
+            if (r.exch == Bhav.BSE) StockList.BSE else if (r.series == "SM" || r.series == "ST") StockList.SME else StockList.EQ))
+        return out
+    }
+
+    /** The published table's entry for [sym] when it was scored on the same bar the page shows (or [sym] is scanned by the phone). */
+    private fun ownEntry(t: ScoreTable?, sym: String, s: Series): ScoreEntry? {
+        val e = t?.entries?.get(sym) ?: return null
+        return if (universeSet.contains(sym) || (s.n > 0 && e.comp.day == s.lastDay())) e else null
     }
 
     // =========================================================================================== track record (SPEC4)
@@ -865,7 +967,7 @@ class SwingApp(private val p: Platform) {
     /** The stockInfo `call` for [s]: the scan table's entry for a universe stock, else [s] ranked into the table. */
     private fun callFor(sym: String, s: Series, r: Refs): Map<String, Any?> {
         val t = scoreTable
-        val own = if (universeSet.contains(sym)) t?.entries?.get(sym) else null
+        val own = ownEntry(t, sym, s)
         val comp = own?.comp ?: SetupScore.compute(s)
         var kind = comp.naKind()
         var e: ScoreEntry? = null
@@ -1561,7 +1663,7 @@ class SwingApp(private val p: Platform) {
             symIndex?.let { return it }
             loadUniverse()
             val list = stockList ?: initialList().also { stockList = it }
-            val ix = try { SymbolIndex.build(list.rows, universe, names, asset("aliases.csv"), changesCsv(), asset("corpactions.csv")) }
+            val ix = try { SymbolIndex.build(withMarket(list.rows), universe, names, asset("aliases.csv"), changesCsv(), asset("corpactions.csv")) }
             catch (t: Throwable) { log("search index failed: $t"); SymbolIndex.build(emptyList(), universe, names, null) }
             symIndex = ix
             return ix
@@ -1618,7 +1720,7 @@ class SwingApp(private val p: Platform) {
                 val chg = httpAll(listOf(CHANGES_URL)).firstOrNull()
                 if (chg != null && SymbolChanges.parseNse(chg).size > 500) p.write(CHANGES_FILE, chg)
             } catch (t: Throwable) { log("symbol changes not refreshed: $t") }
-            val ix = SymbolIndex.build(got.rows, universe, names, asset("aliases.csv"), changesCsv(), asset("corpactions.csv"))
+            val ix = SymbolIndex.build(withMarket(got.rows), universe, names, asset("aliases.csv"), changesCsv(), asset("corpactions.csv"))
             synchronized(idxLock) { stockList = got; symIndex = ix }
             listFailed = false
             log("stock list: ${got.rows.size} rows from ${got.source}")
@@ -1823,7 +1925,7 @@ class SwingApp(private val p: Platform) {
         @Suppress("UNCHECKED_CAST") val call = m["call"] as Map<String, Any?>
         m["panel"] = try {
             val t = scoreTable
-            val own = if (universeSet.contains(sym)) t?.entries?.get(sym) else null
+            val own = ownEntry(t, sym, got.s)
             val e = if (own != null) own else if (t != null && t.usable) SetupScore.insert(t, sym, SetupScore.compute(got.s)) else null
             Panel.build(PanelInput(got.s, e, t, call, indexSeries(), scanCtx?.breadth ?: Double.NaN, r.sizing[0], r.sizing[1], r.sizing[2], listed, today))
         } catch (t: Throwable) {
@@ -2493,6 +2595,7 @@ class SwingApp(private val p: Platform) {
             m["myWatch"] = myWatch(s, now)
             m["ideas"] = ideaItems
             m["marketGate"] = marketGate
+            m["marketScan"] = marketSummary
             m["optOpen"] = try { synchronized(optLock) { optLoad().filter { it.status == "OPEN" }.map { it.toMap() } } } catch (t: Throwable) { emptyList<Any>() }
             m["optRecord"] = try { synchronized(optLock) { Options.stats(optLoad()) } } catch (t: Throwable) { null }
             m["targets"] = s.targets.map { it.toMap() }
@@ -2543,6 +2646,11 @@ class SwingApp(private val p: Platform) {
         const val FUND_META = "fund_fetched.txt"
         const val FLOW_STALE_MS = 4L * 3600 * 1000
         const val FLOW_FORCE_MS = 5L * 60 * 1000
+        const val MARKET_META = "scan_fetched.txt"
+        /** the job runs once each evening (and a morning catch-up); a 3-hour refresh picks it up the same evening */
+        const val MARKET_STALE_MS = 3L * 3600 * 1000
+        /** a whole-market scan older than this many calendar days is not used for ranking */
+        const val MARKET_MAX_AGE_DAYS = 7
         const val ALT_MAX = 12
         const val ALT_RETRY_MS = 6L * 3600 * 1000
         const val ALT_FORCE_MS = 10L * 60 * 1000

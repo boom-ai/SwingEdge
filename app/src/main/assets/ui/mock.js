@@ -837,6 +837,19 @@
     if (scenario === 'empty') res = { ok: true, seg: a.seg, loading: true, india: [], global: [], sectors: [], src: {} };
     return res;
   }
+  function mockRatings(fnoOnly) {
+    if (scenario === 'empty') return { ok: true, none: true };
+    var F = [['mom6', '6-month momentum', -0.021, -1.2, 0], ['mom3', '3-month momentum', -0.034, -2.1, -0.31], ['rev5', '1-week pullback', 0.041, 2.6, 0.42], ['hi52', 'Near 52-week high', 0.012, 0.7, 0], ['trend', 'Above 50-day average', -0.028, -1.8, -0.22],
+      ['stack', '50 over 200-day average', 0.01, 0.5, 0], ['clen', 'Trend quality', 0.018, 1.1, 0], ['lowvol', 'Low volatility', 0.052, 3.4, 0.58], ['liq', 'Liquidity', 0.031, 2.2, 0.29], ['volx', 'Volume pick-up', -0.006, -0.4, 0],
+      ['updv', 'Up-day volume', 0.022, 1.6, 0.17], ['rsi', 'RSI(14)', -0.03, -1.9, -0.25], ['dd', 'Small drawdown', 0.027, 1.7, 0.2], ['sect', 'Sector strength', 0.015, 0.9, 0], ['relsect', 'Beats its sector', -0.012, -0.8, 0]];
+    var syms = ['HDFCBANK', 'ICICIBANK', 'ITC', 'HINDUNILVR', 'NESTLEIND', 'SBIN', 'TCS', 'INFY', 'RELIANCE', 'LT', 'BAJFINANCE', 'M&M', 'KOTAKBANK', 'AXISBANK', 'SUNPHARMA', 'TITAN', 'ASIANPAINT', 'MARUTI', 'POWERGRID', 'NTPC',
+      'COALINDIA', 'ONGC', 'BEL', 'HAL', 'TATAMOTORS', 'TATASTEEL', 'JSWSTEEL', 'ADANIENT', 'WIPRO', 'TECHM', 'YESBANK', 'IDEA', 'SUZLON', 'RVNL', 'IRFC', 'ZOMATO', 'PAYTM', 'NYKAA', 'DIXON', 'POLYCAB'];
+    var rows = syms.map(function (s, k) { return { sym: s, name: s + ' Ltd', sector: ['Banks', 'FMCG', 'IT', 'Energy', 'Auto', 'Metals'][k % 6], fno: k % 4 !== 3, close: 200 + (k * 137) % 3000, rating: 99 - k * 2.5 | 0, rank: k + 1, of: 1642, r1m: ((k * 7) % 13 - 6) / 1, r3m: ((k * 11) % 25 - 10) / 1,
+      plus: ['Low volatility', '1-week pullback', 'Liquidity'].slice(k % 2), minus: ['RSI(14)', '3-month momentum'] }; });
+    if (fnoOnly) rows = rows.filter(function (x) { return x.fno; });
+    return { ok: true, none: false, count: rows.length, rows: rows, sectors: [], factors: F.map(function (q) { return { id: q[0], name: q[1], ic: q[2], t: q[3], weight: q[4], used: q[4] !== 0, text: q[1] }; }),
+      meta: { asof: '2026-11-27', universe: 1642, h: 10, sessions: 259, oosDays: 54, oosSpreadPct: 0.41, oosHit: 61, oosIc: 0.034, oosTopPct: 0.92, oosAllPct: 0.51 } };
+  }
   function finish(name, res, delay) {
     setTimeout(function () {
       try { if (typeof window.onActionResult === 'function') window.onActionResult(name, JSON.stringify(res)); } catch (e) { /* ignore */ }
@@ -998,6 +1011,11 @@
     brokerStatus: function () { setTimeout(function () { finish('brokerStatus', { ok: true, connected: !!window.__brk, otpPending: !!window.__otp, apiKeySaved: !!window.__brk, clientCode: window.__brk ? 'MA12345' : '', lastSync: window.__brk ? Date.now() : 0, message: '', prices: window.__brk ? { source: 'mstock', label: 'm.Stock', state: 'ok', glitchesRejected: 2, text: 'Live prices from m.Stock · 140 ms · 2 bad ticks blocked' } : { source: 'groww', label: 'Groww', state: 'ok', glitchesRejected: 0, text: 'Live prices from Groww · 210 ms' } }, 0); }, 50); },
     brokerConnect: function (a) { setTimeout(function () { if (a.otp || a.totp) { window.__brk = true; window.__otp = false; finish('brokerConnect', { ok: true, connected: true }, 0); } else if (!a.password) finish('brokerConnect', { ok: false, error: 'Enter your password' }, 0); else { window.__otp = true; finish('brokerConnect', { ok: true, needsOtp: true }, 0); } }, 120); },
     brokerSync: function () { setTimeout(function () { finish('brokerSync', { ok: true, holdings: 7, added: 2, updated: 5, removed: 0 }, 0); }, 150); },
+    ratings: function () { setTimeout(function () { finish('ratings', mockRatings(false), 0); }, 150); },
+    ratingsFno: function () { setTimeout(function () { finish('ratingsFno', mockRatings(true), 0); }, 150); },
+    ratingOf: function (a) { setTimeout(function () { var sym = String((a && a.sym) || '').toUpperCase(), r = mockRatings(false), x = r.rows.filter(function (y) { return y.sym === sym; })[0] || r.rows[3];
+      var f = r.factors.map(function (q, k) { var p = (k * 37 + sym.length * 11) % 100; return { id: q.id, name: q.name, pct: p, weight: q.weight, contrib: q.used ? Math.round(q.weight * (p / 100 - 0.5) * 1000) / 1000 : 0 }; });
+      finish('ratingOf', Object.assign({}, x, { sym: sym, ok: true, none: false, rated: true, of: 1642, factors: f, meta: r.meta }), 0); }, 160); },
     updateCheck: function () { setTimeout(function () { finish('updateCheck', scenario === 'empty' ? { ok: true, current: 212, latest: 212, available: false } : { ok: true, current: 211, latest: 214, available: true, sizeMb: 6.4, notes: '- Charts: Darvas boxes, flags and trendlines on every chart\n- In-app updates\n- Terminal-style look', at: '2026-11-27T13:00:00Z' }, 0); }, 120); },
     updateInstall: function () { var p = 0, t = setInterval(function () { p += 20; finish('updateProgress', { ok: true, pct: p, got: p * 67000, total: 6700000 }, 0); if (p >= 100) { clearInterval(t); finish('updateInstall', { ok: true, installing: true, latest: 214 }, 0); } }, 150); },
     updatePermission: function () { finish('updatePermission', { ok: true }, 0); },

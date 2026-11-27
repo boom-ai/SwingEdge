@@ -15,7 +15,7 @@
 
   var TABS = { today: 1, setups: 1, money: 1, markets: 1, funds: 1, bot: 1, trades: 1, portfolio: 1, alerts: 1 };
   var S = {}, lastJson = null, lastDevJson = null;
-  var ui = { tab: TABS[qs.tab] ? qs.tab : 'today', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now(),
+  var ui = { tab: qs.tab === 'trades' ? 'portfolio' : TABS[qs.tab] ? qs.tab : 'today', pseg: qs.tab === 'trades' ? 'trades' : 'holdings', expanded: {}, pending: {}, device: null, bannerDismissed: false, importResult: null, now: Date.now(),
     recent: loadRecent(), search: { q: '', sent: null, shown: '', results: null, loading: false, err: '', filter: 'all', newList: null, newErr: '' }, emaOn: { 10: true, 20: true, 50: true, 100: false, 200: true }, watchEdit: false, stock: null, pnl: {}, vOpen: {}, listMeta: null,
     cf: null, cfOpts: { levels: true, vol: true, rangeOn: '6M' }, confirmTarget: {}, cfBoot: null, afterInfo: null, lastTarget: null };
   var cache = { top: null, view: null, tabs: null };
@@ -172,6 +172,9 @@
       if (name === 'liveScan' || name === 'liveScanSet') { onLiveScan(name, res, ok); return; }
       if (name === 'intraday') { ntBusy = 0; if (ok) { ui.intraday = res; ntAt = Date.now(); if (!sheet && (ui.tab === 'today' || ui.tab === 'setups')) render(true); } return; }
       if (name === 'updateCheck' || name === 'updateProgress' || name === 'updateInstall') { onUpdate(name, res, ok, err); return; }
+      if (name === 'ratings') { ratBusy = 0; if (ok) { ui.rat = res; ratAt = Date.now(); if (!sheet && (ui.tab === 'today' || ui.tab === 'setups')) render(true); } return; }
+      if (name === 'ratingsFno') { if (ok) { ui.ratFno = res; if (sheet && sheet.kind === 'fno') paintSheet(true); } return; }
+      if (name === 'ratingOf') { var stR = ui.stock; if (ok && stR && String(res.sym || '').toUpperCase() === stR.sym) { stR.rating = res; paintStock(['body']); } return; }
       if (name === 'brokerStatus') { if (ok) { ui.broker = res; if (sheet && (sheet.kind === 'settings' || sheet.kind === 'broker') && !sheet.waiting) { var bb = document.getElementById('brokerbox'); if (sheet.kind === 'settings') { try { var sb = elSheet.querySelector('.sb'), y = sb ? sb.scrollTop : 0; paintSheet(true); if (sb) elSheet.querySelector('.sb').scrollTop = y; } catch (e) {} } } } return; }
       if (name === 'brokerConnect') { clearPending('brokerConnect', true);
         if (!ok) { sheetIdle(err || 'Could not connect'); return; }
@@ -448,6 +451,7 @@
   /* ---------- commands ---------- */
   function setTab(t, anchor) {
     if (!TABS[t]) return;
+    if (t === 'trades') { ui.pseg = 'trades'; t = 'portfolio'; if (ui.tab === 'portfolio') { render(true); elView.scrollTop = 0; return; } }   // Trades now lives inside Portfolio
     if (t !== ui.tab) { scrollPos[ui.tab] = elView.scrollTop; ui.tab = t; render(true); elView.scrollTop = anchor ? 0 : (scrollPos[t] || 0); }
     else if (!anchor) elView.scrollTop = 0;
     if (anchor) {
@@ -644,13 +648,24 @@
     } catch (e) { ntBusy = 0; }
   }
   setInterval(nightLoop, 2000); setTimeout(nightLoop, 300);
+  /* ---------- factor ratings (rating.csv): Today + Setups ask every 30 min; F&O once per open; stock page per stock ---------- */
+  var ratAt = 0, ratBusy = 0, ratFnoAt = 0;
+  function ratLoop() {
+    try {
+      if (document.hidden || (ui.tab !== 'today' && ui.tab !== 'setups')) return;
+      var t = Date.now();
+      if ((t - ratAt >= 1800000 || !ui.rat) && !(ratBusy && t - ratBusy < 20000)) { ratBusy = t; ratAt = t; bridge().action('ratings', JSON.stringify({ limit: 500 })); }
+    } catch (e) { ratBusy = 0; }
+  }
+  setInterval(ratLoop, 3000); setTimeout(ratLoop, 600);
+  function ratFnoLoad() { var t = Date.now(); if (t - ratFnoAt < 1800000 && ui.ratFno) return; ratFnoAt = t; try { bridge().action('ratingsFno', '{}'); } catch (e) {} }
   /* ---------- live stock prices everywhere: one batch call every 2 s for the stocks on screen ---------- */
   ui.live = {};
   var liveAt = 0, liveBusy = 0;
   function liveSyms() {
     var out = [], add = function (x) { var y = SE.T(x && x.sym).trim().toUpperCase(); if (y && out.indexOf(y) < 0) out.push(y); };
     if (ui.stock && sheet && sheet.kind === 'stock') add(ui.stock);
-    var keys = ui.tab === 'portfolio' ? ['holdings'] : ui.tab === 'trades' ? ['trades', 'signals'] : ui.tab === 'setups' ? ['myWatch', 'ideas', 'watch'] : ['holdings', 'trades', 'signals', 'ideas', 'myWatch'];
+    var keys = ui.tab === 'portfolio' ? (ui.pseg === 'trades' ? ['trades', 'signals'] : ['holdings']) : ui.tab === 'trades' ? ['trades', 'signals'] : ui.tab === 'setups' ? ['myWatch', 'ideas', 'watch'] : ['holdings', 'trades', 'signals', 'ideas', 'myWatch'];
     keys.forEach(function (k) { SE.A(S && S[k]).forEach(add); });
     return out.slice(0, 80);
   }
@@ -864,6 +879,7 @@
     else openSheet('stock', { id: sym }, true);
     try { var sb = scrollEl(); if (sb) sb.scrollTop = 0; } catch (e) { /* ignore */ }
     requestInfo(); requestChart(130);
+    try { bridge().action('ratingOf', JSON.stringify({ sym: sym })); } catch (e) { /* ignore */ }
   }
   function onInfoResult(res, ok, err) {
     var st = ui.stock;
@@ -1131,9 +1147,11 @@
   function command(c, id, el) {
     if (c.indexOf('mk-') === 0 && mkCommand(c, id)) return;
     switch (c) {
-      case 'tab': if (id === 'fno') { ui.fno = ui.fno || { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); fnoPoll(true); break; } setTab(id); if (id === 'money') loadMoney(false); if (id === 'markets') mkLoad(false); if (id === 'funds') loadFunds(false); break;
+      case 'tab': if (id === 'fno') { ui.fno = ui.fno || { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); fnoPoll(true); ratFnoLoad(); break; } setTab(id); if (id === 'money') loadMoney(false); if (id === 'markets') mkLoad(false); if (id === 'funds') loadFunds(false); break;
+      case 'pseg': ui.pseg = id === 'trades' ? 'trades' : 'holdings'; render(true); elView.scrollTop = 0; break;
       case 'money-refresh': loadMoney(true); break;
-      case 'fno-open': ui.fno = ui.fno || { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); fnoPoll(true); break;
+      case 'fno-open': ui.fno = ui.fno || { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); fnoPoll(true); ratFnoLoad(); break;
+      case 'rated-all': sfSet({ type: 'rated' }); setTab('setups'); break;
       case 'fno-symgo': fnoSymGo(); break;
       case 'fno-sym': ui.fno.sym = id; ui.fno.exp = ''; ui.fno.form = null; ui.fno.res = null; paintSheet(true); fnoLoad(); break;
       case 'fno-width': ui.fno.width = (ui.fno.width || 8) > 8 ? 8 : 16; fnoLoad(); break;
@@ -1376,7 +1394,7 @@
   if (ui.tab === 'money') loadMoney(false);
   if (ui.tab === 'markets') { if (qs.seg) mkState().seg = qs.seg; render(true); mkLoad(false); }
   if (ui.tab === 'funds') loadFunds(false);
-  else if (qs.sheet === 'fno') { ui.fno = { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); }
+  else if (qs.sheet === 'fno') { ui.fno = { sym: 'NIFTY' }; openSheet('fno', {}, true); fnoLoad(); ratFnoLoad(); }
   else if (qs.sheet === 'opt') { ui.opt = { calc: { prem: 120 } }; openSheet('opt', {}, true); try { bridge().action('options', '{}'); } catch (e) {} }
   else if (qs.sheet === 'index') { ui.index = {}; openSheet('index', {}, true); loadIndex(qs.index || ''); }
   else if (qs.sheet === 'fund') { ui.fundInfo = {}; openSheet('fund', { id: qs.code || '1' }, true); try { bridge().action('fundInfo', JSON.stringify({ code: qs.code || '1' })); } catch (e) {} }

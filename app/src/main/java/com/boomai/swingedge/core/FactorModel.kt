@@ -80,6 +80,7 @@ object FactorModel {
         private val to = DoubleArray(n) { s.c[it] * s.v[it] }
         private fun sma(a: DoubleArray, i: Int, w: Int): Double { if (i + 1 < w) return Double.NaN; var t = 0.0; for (k in i - w + 1..i) t += a[k]; return t / w }
         fun turnover20(i: Int) = sma(to, i, 20)
+        fun sd20(i: Int): Double { if (i < 20) return 1.0; var m = 0.0; for (k in i - 19..i) m += ret[k]; m /= 20; var q = 0.0; for (k in i - 19..i) q += (ret[k] - m) * (ret[k] - m); return Math.sqrt(q / 19) }
         fun r(i: Int, back: Int): Double = if (i - back >= 0 && s.c[i - back] > 0) s.c[i] / s.c[i - back] - 1 else Double.NaN
 
         fun values(i: Int): DoubleArray {
@@ -152,7 +153,19 @@ object FactorModel {
         return if (any) s else Double.NaN
     }
 
-    private fun weightsFrom(stats: List<FactorStat>, ics: List<DoubleArray>): DoubleArray {
+    /**
+     * Weighting schemes compared in the same walk-forward test; the one that did best out of sample is used.
+     *  GATED  - only factors with overlap-corrected |t| >= MIN_T, weight = shrunk ICIR
+     *  SHRUNK - every factor, ICIR shrunk hard toward 0 (n / (n + 30))
+     *  BLEND  - half SHRUNK, half the documented-factor prior
+     *  PRIOR  - documented equity factors only (momentum, 52-week high, low volatility, trend quality, short-term reversal)
+     */
+    val MODES = listOf("GATED", "SHRUNK", "BLEND", "PRIOR")
+    /** prior in ICIR units: what decades of equity research (incl. Indian markets) found, at a modest strength */
+    val PRIOR_W: DoubleArray = DoubleArray(15).also { it[0] = 0.25; it[3] = 0.25; it[6] = 0.15; it[7] = 0.25; it[2] = 0.1; it[12] = 0.1 }
+
+    fun weightsFrom(mode: String, ics: List<DoubleArray>): DoubleArray {
+        if (mode == "PRIOR") return PRIOR_W.copyOf()
         val w = DoubleArray(NF)
         for (f in 0 until NF) {
             val v = ics.map { it[f] }.filter { !it.isNaN() }
@@ -160,15 +173,28 @@ object FactorModel {
             val m = v.average(); val sd = Math.sqrt(v.sumOf { (it - m) * (it - m) } / (v.size - 1))
             if (sd <= 0) continue
             val ir = m / sd; val t = ir * Math.sqrt(v.size / (H.toDouble() / STEP))
-            if (Math.abs(t) >= MIN_T) w[f] = ir * v.size / (v.size + 10.0)   // shrink toward 0 when history is short
+            when (mode) {
+                "GATED" -> if (Math.abs(t) >= MIN_T) w[f] = ir * v.size / (v.size + 10.0)
+                else -> w[f] = ir * v.size / (v.size + 30.0)
+            }
         }
+        if (mode == "BLEND") for (f in 0 until NF) w[f] = 0.5 * w[f] + 0.5 * PRIOR_W[f]
         return w
     }
 
+    class Oos(val mode: String) { var n = 0; var spread = 0.0; var hits = 0; var ic = 0.0; var top = 0.0; var all = 0.0
+        val avgSpread get() = if (n > 0) spread / n else 0.0 }
+
     // ---------------------------------------------------------------- the run
 
+    /** set by [build]: the scheme in use and every scheme's walk-forward record */
+    @Volatile var chosen = "BLEND"; private set
+    @Volatile var candidates: List<Oos> = emptyList(); private set
+    private val NOT_STOCK = Regex("ETF$|BEES$|ETF\\d*$|LIQUID|GILT|NIFTY|SENSEX|^GOLD\\d|^SILVER\\d|GOLD$|CASE$|^MON\\d|^MAFANG|^MAHKTECH|^HNGSNG|^SETF", RegexOption.IGNORE_CASE)
+    fun isStock(x: MarketStock): Boolean = !NOT_STOCK.containsMatchIn(x.sym) && !Regex("\\bETF\\b|Exchange Traded|Fund|Index", RegexOption.IGNORE_CASE).containsMatchIn(x.name)
+
     fun build(stocks: List<MarketStock>, sectors: Map<String, String>, fno: Set<String>): Result {
-        val have = stocks.filter { it.s.n > START + H && it.exch == Bhav.NSE && (it.series == "EQ" || it.series == "BE" || it.series == "") }
+        val have = stocks.filter { it.s.n > START + H && it.exch == Bhav.NSE && (it.series == "EQ" || it.series == "BE" || it.series == "") && isStock(it) }
         if (have.isEmpty()) return Result(0, 0, 0, FACTORS.map { FactorStat(it) }, 0, 0.0, 0.0, 0.0, 0.0, 0.0, emptyList())
         // calendar of sessions
         val days = java.util.TreeSet<Int>(); for (x in have) for (k in 0 until x.s.n) days.add(x.s.d[k])
@@ -185,6 +211,7 @@ object FactorModel {
                 val i = at[j][p]; if (i < START) continue
                 val s = have[j].s
                 if (s.c[i] < MIN_PRICE || !(feats[j].turnover20(i) >= MIN_TURNOVER)) continue
+                if (feats[j].sd20(i) < 0.003) continue   // moves under 0.3% a day: a fund or debt-like paper, not a stock
                 if (withFwd && (p + H >= nd || at[j][p + H] < 0)) continue
                 mem.add(j)
             }
@@ -221,23 +248,30 @@ object FactorModel {
             }
             p += STEP
         }
-        // 4. walk-forward test
-        var oosN = 0; var spread = 0.0; var hits = 0; var icSum = 0.0; var topSum = 0.0; var allSum = 0.0
+        // 4. walk-forward test of every scheme: on each test day weights use only IC days whose window had ended,
+        //    and only days with at least 8 such IC days are scored (the same days for every scheme)
+        val oos = MODES.map { Oos(it) }
         for ((k, pair) in icDays.withIndex()) {
             val (d, _) = pair
             val prior = icDays.subList(0, k).filter { it.first.p + H <= d.p }.map { it.second }
-            val w = weightsFrom(stats, prior)
-            if (w.all { it == 0.0 }) continue
-            val comp = DoubleArray(d.members.size) { composite(d.pct, it, w) }
-            val ok = d.fwd.indices.filter { !d.fwd[it].isNaN() && !comp[it].isNaN() }
-            if (ok.size < MIN_STOCKS) continue
-            val top = ok.sortedByDescending { comp[it] }.take(maxOf(5, ok.size / 10))
-            val tr = top.map { d.fwd[it] }.average(); val ar = ok.map { d.fwd[it] }.average()
-            oosN++; spread += tr - ar; if (tr > ar) hits++; topSum += tr; allSum += ar
-            icSum += corr(ranks(comp), ranks(d.fwd)).let { if (it.isNaN()) 0.0 else it }
+            if (prior.size < 8) continue
+            for (o in oos) {
+                val w = weightsFrom(o.mode, prior)
+                if (w.all { it == 0.0 }) { o.n++; continue }   // no factor on = holds the market: spread 0
+                val comp = DoubleArray(d.members.size) { composite(d.pct, it, w) }
+                val ok = d.fwd.indices.filter { !d.fwd[it].isNaN() && !comp[it].isNaN() }
+                if (ok.size < MIN_STOCKS) continue
+                val top = ok.sortedByDescending { comp[it] }.take(maxOf(5, ok.size / 10))
+                val tr = top.map { d.fwd[it] }.average(); val ar = ok.map { d.fwd[it] }.average()
+                o.n++; o.spread += tr - ar; if (tr > ar) o.hits++; o.top += tr; o.all += ar
+                o.ic += corr(ranks(comp), ranks(d.fwd)).let { if (it.isNaN()) 0.0 else it }
+            }
         }
-        // 3. final weights on the whole history
-        val w = weightsFrom(stats, icDays.map { it.second })
+        val best = oos.filter { it.n >= 10 }.maxByOrNull { it.avgSpread } ?: oos.first { it.mode == "BLEND" }
+        chosen = best.mode; candidates = oos
+        val oosN = best.n; val spread = best.spread; val hits = best.hits; val icSum = best.ic; val topSum = best.top; val allSum = best.all
+        // 3. final weights on the whole history, with the winning scheme
+        val w = weightsFrom(best.mode, icDays.map { it.second })
         for (f in 0 until NF) stats[f].weight = w[f]
         // 5. today
         val last = nd - 1
@@ -276,7 +310,8 @@ object FactorModel {
         sb.append(MAGIC).append(",v=").append(VERSION).append(",asof=").append(iso(r.asof)).append(",builtAt=").append(builtAt)
             .append(",sessions=").append(r.sessions).append(",universe=").append(r.universe).append(",h=").append(H)
             .append(",oosDays=").append(r.oosDays).append(",oosSpread=").append(r4(r.oosSpread)).append(",oosHit=").append(r2(r.oosHit))
-            .append(",oosIc=").append(r4(r.oosIc)).append(",oosTop=").append(r4(r.oosTopRet)).append(",oosAll=").append(r4(r.oosAllRet)).append('\n')
+            .append(",oosIc=").append(r4(r.oosIc)).append(",oosTop=").append(r4(r.oosTopRet)).append(",oosAll=").append(r4(r.oosAllRet))
+            .append(",model=").append(chosen).append(",cands=").append(candidates.joinToString(";") { it.mode + ":" + r4(it.avgSpread) + ":" + (if (it.n > 0) r2(it.hits * 100.0 / it.n) else "0") + ":" + it.n }).append('\n')
         for (s in r.stats) sb.append("#FACTOR,").append(s.f.id).append(',').append(q(s.f.name)).append(',').append(r4(s.mean)).append(',').append(r4(s.icir))
             .append(',').append(r2(s.tstat)).append(',').append(r4(s.weight)).append(',').append(s.ics.size).append(',').append(q(s.f.text)).append('\n')
         sb.append(COLS.joinToString(",")).append('\n')
@@ -338,7 +373,8 @@ object FactorModel {
     }
     fun meta(p: Parsed): Map<String, Any?> = linkedMapOf("asof" to p.meta["asof"], "builtAt" to (p.meta["builtAt"]?.toLongOrNull() ?: 0L), "sessions" to p.d("sessions").toInt(),
         "universe" to p.d("universe").toInt(), "h" to p.d("h").toInt(), "oosDays" to p.d("oosDays").toInt(), "oosSpreadPct" to pr(p.d("oosSpread")), "oosHit" to p.d("oosHit"),
-        "oosIc" to Math.round(p.d("oosIc") * 1000) / 1000.0, "oosTopPct" to pr(p.d("oosTop")), "oosAllPct" to pr(p.d("oosAll")))
+        "oosIc" to Math.round(p.d("oosIc") * 1000) / 1000.0, "oosTopPct" to pr(p.d("oosTop")), "oosAllPct" to pr(p.d("oosAll")), "model" to (p.meta["model"] ?: ""),
+        "cands" to (p.meta["cands"] ?: "").split(';').filter { it.contains(':') }.map { c -> val q = c.split(':'); linkedMapOf("mode" to q[0], "spreadPct" to q.getOrNull(1)?.toDoubleOrNull()?.let { pr(it) }, "hit" to q.getOrNull(2)?.toDoubleOrNull(), "days" to q.getOrNull(3)?.toIntOrNull()) })
 
     fun row(p: Parsed, x: Rated, withDrivers: Boolean): Map<String, Any?> {
         val m = linkedMapOf<String, Any?>("sym" to x.sym, "name" to x.name, "sector" to x.sector, "fno" to x.fno, "close" to (if (x.close.isNaN()) null else x.close),

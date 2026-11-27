@@ -3,7 +3,7 @@ package com.boomai.swingedge.coretest
 import com.boomai.swingedge.core.*
 
 object FactorTests {
-    fun all(): List<Pair<String, () -> Unit>> = listOf("factor-helpers" to ::helpers, "factor-planted" to ::planted, "factor-noise" to ::noise, "factor-csv" to ::csv)
+    fun all(): List<Pair<String, () -> Unit>> = listOf("factor-helpers" to ::helpers, "factor-planted" to ::planted, "factor-noise" to ::noise, "factor-csv" to ::csv, "factor-universe" to ::universe)
 
     private fun market(n: Int, days: Int, seed: Long, drift: (Int) -> Double): List<MarketStock> {
         val rnd = java.util.Random(seed)
@@ -45,8 +45,7 @@ object FactorTests {
     fun noise() {
         val st = market(150, 270, 11L) { 0.0 }
         val r = FactorModel.build(st, emptyMap(), emptySet())
-        val used = r.stats.count { it.weight != 0.0 }
-        T.check(used <= 3, "noise market: few factors pass the evidence gate ($used)")
+        T.check(FactorModel.candidates.size == 4 && FactorModel.candidates.all { Math.abs(it.avgSpread) < 0.01 }, "noise market: no scheme shows an out-of-sample edge: " + FactorModel.candidates.joinToString { it.mode + " " + "%.4f".format(it.avgSpread) })
         T.check(Math.abs(r.oosSpread) < 0.01, "noise market: no real out-of-sample edge (${"%.4f".format(r.oosSpread)})")
     }
 
@@ -64,5 +63,13 @@ object FactorTests {
         val row = FactorModel.row(p, p.rows[0], true); T.check((row["factors"] as List<*>).size == FactorModel.NF && row["of"] == r.rated.size, "stock row with factor breakdown")
         T.check(FactorModel.parse("junk") == null && FactorModel.parse(null) == null && FactorModel.parse(text.replace(",v=1,", ",v=9,")) == null, "bad files rejected")
         T.check(FactorModel.list(null, false, "", "top", 5)["none"] == true, "no file = none")
+    }
+
+    fun universe() {
+        fun m(sym: String, name: String) = MarketStock(sym, Bhav.NSE, "", "", "EQ", name, Series(sym, 1), 0)
+        T.check(listOf("LIQUIDBEES", "GOLDBEES", "NIFTYBEES", "LIQUIDETF", "SETFNIF50", "MON100", "GOLD1", "SILVERIETF", "HDFCGOLD").none { FactorModel.isStock(m(it, it)) }, "ETFs and liquid funds are not rated")
+        T.check(listOf("GOLDIAM", "BONDADA", "SILVERTUC", "RELIANCE", "M&M", "INDIGO").all { FactorModel.isStock(m(it, it + " Ltd")) }, "real companies with GOLD / BOND / SILVER in the name stay")
+        T.check(!FactorModel.isStock(m("ABC", "Some AMC - Exchange Traded Fund")), "a fund name is caught")
+        T.check(FactorModel.chosen in FactorModel.MODES, "the chosen scheme is one of the compared ones")
     }
 }

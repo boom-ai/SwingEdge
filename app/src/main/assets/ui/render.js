@@ -329,16 +329,14 @@
     }
     return h;
   }
-  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['markets', 'Markets'], ['funds', 'Funds'], ['trades', 'Trades'], ['portfolio', 'Portfolio'], ['fno', 'F&O']];
+  var TABS = [['today', 'Today'], ['setups', 'Setups'], ['markets', 'Markets'], ['funds', 'Funds'], ['portfolio', 'Portfolio'], ['fno', 'F&O']];
   function tabbar(S, ui) {
     var c = counts(S), nOpen = openTrades(S).length;
     return TABS.map(function (t) {
       var badge = '';
       if (t[0] === 'today' && (c.sell + c.buy + c.tgt) > 0) badge = '<span class="badge' + (c.sell ? '' : c.tgt ? ' a' : ' g') + '">' + (c.sell + c.buy + c.tgt) + '</span>';
-      if (t[0] === 'trades' && c.tradeActs > 0) badge = '<span class="badge">' + c.tradeActs + '</span>';
-      if (t[0] === 'portfolio' && c.holdActs > 0) badge = '<span class="badge a">' + c.holdActs + '</span>';
-      if (t[0] === 'trades' && nOpen && !badge) badge = '<span class="badge n">' + nOpen + '</span>';
-      var on = ui.tab === t[0];
+      if (t[0] === 'portfolio' && (c.holdActs + c.tradeActs) > 0) badge = '<span class="badge' + (c.tradeActs ? '' : ' a') + '">' + (c.holdActs + c.tradeActs) + '</span>';
+      var on = ui.tab === t[0] || (t[0] === 'portfolio' && ui.tab === 'trades');
       return '<button type="button" class="tab' + (on ? ' on' : '') + '" data-c="tab" data-id="' + t[0] + '"' + (on ? ' aria-current="page"' : '') + '>' +
         ic(t[0] === 'fno' ? 'chart' : t[0]) + '<span>' + esc(t[1]) + '</span>' + badge + '</button>';
     }).join('');
@@ -614,6 +612,65 @@
       btn('live-bg', null, 'Screen-off scanning: ' + (L.bg === true ? 'on' : 'off'), 'sm ghost', { busy: pend(ui, 'liveScanSet') }) + '</div>';
   }
 
+  /* ---------- multi-factor rating (FactorModel.kt / rating.csv) ---------- */
+  function ratTone(r) { r = N(r); return r === null ? 'mut' : r >= 80 ? 'up' : r <= 20 ? 'down' : 'mut'; }
+  function ratBadge(r) { r = N(r); return '<span class="rbadge ' + ratTone(r) + '"><b class="num">' + (r === null ? DASH : Math.round(r)) + '</b></span>'; }
+  function ratModelLine(m) {
+    m = O(m); if (!(N(m.oosDays) > 0)) return 'Model weights come from how each factor predicted the next ' + (N(m.h) || 10) + ' sessions over the last year.';
+    var sp = N(m.oosSpreadPct), hit = N(m.oosHit);
+    return 'Walk-forward test (' + N(m.oosDays) + ' days, weights only from earlier data): the top 10% returned ' + (N(m.oosTopPct) >= 0 ? '+' : '') + (N(m.oosTopPct) || 0).toFixed(2) + '% vs ' +
+      (N(m.oosAllPct) >= 0 ? '+' : '') + (N(m.oosAllPct) || 0).toFixed(2) + '% for all stocks per ' + (N(m.h) || 10) + ' sessions (' + (sp >= 0 ? '+' : '') + (sp || 0).toFixed(2) + '%), beating the market on ' + Math.round(hit || 0) + '% of days.';
+  }
+  function ratRow(x) {
+    x = O(x);
+    var why = texts(x.plus).slice(0, 2).join(' · ');
+    return '<button type="button" class="lrow rrow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' + ratBadge(x.rating) +
+      '<span class="l"><b>' + tx(x.sym) + (x.fno === true ? ' <i class="qt">F&amp;O</i>' : '') + '</b><small>' + (why ? esc(why) : tx(x.sector, '')) + '</small></span>' +
+      '<span class="r"><b class="num">' + px(x.close) + '</b><small class="num">#' + (N(x.rank) || DASH) + ' · 3M <span class="' + tone(x.r3m) + '">' + (N(x.r3m) === null ? DASH : pc(x.r3m, true)) + '</span></small></span></button>';
+  }
+  function ratedList(ui, f) {
+    var r = O(ui.rat);
+    if (r.ok !== true) return skCard('Top rated', 5);
+    if (r.none === true) return '<div class="empty"><div class="ei">' + ic('clock') + '</div><h3>Ratings arrive tonight</h3><p>The rating job runs every evening after the market closes.</p></div>';
+    var rows = A(r.rows).filter(function (x) { x = O(x); return (!f.fno || x.fno === true) && sfPriceOk(x.close, f.price); });
+    var used = A(r.factors).filter(function (x) { return O(x).used === true; });
+    var h = '<div class="hint hintpad">' + ic('info') + '<span class="t">Every liquid NSE stock (' + grp(String(N(O(r.meta).universe) || 0)) + ') rated 0–100 on ' + used.length + ' of ' + A(r.factors).length +
+      ' factors that proved themselves over the last year. ' + esc(ratModelLine(r.meta)) + '</span></div>';
+    if (!rows.length) return h + '<p class="none">Nothing matches these filters.</p>';
+    var max = ui.sfMore === true ? rows.length : 30;
+    h += '<div class="card mv">' + rows.slice(0, max).map(ratRow).join('') + '</div>';
+    if (rows.length > max) h += '<div class="btns hintpad">' + btn('sf-more', null, 'Show all ' + rows.length, 'sm ghost') + '</div>';
+    h += '<details class="rfac"><summary>Factors and their tested weight</summary>' + tbl(['Factor', 'IC', 't', 'Weight'], A(r.factors).map(function (x) {
+      x = O(x); return '<tr' + (x.used === true ? '' : ' class="mut"') + '><td>' + tx(x.name) + '</td><td class="num ' + tone(x.ic) + '">' + (N(x.ic) || 0).toFixed(3) + '</td><td class="num">' + (N(x.t) || 0).toFixed(1) + '</td><td class="num ' + tone(x.weight) + '">' + (x.used === true ? (N(x.weight) || 0).toFixed(2) : 'off') + '</td></tr>';
+    })) + '<p class="sk-p mut">IC = how well the factor ranked the next ' + (N(O(r.meta).h) || 10) + ' sessions’ returns (1 = perfectly). Factors with t below 1.5 are switched off; a negative weight means the opposite of the factor worked.</p></details>';
+    return h;
+  }
+  function ratedBlock(ui) {
+    var r = O(ui.rat); if (r.ok !== true || r.none === true || !A(r.rows).length) return '';
+    return sech('Top rated stocks', { id: 'rated', cnt: N(O(r.meta).universe) ? 'of ' + grp(String(N(O(r.meta).universe))) : '', info: ['rated', ratModelLine(r.meta), 'About the rating'],
+      right: '<button type="button" class="linkbtn" data-c="rated-all">See all</button>' }, ui) + '<div class="card mv">' + A(r.rows).slice(0, 5).map(ratRow).join('') + '</div>';
+  }
+  function ratingCard(ui) {
+    var r = O(O(ui.stock).rating);
+    if (r.ok !== true || r.none === true) return '';
+    if (r.rated !== true) return '<section class="card sk-card"><h3 class="skh">Factor rating</h3><p class="sk-p mut">Not rated: only NSE stocks trading ₹2 crore a day or more at ₹20+ are rated.</p></section>';
+    var fs = A(r.factors).filter(function (x) { return N(O(x).weight) !== 0 && N(O(x).weight) !== null; }).sort(function (a, b) { return Math.abs(N(O(b).contrib) || 0) - Math.abs(N(O(a).contrib) || 0); });
+    var mx = 0; fs.forEach(function (x) { mx = Math.max(mx, Math.abs(N(O(x).contrib) || 0)); });
+    return '<section class="card sk-card" id="sk-rating"><h3 class="skh">Factor rating</h3><div class="rhead">' + ratBadge(r.rating) +
+      '<div><b>Rank ' + grp(String(N(r.rank) || 0)) + ' of ' + grp(String(N(r.of) || 0)) + '</b><span class="mut">' + tx(r.sector, 'NSE') + (texts(r.plus).length ? ' · strong on ' + esc(texts(r.plus).slice(0, 2).join(', ').toLowerCase()) : '') + '</span></div></div>' +
+      '<div class="rbars">' + fs.map(function (x) {
+        x = O(x); var c = N(x.contrib) || 0, w = mx > 0 ? Math.abs(c) / mx * 50 : 0;
+        return '<div class="rbar"><span class="rn">' + tx(x.name) + '</span><span class="rt"><i class="' + (c >= 0 ? 'p' : 'n') + '" style="' + (c >= 0 ? 'left:50%' : 'right:50%') + ';width:' + w.toFixed(1) + '%"></i></span><span class="rp num">' + (N(x.pct) === null ? DASH : Math.round(N(x.pct))) + '</span></div>';
+      }).join('') + '</div><p class="sk-p mut">Bars: how much each factor lifts (right) or drags (left) this stock’s rating; the number is its percentile among rated stocks. ' + esc(ratModelLine(r.meta)) + '</p></section>';
+  }
+  function fnoRated(ui) {
+    var r = O(ui.ratFno); if (r.ok !== true || r.none === true) return '';
+    var rows = A(r.rows); if (rows.length < 6) return '';
+    var top = rows.slice(0, 5), bot = rows.slice(-5).reverse();
+    var line = function (x, bull) { x = O(x); return '<button type="button" class="lrow rrow" data-c="fno-sym" data-id="' + esc(T(x.sym)) + '">' + ratBadge(x.rating) + '<span class="l"><b>' + tx(x.sym) + '</b><small>' + esc((bull ? texts(x.plus) : texts(x.minus)).slice(0, 2).join(' · ')) + '</small></span><span class="r"><b class="num ' + (bull ? 'up' : 'down') + '">' + (bull ? 'CE bias' : 'PE bias') + '</b><small class="num">#' + N(x.rank) + '</small></span></button>'; };
+    return sech('F&amp;O stocks by rating', { id: 'fnorat', info: ['fnorat', 'The ' + rows.length + ' F&O stocks ranked by the factor rating. Top = strongest on the factors that worked over the last year (a bias for calls); bottom = weakest (a bias for puts). A rating is a 2-week tilt, not an intraday signal. ' + ratModelLine(r.meta), 'About this list'] }, ui) +
+      '<div class="card mv"><div class="subh"><span>Strongest</span></div>' + top.map(function (x) { return line(x, true); }).join('') + '<div class="subh"><span>Weakest</span></div>' + bot.map(function (x) { return line(x, false); }).join('') + '</div>';
+  }
   /* ---------- Setups: tonight's back-tested list (intraday.csv) with filters ---------- */
   var SF_PRICE = [['any', 'Any price'], ['lt200', 'Under ₹200'], ['m', '₹200–1,000'], ['gt1k', 'Over ₹1,000']];
   function sfOpts(ui) { var f = O(ui.sf); return { type: T(f.type) || 'all', fno: f.fno === true, price: T(f.price) || 'any', lose: f.lose === true }; }
@@ -653,8 +710,9 @@
     var h = sech(title, { id: 'nsetups', info: ['nsetups', 'Built every trading evening at about 8:15 PM from the day’s NSE closing data for every liquid stock. Each setup type is back-tested on the last year of data: you see how many times it fired, how often it won and the average result in R (1R = the risk from entry to stop). Intraday setups trigger in the next session and close by 15:15; swing setups are bought at the next open and held for days. Setup types that lost money in testing are hidden unless you turn on “Show losing types”.', 'About these setups'],
       right: N(d.stocks) > 0 ? '<span class="sr2">' + grp(String(N(d.stocks))) + ' stocks</span>' : '' }, ui);
     if (d.ok !== true || d.none === true) {
-      h += '<div class="chips sfch">' + chip('sf-type', 'all', 'Tonight’s list', f.type !== 'leaders') + chip('sf-type', 'leaders', 'Trend leaders', f.type === 'leaders', ' <em class="num">' + A(S.ideas).length + '</em>') + '</div>';
+      h += '<div class="chips sfch">' + chip('sf-type', 'rated', 'Top rated', f.type === 'rated') + chip('sf-type', 'all', 'Tonight’s list', f.type !== 'leaders' && f.type !== 'rated') + chip('sf-type', 'leaders', 'Trend leaders', f.type === 'leaders', ' <em class="num">' + A(S.ideas).length + '</em>') + '</div>';
       if (f.type === 'leaders') return h + ideasBlock(S, 'setups', ui);
+      if (f.type === 'rated') return h + ratedList(ui, f);
       return h + (d.ok !== true ? skCard('', 4) : '<div class="empty"><div class="ei">' + ic('clock') + '</div><h3>Tonight’s list is not here yet</h3><p>It is built after the market closes (about 8:15 PM) and arrives by 10 PM.</p></div>');
     }
     var rules = A(d.rules), all = A(d.setups), cnt = {}, kinds = { intraday: 0, swing: 0 };
@@ -670,12 +728,14 @@
       if (!cnt[id] && f.type !== id) return;
       t1 += chip('sf-type', id, esc(T(r.name).replace(/ \(swing\)$/, '')), f.type === id, ' <em class="num' + (lost ? ' down' : '') + '">' + (cnt[id] || 0) + '</em>');
     });
+    t1 = chip('sf-type', 'rated', 'Top rated', f.type === 'rated', '') + t1;
     t1 += chip('sf-type', 'leaders', 'Trend leaders', f.type === 'leaders', ' <em class="num">' + A(S.ideas).length + '</em>');
     var pl = SF_PRICE.filter(function (p) { return p[0] === f.price; })[0] || SF_PRICE[0];
     var t2 = chip('sf-fno', null, 'F&amp;O only', f.fno) + chip('sf-price', null, esc(pl[1]) + ' ▾', f.price !== 'any') + chip('sf-lose', null, 'Show losing types', f.lose) +
       (f.fno || f.price !== 'any' || f.lose || f.type !== 'all' ? chip('sf-clear', null, 'Clear', false) : '');
     h += '<div class="chips sfch">' + t1 + '</div><div class="chips sfch2">' + t2 + '</div>';
     if (f.type === 'leaders') return h + ideasBlock(S, 'setups', ui);
+    if (f.type === 'rated') return h + ratedList(ui, f);
     var cur = O(rules.filter(function (r) { return T(O(r).id) === f.type; })[0]);
     if (T(cur.id)) h += '<div class="hint hintpad">' + ic(T(cur.status) === 'TESTED-' ? 'warn' : 'info') + '<span class="t"><b>' + tx(cur.name) + '.</b> ' + tx(cur.text) + ' Tested ' + (N(cur.trades) || 0) + ' times: ' + Math.round(N(cur.winPct) || 0) + '% won, average ' + ((N(cur.avgR) || 0) >= 0 ? '+' : '−') + Math.abs(N(cur.avgR) || 0).toFixed(2) + 'R.</span></div>';
     var rows = setupRows(d, f), max = ui.sfMore === true ? rows.length : 25;
@@ -707,7 +767,7 @@
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
     if (ui.fullCards !== true) { var L = simpleLists(S, ui, items);
-      return banner(ui) + hero(S, ui, L) + statusPanel(S, ui, now) + fnoStrip(S, ui) + intradayView(S, ui) + simpleToday(S, ui, items, bs, L) + liveScanView(S, ui) +
+      return banner(ui) + hero(S, ui, L) + statusPanel(S, ui, now) + fnoStrip(S, ui) + intradayView(S, ui) + ratedBlock(ui) + simpleToday(S, ui, items, bs, L) + liveScanView(S, ui) +
       '<div class="btns hintpad">' + btn('fullcards', null, 'Detailed view', 'sm ghost', { icon: 'layers' }) + '</div>'; }
     var h = banner(ui) + fnoStrip(S, ui) + statusPanel(S, ui, now) + intradayView(S, ui) + glance(S) + plan(S, items, bs) + liveScanView(S, ui);
     if (ui.fullCards === true || !items.length) h += '<div class="sec"><h2>Act now</h2>' + (items.length ? '<span class="cnt">' + items.length + '</span>' : '') + '</div>';
@@ -715,7 +775,7 @@
       h += '<div class="empty"><div class="ei">' + ic(bs.icon) + '</div><h3>' + esc(bs.title) + '</h3><p>' + esc(bs.text) + '</p>' +
         (bs.link ? '<div class="btns">' + btn('strategies', null, bs.link, 'sm') + '</div>' : '') + '</div>';
       var ot = openTrades(S).length;
-      h += ideasBlock(S, 'today', ui) + watchList(S) + movers(S);
+      h += (ratedBlock(ui) || ideasBlock(S, 'today', ui)) + watchList(S) + movers(S);
       if (ot) h += '<div class="hint hintpad">' + ic('check') + '<span class="t">' + ot + ' open trade' + (ot > 1 ? 's are' : ' is') + ' on HOLD. Nothing to do on ' + (ot > 1 ? 'them' : 'it') + '.</span></div>';
       return h;
     }
@@ -736,7 +796,7 @@
       h += simpleToday(S, ui, items, bs);
     }
     h += '<div class="btns hintpad">' + btn('fullcards', null, ui.fullCards === true ? 'Simple view' : 'Detailed cards', 'sm ghost', { icon: 'layers' }) + '</div>';
-    return h + ideasBlock(S, 'today', ui) + watchList(S);
+    return h + (ratedBlock(ui) || ideasBlock(S, 'today', ui)) + watchList(S);
   }
 
   /* ---------- Trades ---------- */
@@ -902,6 +962,18 @@
     var health = '<div class="hl"><span class="hold">' + vc.HOLD + ' healthy</span><span class="watch">' + vc.WATCH + ' on watch</span><span class="trim">' + vc.TRIM + ' to trim</span><span class="sell">' + vc.SELL + ' to sell</span></div>';
     return '<div class="sec"><h2>Overview</h2><span class="sp"></span><button type="button" class="linkbtn" data-c="ov-toggle">' + (ovOpen ? 'Less' : 'More') + '</button></div><div class="card ov">' + health +
       (ovOpen ? '<div class="k">Where the money is</div>' + bar + (warn ? '<div class="ovw">' + ic('warn') + '<span>' + esc(warn) + '</span></div>' : '') + wl : (warn ? '<div class="ovw">' + ic('warn') + '<span>' + esc(warn) + '</span></div>' : '')) + '</div>';
+  }
+  /* Portfolio tab = holdings + the app's trades, one place: a segmented switch at the top */
+  function portTab(S, ui) {
+    var seg = ui.tab === 'trades' || ui.pseg === 'trades' ? 'trades' : 'holdings', c = counts(S);
+    var nh = A(S.holdings).length, nt = openTrades(S).length;
+    var b = function (id, label, n, acts, tone) {
+      var on = seg === id;
+      return '<button type="button" class="pseg' + (on ? ' on' : '') + '" data-c="pseg" data-id="' + id + '" aria-pressed="' + on + '"><b>' + label + '</b><span class="num">' + n + '</span>' +
+        (acts > 0 ? '<i class="pact ' + tone + '">' + acts + ' to act</i>' : '') + '</button>';
+    };
+    return '<div class="psegs" role="tablist">' + b('holdings', 'Holdings', nh, c.holdActs, 'a') + b('trades', 'Trades', nt + ' open', c.tradeActs, 'r') + '</div>' +
+      (seg === 'trades' ? trades(S, ui) : portfolio(S, ui));
   }
   function portfolio(S, ui) {
     var p = O(S.portfolio), hs = sortedHoldings(S, ui.sort);
@@ -1342,8 +1414,7 @@
   function view(S, ui) {
     S = O(S); ui = O(ui);
     if (ts(ui.now) === null) ui.now = Date.now();
-    if (ui.tab === 'trades') return trades(S, ui);
-    if (ui.tab === 'portfolio') return portfolio(S, ui);
+    if (ui.tab === 'trades' || ui.tab === 'portfolio') return portTab(S, ui);
     if (ui.tab === 'alerts') return alerts(S, ui);
     if (ui.tab === 'setups') return setups(S, ui);
     if (ui.tab === 'money') return money(S, ui);
@@ -1726,7 +1797,7 @@
   }
   function labCalls(S, ui) {
     var L = O(ui.lab), all = A(L.today), cap = N(O(S.settings).capital) || 0, td = all.slice(0, 20);
-    var h = marketViews(ui) + movers(ui) + sech('Today’s F&amp;O calls', { cnt: all.length, info: ['fcalls', 'Calls marked Learning or Unproven are paper tests, not advice: no rule here has proven itself yet, and SEBI found about 9 in 10 retail F&O traders lose money. “Buy ≤” is the ask price + 2%. Every call exits by 3:15 pm.', 'About these calls'],
+    var h = marketViews(ui) + fnoRated(ui) + movers(ui) + sech('Today’s F&amp;O calls', { cnt: all.length, info: ['fcalls', 'Calls marked Learning or Unproven are paper tests, not advice: no rule here has proven itself yet, and SEBI found about 9 in 10 retail F&O traders lose money. “Buy ≤” is the ask price + 2%. Every call exits by 3:15 pm.', 'About these calls'],
       right: all.length > 20 ? '<span class="sr2">newest 20</span>' : '' }, ui);
     if (!L.ok) return h + '<p class="none">Loading calls…</p>';
     if (!td.length) return h + '<p class="none">No call yet today. Twelve rules watch every F&amp;O index and stock from 9:20 am to 2:30 pm.</p>';
@@ -1774,14 +1845,7 @@
     var rows = setupRows(d, { type: 'all', fno: false, price: 'any', lose: false }), rules = A(d.rules), all = ui.ntMore === true, shown = all ? rows : rows.slice(0, 6), r2 = function (v) { var n = N(v); return n === null ? DASH : (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(2) + 'R'; };
     var h = '<section class="card nt" aria-label="Intraday calls">' + sech((d.isToday === true ? 'Today' : 'Tomorrow') + ' · ' + esc(T(d.forLabel)), { id: 'night', cnt: rows.length,
       info: ['night', texts(d.notes).join(' ') || 'Mechanical rules, back-tested on daily bars only. Not proven live.', 'About these calls'], right: '<button type="button" class="linkbtn" data-c="tab" data-id="setups">Filter</button>' }, ui);
-    h += rows.length ? '<div class="list">' + shown.map(function (x) {
-      var side = T(x.side), sw = T(x.kind) === 'swing', gap = side === 'IF GAP';
-      var lead = gap ? 'If gap' : side === 'SELL' ? 'Sell < ' + px(x.trigger) : (sw ? 'Buy ≈ ' : 'Buy > ') + px(x.trigger);
-      var sub = gap ? 'at the open' : 'stop ' + px(x.stop) + (N(x.target) > 0 ? ' · tgt ' + px(x.target) : '') + (N(x.qty) > 0 ? ' · ' + (N(x.qty) | 0) + ' sh' : '');
-      return '<button type="button" class="lrow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
-        '<span class="l"><b>' + tx(x.sym) + (x.fno === true ? ' <i class="qt">F&amp;O</i>' : '') + (sw ? ' <i class="qt">swing</i>' : '') + '</b><small>' + tx(x.ruleName) + ' · ' + (N(x.trades) || 0) + ' tests, ' + (N(x.winPct) === null ? DASH : Math.round(N(x.winPct)) + '%') + ' won, ' + r2(x.avgR) + '</small>' +
-        '<small class="ntw">' + tx(x.when) + '</small></span>' +
-        '<span class="r"><b class="num ' + (side === 'SELL' ? 'down' : gap ? '' : 'up') + '">' + esc(lead) + '</b><small class="num">' + esc(sub) + '</small></span></button>';
+    h += rows.length ? '<div class="list">' + shown.map(function (x) { return nightRow(x);
     }).join('') + '</div>' : '<p class="none">No rule has a positive back-test record right now — sit out.</p>';
     if (rows.length > shown.length || all && rows.length > 6) h += '<div class="btns hintpad">' + btn('night-more', null, all ? 'Show fewer' : 'Show all ' + rows.length, 'sm ghost') + '</div>';
     A(d.index).forEach(function (x) {
@@ -2359,7 +2423,7 @@
     }
     var d = st.info;
     var more = O(ui).stMore === true;
-    return listingCard(d) + '<section class="card sk-card" id="sk-sum"><h3 class="skh">In short</h3>' + (T(d.summary).trim() ? '<p class="sk-p">' + esc(T(d.summary).trim()) + '</p>' : '<p class="sk-p mut">No summary available.</p>') + '</section>' +
+    return listingCard(d) + ratingCard(ui) + '<section class="card sk-card" id="sk-sum"><h3 class="skh">In short</h3>' + (T(d.summary).trim() ? '<p class="sk-p">' + esc(T(d.summary).trim()) + '</p>' : '<p class="sk-p mut">No summary available.</p>') + '</section>' +
       levelsCard(d) + heldCard(d) + setupsCard(d) + checksCard(d) + moneyCard(d) +
       '<div class="btns hintpad">' + btn('st-more', null, more ? 'Fewer indicators' : 'More indicators', 'sm ghost', { icon: 'layers' }) + '</div>' +
       (more ? crossCard(d) + emaTable(d) + momentumCard(d) + statsCard(d) : '') +

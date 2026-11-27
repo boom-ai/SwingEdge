@@ -1528,3 +1528,33 @@ a, .lnk { color: var(--link); }
 .lrow.nr .r { flex: 0 0 auto; max-width: 54%; }
 .lrow.nr .r b { font-size: var(--t-sec); }
 .lrow.nr .r small { font-size: var(--t-cap); }
+/* Portfolio: Holdings | Trades switch */
+.psegs { display: flex; gap: 0; margin: 0 0 var(--s3); box-shadow: inset 0 0 0 1px var(--line-2); border-radius: var(--r); overflow: hidden; }
+.pseg { flex: 1 1 0; min-width: 0; min-height: 52px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: 6px 12px; text-align: left; color: var(--text-2); position: relative; }
+.pseg + .pseg { border-left: 1px solid var(--line-2); }
+.pseg b { font-size: var(--t-cap); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.pseg .num { font-size: var(--t-body); color: var(--text); margin-top: 2px; }
+.pseg.on { background: var(--accent-bg); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.pseg .pact { position: absolute; top: 8px; right: 10px; font-style: normal; font-size: var(--t-cap); font-weight: 700; padding: 0 5px; border-radius: 2px; }
+.pseg .pact.a { background: var(--accent); color: #000; } .pseg .pact.r { background: var(--red); color: #fff; }
+/* factor rating */
+.rbadge { flex: none; width: 38px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--line-2); font-family: var(--mono); font-size: 15px; }
+.rbadge.up { box-shadow: inset 0 0 0 1px var(--green); color: var(--green); background: var(--green-bg); }
+.rbadge.down { box-shadow: inset 0 0 0 1px var(--red); color: var(--red); background: var(--red-bg); }
+.rbadge.mut { color: var(--text-2); }
+.lrow.rrow { gap: 10px; min-height: 0; padding: 9px var(--pad); }
+.lrow.rrow .l small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rhead { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
+.rhead .rbadge { width: 52px; height: 40px; font-size: 20px; }
+.rhead div { display: flex; flex-direction: column; min-width: 0; }
+.rhead b { font-size: var(--t-body); }
+.rhead .mut { font-size: var(--t-sec); }
+.rbars { display: flex; flex-direction: column; gap: 5px; }
+.rbar { display: grid; grid-template-columns: 42% 1fr 28px; align-items: center; gap: 8px; font-size: var(--t-sec); }
+.rbar .rn { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rbar .rt { position: relative; height: 8px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); }
+.rbar .rt::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-2); }
+.rbar .rt i { position: absolute; top: 1px; bottom: 1px; }
+.rbar .rt i.p { background: var(--green); } .rbar .rt i.n { background: var(--red); }
+.rbar .rp { text-align: right; color: var(--muted); }
+details.rfac { margin: 8px 0; } details.rfac summary { color: var(--accent); font-size: var(--t-sec); font-weight: 600; padding: 8px 0; cursor: pointer; }

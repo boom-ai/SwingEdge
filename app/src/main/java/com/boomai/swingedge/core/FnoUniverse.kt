@@ -7,6 +7,7 @@ package com.boomai.swingedge.core
  */
 object FnoUniverse {
     const val LOTS_URL = "https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv"
+    const val LOTS_MIRROR = "https://raw.githubusercontent.com/boom-ai/SwingEdge/main/data/fo_lots.csv"
     val MONTHS = listOf("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
     val YAHOO_INDEX = mapOf("NIFTY" to "^NSEI", "BANKNIFTY" to "^NSEBANK", "FINNIFTY" to "NIFTY_FIN_SERVICE.NS", "MIDCPNIFTY" to "^NSEMDCP50", "NIFTYNXT50" to "^NSMIDCP")
 

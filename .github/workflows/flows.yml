@@ -26,6 +26,10 @@ jobs:
         run: python3 tools/indices.py data/indices.csv || true
       - name: Industries
         run: timeout 1800 python3 -u tools/industries.py data/symbols.csv data/industries.csv 900 || true
+      - name: F&O lot sizes
+        run: |
+          curl -sSL --retry 3 -A "Mozilla/5.0" -o /tmp/fo_lots.csv https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv || true
+          if [ "$(grep -c , /tmp/fo_lots.csv 2>/dev/null || echo 0)" -gt 100 ]; then cp /tmp/fo_lots.csv data/fo_lots.csv; fi
       - name: Commit fast data
         run: |
           git config user.name "swingedge-bot"; git config user.email "actions@users.noreply.github.com"

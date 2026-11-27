@@ -2123,6 +2123,7 @@ class SwingApp(private val p: Platform) {
         if (uniLotsDay != day) {
             var txt = try { p.httpGetAll(listOf(FnoUniverse.LOTS_URL)).firstOrNull() } catch (t: Throwable) { null }
             var lots = FnoUniverse.parseLots(txt)
+            if (lots.size < 3) { txt = try { p.httpGetAll(listOf(FnoUniverse.LOTS_MIRROR)).firstOrNull() } catch (t: Throwable) { null }; lots = FnoUniverse.parseLots(txt) }   // NSE archive blocked on this network: use the copy kept in the repo
             if (lots.size >= 3) { try { p.write("fo_lots.csv", txt!!) } catch (t: Throwable) {}; uniLotsDay = day }
             else { txt = try { p.read("fo_lots.csv") } catch (t: Throwable) { null }; lots = FnoUniverse.parseLots(txt); if (lots.isNotEmpty() && Fno.LOT.size < 3) uniLotsDay = -2 }
             for ((k, v) in lots) Fno.LOT[k] = v

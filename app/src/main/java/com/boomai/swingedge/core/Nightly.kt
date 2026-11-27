@@ -124,7 +124,9 @@ class NightSetup(
     val trigger: Double, val stop: Double, val target: Double, val exit: String, val qty: Int, val riskRs: Double,
     val fno: Boolean, val cond: String, val score: Double,
     /** conviction: tested average R / win % / trades of past setups of this rule in the same group as this one; [hc] = high conviction */
-    var conv: Double = Double.NaN, var convWin: Double = Double.NaN, var convN: Int = 0, var hc: Boolean = false, var why: String = ""
+    var conv: Double = Double.NaN, var convWin: Double = Double.NaN, var convN: Int = 0, var hc: Boolean = false, var why: String = "",
+    /** strength of the winning trait (direction-adjusted): orders setups inside the same group; not stored */
+    var tie: Double = Double.NaN
 )
 
 /** One historical trade of a rule with the traits of the stock on the signal day. */
@@ -654,6 +656,7 @@ object NightCalls {
             val m = models[x.rule] ?: continue
             val bq = m.bucket(liveX[x]?.getOrNull(m.feat) ?: Double.NaN)
             x.conv = m.mean[bq]; x.convWin = m.win[bq]; x.convN = m.n[bq]; x.hc = m.hc(bq); x.why = convWhy(m, bq)
+            if (m.feat >= 0) liveX[x]?.getOrNull(m.feat)?.let { if (!it.isNaN()) x.tie = m.dir * it }
         }
         fun capPerRule(xs: List<NightSetup>, per: Int, total: Int): List<NightSetup> {
             val cnt = HashMap<String, Int>(); val seen = HashSet<String>(); val out = ArrayList<NightSetup>()
@@ -665,7 +668,7 @@ object NightCalls {
             }
             return out
         }
-        val byConv = compareByDescending<NightSetup> { if (it.conv.isNaN()) -9.0 else it.conv }.thenByDescending { it.hc }.thenBy { it.sym }
+        val byConv = compareByDescending<NightSetup> { if (it.conv.isNaN()) -9.0 else it.conv }.thenByDescending { it.hc }.thenByDescending { if (it.tie.isNaN()) Double.NEGATIVE_INFINITY else it.tie }.thenBy { it.sym }
         // intraday: tested groups with enough trades, best first (groups that lost are kept for "show losing", capped)
         val pick = capPerRule(all.filter { !isSwing(it.rule) && it.convN >= 60 }.sortedWith(byConv), MAX_PER_RULE, MAX_SETUPS)
         val swing = capPerRule(all.filter { isSwing(it.rule) && it.convN >= 30 }.sortedWith(byConv), MAX_PER_SWING_RULE, MAX_SWING)

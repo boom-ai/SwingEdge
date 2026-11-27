@@ -1,11 +1,11 @@
 {
- "source": "Committed fallback. 2026: NSE circular 'Trading holidays for the calendar year 2026' (Dec 2025, incl. 15 Jan municipal-election closure). 2027: NSE list not yet published; only fixed-date weekday holidays, marked provisional. Replaced by the NSE API (holiday-master?type=trading) on each workflow run.",
- "updatedAt": "2026-11-27",
+ "source": "NSE API holiday-master?type=trading (CM) for 2026; other years: committed fallback",
+ "updatedAt": "2026-11-27 17:53 IST",
  "count": 19,
  "days": [
   {
    "date": "2026-01-15",
-   "name": "Municipal Corporation elections (Maharashtra)"
+   "name": "Municipal Corporation Election - Maharashtra"
   },
   {
    "date": "2026-01-26",
@@ -57,7 +57,7 @@
   },
   {
    "date": "2026-11-10",
-   "name": "Diwali Balipratipada"
+   "name": "Diwali-Balipratipada"
   },
   {
    "date": "2026-11-24",

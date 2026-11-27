@@ -1,4 +1,4 @@
-#SWINGEDGE_INTRADAY,v=1,asof=2026-11-27,for=2026-11-30,builtAt=1795789514528,sessions=259,stocks=5244,capital=100000,riskPct=1.0
+#SWINGEDGE_INTRADAY,v=1,asof=2026-11-27,for=2026-11-30,builtAt=1795792729808,sessions=259,stocks=5244,capital=100000,riskPct=1.0
 #RULE,nr7,intraday,7341,47.69,0.121,884.86,TESTED+,NR7 breakout,Yesterday was the narrowest range of 7 days. With the trend (close vs 50-day average): buy above its high / sell below its low; stop at the bar's midpoint; target 2R; else exit 15:15.,-0.603
 #RULE,nr7id,intraday,4159,46.74,0.132,548.56,TESTED+,NR7 inside-day breakout,NR7 that is also an inside day (Crabel's NR7ID). Same orders as NR7.,-0.674
 #RULE,cpr,intraday,5781,46.25,0.088,508.61,TESTED+,Narrow CPR breakout,"Central pivot range under 0.15% of price (trend day expected). Close above the CPR and the 20-day average: buy above the previous high, stop below the CPR; mirror for shorts; target 2R; else exit 15:15.",-0.567

@@ -929,6 +929,10 @@
       var q = {}; (Array.isArray(a.syms) ? a.syms : []).forEach(function (sym) { if (!validSym(sym)) return; var m = model(sym), l = m.info.ltp * (1 + (Math.random() - 0.5) * 0.002); q[sym] = { ltp: Math.round(l * 20) / 20, chg: 0, pct: m.info.dayChgPct, ts: Date.now() }; });
       setTimeout(function () { finish('liveQuotes', { ok: true, at: Date.now(), quotes: q }, 0); }, 60);
     },
+    brokerStatus: function () { setTimeout(function () { finish('brokerStatus', { ok: true, connected: !!window.__brk, otpPending: !!window.__otp, apiKeySaved: !!window.__brk, clientCode: window.__brk ? 'MA12345' : '', lastSync: window.__brk ? Date.now() : 0, message: '' }, 0); }, 50); },
+    brokerConnect: function (a) { setTimeout(function () { if (a.otp) { window.__brk = true; window.__otp = false; finish('brokerConnect', { ok: true, connected: true }, 0); } else if (!a.password) finish('brokerConnect', { ok: false, error: 'Enter your password' }, 0); else { window.__otp = true; finish('brokerConnect', { ok: true, needsOtp: true }, 0); } }, 120); },
+    brokerSync: function () { setTimeout(function () { finish('brokerSync', { ok: true, holdings: 7, added: 2, updated: 5, removed: 0 }, 0); }, 150); },
+    brokerDisconnect: function () { window.__brk = false; setTimeout(function () { finish('brokerDisconnect', { ok: true }, 0); }, 50); },
     fnoTicker: function () { var j = function (b) { return Math.round((b + (Math.random() - 0.5) * b * 0.0006) * 100) / 100; };
       setTimeout(function () { finish('fnoTicker', { ok: true, at: Date.now(), ticker: [{ name: 'Nifty 50', last: j(25387.4), chg: 96.3, pct: 0.38 }, { name: 'Bank Nifty', last: j(62110.2), chg: -80.5, pct: -0.13 }, { name: 'Fin Nifty', last: j(27120), chg: 40, pct: 0.15 }, { name: 'Midcap Nifty', last: j(13150), chg: 55, pct: 0.42 }, { name: 'India VIX', last: j(12.4), chg: -0.2, pct: -1.6 }] }, 0); }, 80); },
     fnoLab: function () { var now = Date.now();

@@ -168,6 +168,13 @@
       if (name === 'flowSector') { onSector(res, ok, err); return; }
       if (name === 'fnoTicker' || name === 'fnoLab') { onLive(name, res, ok); return; }
       if (name === 'liveQuotes') { onStockLive(res, ok); return; }
+      if (name === 'brokerStatus') { if (ok) { ui.broker = res; if (sheet && (sheet.kind === 'settings' || sheet.kind === 'broker') && !sheet.waiting) { var bb = document.getElementById('brokerbox'); if (sheet.kind === 'settings') { try { var sb = elSheet.querySelector('.sb'), y = sb ? sb.scrollTop : 0; paintSheet(true); if (sb) elSheet.querySelector('.sb').scrollTop = y; } catch (e) {} } } } return; }
+      if (name === 'brokerConnect') { clearPending('brokerConnect', true);
+        if (!ok) { sheetIdle(err || 'Could not connect'); return; }
+        if (res.needsOtp) { ui.broker = ui.broker || {}; ui.broker.otpPending = true; if (sheet) sheet.waiting = null; paintSheet(true); return; }
+        ui.broker = ui.broker || {}; ui.broker.otpPending = false; toast('m.Stock connected', 'ok'); closeSheet(); brokerStatus(); act('brokerSync', {}, 'brokerSync'); return; }
+      if (name === 'brokerSync') { clearPending('brokerSync', true); if (ok) { toast('Synced ' + (res.holdings || 0) + ' holdings from m.Stock', 'ok'); pull(); } else toast(err || 'Sync failed', 'err'); brokerStatus(); return; }
+      if (name === 'brokerDisconnect') { clearPending('brokerDisconnect', true); ui.broker = { connected: false }; toast('Disconnected', 'ok'); brokerStatus(); return; }
       if (name.indexOf('fno') === 0) { fnoBusy = false; ui.fno = ui.fno || { sym: 'NIFTY' }; if (ok) { var pq = {}; SE.A(ui.fno.res && ui.fno.res.chain && ui.fno.res.chain.rows).forEach(function (x) { pq[String(x.k)] = { CE: x.ce || {}, PE: x.pe || {} }; }); ui.fno.prev = pq; ui.fno.res = res; var ce = SE.T(res && res.chain && res.chain.expiry); if (ce) ui.fno.exp = ce; } else ui.fno.res = ui.fno.res || { ok: true, error: err }; if (sheet && sheet.kind === 'fno' && !(name === 'fno' && ui.fno.form && document.querySelector('#sheet-root .ofrm'))) { if (document.getElementById('fno-main') && name === 'fno') fnoParts(['main']); else paintSheet(true); } return; }
       if (name === 'options') { ui.opt = ui.opt || { calc: {} }; if (ok) ui.opt.res = res; if (sheet && sheet.kind === 'opt') paintSheet(true); return; }
       if (name === 'indexView') { var im = ui.index || (ui.index = {}); im.loading = false; if (ok) { im.res = res; im.sel = SE.T(res && res.index); } else im.err = err; if (sheet && sheet.kind === 'index') paintSheet(true); return; }
@@ -201,6 +208,7 @@
   };
 
   /* ---------- toasts ---------- */
+  function brokerStatus() { try { bridge().action('brokerStatus', '{}'); } catch (e) {} }
   function toast(msg, kind) {
     try {
       var d = document.createElement('div');
@@ -354,6 +362,15 @@
     } else if (k === 'clearfeed') {
       sheetBusy('clearFeed');
       act('clearFeed', {}, 'clearFeed');
+    } else if (k === 'broker') {
+      if (ui.broker && ui.broker.otpPending) {
+        var otp = val('otp').trim(); if (!check([['otp', /^\d{4,8}$/.test(otp), 'Enter the OTP from the SMS']])) return;
+        sheetBusy('brokerConnect'); act('brokerConnect', { otp: otp }, 'brokerConnect'); return;
+      }
+      var ak = val('apiKey').trim(), cc = val('clientCode').trim(), pw = val('password'), tt = val('totp').trim();
+      if (!check([['apiKey', ak.length > 5 || (ui.broker && ui.broker.apiKeySaved), 'Paste your API key'], ['clientCode', cc.length > 1, 'Your m.Stock login ID'], ['password', pw.length > 0, 'Your m.Stock password'], ['totp', !tt || /^\d{6}$/.test(tt), '6 digits, or leave blank']])) return;
+      var ba = { clientCode: cc, password: pw }; if (ak) ba.apiKey = ak; if (tt) ba.totp = tt;
+      sheetBusy('brokerConnect'); act('brokerConnect', ba, 'brokerConnect');
     } else if (k === 'settings') {
       var c = num('capital'), r = num('riskPct'), m = num('maxOpenTrades'), cp = num('costPct');
       if (!check([['capital', c !== null && c >= 1000 && c <= 1e10, 'At least ₹1,000'], ['riskPct', r !== null && r >= 0.05 && r <= 5, 'Between 0.05 and 5'],
@@ -1090,7 +1107,10 @@
       case 'fund': if (id) { ui.fundInfo = ui.fundInfo || {}; delete ui.fundInfo[id]; openSheet('fund', { id: id }, true); try { bridge().action('fundInfo', JSON.stringify({ code: id })); } catch (e) { ui.fundInfo[id] = { ok: false, error: 'Could not reach the app.' }; } } break;
       case 'jump': setTab(ui.tab, id); break;
       case 'strategies': setTab('alerts', 'strategies'); break;
-      case 'settings': openSheet('settings'); break;
+      case 'settings': openSheet('settings'); brokerStatus(); break;
+      case 'broker-open': openSheet('broker', {}, true); break;
+      case 'broker-sync': act('brokerSync', {}, 'brokerSync'); break;
+      case 'broker-disc': act('brokerDisconnect', {}, 'brokerDisconnect'); break;
       case 'toggle': if (ui.expanded[id]) delete ui.expanded[id]; else ui.expanded[id] = 1; render(true); break;
       case 'info': (function () { /* (i) caption: flipped in place so it also works inside sheets; the next render reads ui.expanded */
         var k = 'i:' + id, on = !ui.expanded[k]; if (on) ui.expanded[k] = 1; else delete ui.expanded[k];

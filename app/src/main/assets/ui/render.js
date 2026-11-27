@@ -1796,7 +1796,7 @@
     o = o || {};
     return '<label class="fld" data-f="' + name + '"><span class="lb"><span>' + esc(label) + '</span>' + (o.hint ? '<i>' + esc(o.hint) + '</i>' : '') + '</span>' +
       '<span class="inp">' + (o.pre ? '<span class="u">' + esc(o.pre) + '</span>' : '') +
-      '<input name="' + name + '" type="text" inputmode="' + (o.mode || 'decimal') + '" value="' + esc(value) + '"' + (o.ph ? ' placeholder="' + esc(o.ph) + '"' : '') +
+      '<input name="' + name + '" type="' + (o.secret ? 'password' : 'text') + '" autocomplete="' + (o.secret ? 'current-password' : 'off') + '" inputmode="' + (o.mode || 'decimal') + '" value="' + esc(value) + '"' + (o.ph ? ' placeholder="' + esc(o.ph) + '"' : '') +
       (o.caps ? ' autocapitalize="characters" spellcheck="false" autocorrect="off"' : '') + ' maxlength="' + (o.max || 14) + '" enterkeyhint="' + (o.enter || 'next') + '">' +
       (o.post ? '<span class="u post">' + esc(o.post) + '</span>' : '') + '</span>' +
       '<span class="err"></span>' + (o.help ? '<span class="help">' + esc(o.help) + '</span>' : '') + '</label>';
@@ -2542,6 +2542,7 @@
       return shell('Clear all alerts?', '<p class="lead">The alert history on this screen will be emptied. Trades, holdings and strategies are not affected.</p>',
         btn('sheet-close', null, 'Keep them', 'ghost') + btn('submit', null, 'Clear alerts', 'dan'));
     }
+    if (kind === 'broker') return brokerSheet(ui);
     if (kind === 'settings') {
       var s = O(S.settings);
       function sv(v) { var n = N(v); return n === null ? '' : String(n); }
@@ -2552,6 +2553,7 @@
         '<div class="two">' + field('riskPct', 'Risk per trade', sv(s.riskPct), { post: '%', max: 5 }) + field('maxOpenTrades', 'Max open trades', sv(s.maxOpenTrades), { mode: 'numeric', max: 2 }) + '</div>' +
         field('costPct', 'Charges, round trip', sv(s.costPct), { post: '% of turnover', max: 5, enter: 'done', help: 'Brokerage, STT, stamp duty and other costs for one buy plus one sell. All results are shown after this.' }) +
         '<div class="calc" id="calc">' + settingsCalc(s.capital, s.riskPct) + '</div>' +
+        '<h3>Broker</h3><div class="box">' + brokerRow(ui) + '</div>' +
         '<h3>Notifications</h3><div class="box">' +
         toggle('notifyBuy', s.notifyBuy !== false, 'Buy ideas', 'When a live strategy finds a setup') +
         toggle('notifySell', s.notifySell !== false, 'Sell and exit calls', 'Stop-loss, targets, time exits, portfolio sells') +
@@ -2566,6 +2568,24 @@
         btn('sheet-close', null, 'Cancel', 'ghost') + btn('submit', null, 'Save settings', 'pri'));
     }
     return shell('SwingEdge', '<p class="lead">Nothing to show.</p>', btn('sheet-close', null, 'Close', ''));
+  }
+  function brokerRow(ui) {
+    var b = O(ui.broker);
+    if (b.connected === true) return '<div class="brow"><div><b>m.Stock (Mirae Asset)</b><span class="mut">Connected' + (T(b.clientCode) ? ' · ' + esc(T(b.clientCode)) : '') + (N(b.lastSync) ? ' · synced ' + hm(b.lastSync) : '') + '</span></div></div>' +
+      '<div class="btns">' + btn('broker-sync', null, 'Sync holdings', 'sm', { busy: pend(ui, 'brokerSync') }) + btn('broker-disc', null, 'Disconnect', 'sm ghost', {}) + '</div>';
+    return '<div class="brow"><div><b>m.Stock (Mirae Asset)</b><span class="mut">' + (T(b.message) ? esc(T(b.message)) : 'Not connected. Syncs your holdings, positions, funds and gives live prices.') + '</span></div></div>' +
+      '<div class="btns">' + btn('broker-open', null, b.otpPending ? 'Enter OTP' : 'Connect', 'sm', {}) + '</div>';
+  }
+  function brokerSheet(ui) {
+    var b = O(ui.broker);
+    if (b.otpPending === true) return shell('Enter the OTP', '<p class="lead">m.Stock sent an OTP to your phone by SMS.</p>' + field('otp', 'OTP', '', { mode: 'numeric', max: 8, enter: 'done' }) + '<div class="formerr" id="formerr" hidden></div>',
+      btn('sheet-close', null, 'Cancel', 'ghost') + btn('submit', null, 'Connect', 'pri'));
+    return shell('Connect m.Stock', '<p class="lead">Get your API key at trade.mstock.com → Key Products → Trading APIs. Your password is used once to log in and is never saved. Sessions end at midnight, so you log in once a day.</p>' +
+      field('apiKey', 'API key', '', { mode: 'text', secret: true, ph: b.apiKeySaved ? 'Saved (leave blank to keep)' : 'Paste your API key', max: 120 }) +
+      field('clientCode', 'Client code (login ID)', T(b.clientCode), { mode: 'text', max: 30 }) +
+      field('password', 'Password', '', { mode: 'text', max: 64, ph: 'Used once, not saved', secret: true }) +
+      field('totp', 'Authenticator code (optional)', '', { mode: 'numeric', max: 8, ph: 'Leave blank to get an SMS OTP', enter: 'done' }) +
+      '<div class="formerr" id="formerr" hidden></div>', btn('sheet-close', null, 'Cancel', 'ghost') + btn('submit', null, 'Continue', 'pri'));
   }
   function settingsCalc(capital, riskPct) {
     var c = N(capital), r = N(riskPct);

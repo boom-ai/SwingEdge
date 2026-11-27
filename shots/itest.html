@@ -182,6 +182,14 @@ document.getElementById('f').onload=async()=>{
   const openSym=async sym=>{click('[data-c="tab"][data-id="today"]');click('.topbar [data-c="search"]');typeQ(sym);await sleep(500);click('#sheet-root .srr[data-id="'+sym+'"]');await sleep(1000);};
   const cfi=()=>w.__seChart&&w.__seChart();
   const closeAll=async()=>{let g=0;while(!q('#sheet-root').hidden&&g++<6){hist();await sleep(200);}};
+  // broker: connect m.Stock via OTP, then sync
+  {click('[data-c="settings"]');await sleep(300);ok(/m\.Stock/.test(q('#sheet-root').textContent),'Settings shows the m.Stock broker row');
+   click('#sheet-root [data-c="broker-open"]');await sleep(150);
+   ok(q('#sheet-root input[name="password"]').type==='password','password field is masked');
+   q('#sheet-root input[name="apiKey"]').value='abcdefgh12';q('#sheet-root input[name="clientCode"]').value='MA12345';q('#sheet-root input[name="password"]').value='x';
+   click('#sheet-root [data-c="submit"]');await sleep(500);ok(!!q('#sheet-root input[name="otp"]'),'asks for the SMS OTP');
+   q('#sheet-root input[name="otp"]').value='123456';click('#sheet-root [data-c="submit"]');await sleep(900);
+   ok(/connected/i.test(toasts())||/Synced/.test(toasts()),'connected and synced: '+toasts().slice(0,80));await closeAll();}
   const noC=s=>s.replace(/,/g,'');
   await closeAll();
   ok(typeof w.Touch==='function'&&typeof w.TouchEvent==='function','Touch and TouchEvent constructors exist in this browser');

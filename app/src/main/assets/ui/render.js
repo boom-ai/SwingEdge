@@ -557,10 +557,36 @@
     }
     return h + '<div class="card mv">' + rows.map(function (x) { return wrow(x, edit, ui); }).join('') + '</div>';
   }
+  /* ---------- Live scan (LiveScan.kt): a line on Today, a section on Setups. ui.liveScan = last liveScan reply, else S.liveScan ---------- */
+  var LIVEK = { BREAKOUT: 'up', ZONE: 'up', TARGET: 'up', TARGET2: 'up', UC_NEAR: 'up', GAP_UP: 'up', BIG_UP: 'up', STOP: 'down', GAP_DOWN: 'down', LC_NEAR: 'down', BIG_DOWN: 'down' };
+  function liveScanView(S, ui) {
+    var r = O(ui.liveScan), L = N(r.at) && r.ok === true ? r : O(S.liveScan), mode = T(L.mode), tot = N(L.total) || 0, sw = N(L.swept) || 0;
+    var brk = N(L.breakouts) || 0, inz = N(L.inZone) || 0, on = L.running === true;
+    if (ui.tab === 'today') {
+      if (!tot || (!on && !(N(L.events) > 0))) return '';
+      return '<button type="button" class="card golink" data-c="tab" data-id="setups">' + ic('refresh') + '<span class="gt"><b>Live scan: ' + cnt(sw) + ' stocks · ' + cnt(brk) + ' breakout' + (brk === 1 ? '' : 's') + ' · ' + cnt(inz) + ' in buy zone</b><span>' +
+        (on ? 'Updating now' : mode === 'paused' ? 'Paused while the screen is off' : 'Market closed') + (N(L.events) > 0 ? ' · ' + cnt(L.events) + ' events today' : '') + '</span></span>' + ic('chev') + '</button>';
+    }
+    var st = on ? (mode === 'background' ? 'background' : 'live') : mode === 'paused' ? 'paused' : 'closed';
+    var h = sech('Live scan', { id: 'livescan', cnt: tot ? cnt(sw) + ' of ' + cnt(tot) : '', info: ['livescan', 'While the market is open the app checks every stock in last night’s scan against live prices: buy-zone entries, new 52-week highs on heavy volume, stops and targets, gaps over 3%, volume shocks and circuit limits. ' + T(L.source) + '. Alerts only for your holdings, watchlist and top-ranked ideas.', 'About the live scan'],
+      right: '<span class="sr2">' + esc(st) + (ts(L.at) ? ' · ' + hm(L.at) : '') + '</span>' }, ui);
+    if (!tot) return h + '<p class="none">Starts once the whole-market scan has downloaded and the market is open (9:15 am–3:30 pm).</p>';
+    h += '<div class="hint hintpad"><span class="t"><span><b class="num up">' + cnt(brk) + '</b> breakouts</span> · <span><b class="num">' + cnt(inz) + '</b> in buy zone</span> · <span><b class="num">' + cnt(N(L.events) || 0) + '</b> events today</span>' +
+      (N(L.lastSweepMs) > 0 ? ' · <span class="mut">full sweep ' + Math.round(N(L.lastSweepMs) / 1000) + ' s</span>' : '') + '</span></div>';
+    var ev = A(Array.isArray(r.eventList) && N(r.at) ? r.eventList : L.latest).filter(function (x) { return T(x.sym).trim(); }).slice(0, ui.liveAll === true ? 60 : 8);
+    h += ev.length ? '<div class="list">' + ev.map(function (x) {
+      var k = LIVEK[T(x.kind)] || 'flat';
+      return '<button type="button" class="lrow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '"><span class="l"><b>' + tx(x.sym) + (x.rel === true ? ' <i class="qt">yours</i>' : '') + '</b><small>' + tx(x.label || x.kind) + '</small></span>' +
+        '<span class="r"><b class="num ' + k + '">' + px(x.price) + '</b><small class="num">' + (N(x.pct) !== null ? pc(x.pct, true, true) + ' · ' : '') + hm(x.at) + '</small></span></button>';
+    }).join('') + '</div>' : '<p class="none">' + (on ? 'No events yet today. Rows appear here as they happen.' : 'No events today.') + '</p>';
+    return h + '<div class="btns hintpad">' + (A(r.eventList).length > 8 ? '<button type="button" class="linkbtn" data-c="live-all">' + (ui.liveAll === true ? 'Show fewer' : 'All ' + A(r.eventList).length + ' events') + '</button>' : '') +
+      btn('live-bg', null, 'Screen-off scanning: ' + (L.bg === true ? 'on' : 'off'), 'sm ghost', { busy: pend(ui, 'liveScanSet') }) + '</div>';
+  }
+
   function setups(S, ui) {
     var ws = watchItems(S), asof = '';
     var h = '<div class="links"><button type="button" class="card golink" data-c="index-open">' + ic('layers') + '<span class="gt"><b>Index stocks</b><span>Nifty 50, Bank, Midcap and more, with today’s call</span></span>' + ic('chev') + '</button>' +
-      trackRow(S) + '</div>' + ideasBlock(S, 'setups', ui) + myWatchSection(S, ui);
+      trackRow(S) + '</div>' + ideasBlock(S, 'setups', ui) + liveScanView(S, ui) + myWatchSection(S, ui);
     ws.forEach(function (x) { if (!asof) asof = barDayText(x.barDay); });
     h += sech('Fresh EMA crossovers', { info: ['xover', 'Stocks whose 10-day exponential moving average (EMA) just crossed above the 20-day, while staying above the 50-, 100- and 200-day, and that trade ₹25 crore or more a day. A screener for your own chart reading, not buy calls. On NSE data since 2013 it did no better than a random uptrend stock over 6 days; held about a month it averaged +1.2% a trade vs +0.7% for random, with losing years.', 'About this list'],
       right: asof ? '<span class="sr2">bar ' + asof + (S.marketOpen === true ? ', forming' : '') + '</span>' : '' }, ui);
@@ -579,9 +605,9 @@
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
     if (ui.fullCards !== true) { var L = simpleLists(S, ui, items);
-      return banner(ui) + hero(S, ui, L) + statusPanel(S, ui, now) + fnoStrip(S, ui) + simpleToday(S, ui, items, bs, L) +
+      return banner(ui) + hero(S, ui, L) + statusPanel(S, ui, now) + fnoStrip(S, ui) + simpleToday(S, ui, items, bs, L) + liveScanView(S, ui) +
       '<div class="btns hintpad">' + btn('fullcards', null, 'Detailed view', 'sm ghost', { icon: 'layers' }) + '</div>'; }
-    var h = banner(ui) + fnoStrip(S, ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs);
+    var h = banner(ui) + fnoStrip(S, ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs) + liveScanView(S, ui);
     if (ui.fullCards === true || !items.length) h += '<div class="sec"><h2>Act now</h2>' + (items.length ? '<span class="cnt">' + items.length + '</span>' : '') + '</div>';
     if (!items.length) {
       h += '<div class="empty"><div class="ei">' + ic(bs.icon) + '</div><h3>' + esc(bs.title) + '</h3><p>' + esc(bs.text) + '</p>' +
@@ -2624,7 +2650,8 @@
     stockPart: stockPart, searchBody: searchBody, view: view, sheet: sheet, deviceList: deviceList, deviceIssues: deviceIssues,
     takeCalc: takeCalc, closeCalc: closeCalc, settingsCalc: settingsCalc, isBusy: function (S) { return isBusy(O(S)); },
     actItems: function (S) { return actItems(O(S)); },
-    fnoPart: fnoPart, tickTile: tickTile, tickLabel: function (S, ui) { return tickLabel(O(S), O(ui)); }, fmtIdx: fmtIdx, tickChg: tickChg, liveTicker: function (ui, big, S) { return liveTicker(O(ui), big, O(S)); }
+    fnoPart: fnoPart, tickTile: tickTile, tickLabel: function (S, ui) { return tickLabel(O(S), O(ui)); }, fmtIdx: fmtIdx, tickChg: tickChg, liveTicker: function (ui, big, S) { return liveTicker(O(ui), big, O(S)); },
+    liveScanView: function (S, ui) { return liveScanView(O(S), O(ui)); }
   };
   root.SE = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

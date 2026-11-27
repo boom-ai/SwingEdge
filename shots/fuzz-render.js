@@ -139,6 +139,10 @@ bases.forEach((b, i) => run(b.state, { tab: 'today', expanded: {}, pending: {}, 
   { const ni = JSON.parse(JSON.stringify(ri)); delete ni.call; const nv = SE.stockPart('verdict', b.state, Object.assign({}, u, { stock: { sym: 'RELIANCE', info: ni } }), { id: 'RELIANCE' }); renders++; if (/BUY|WAIT|AVOID/.test(nv)) { fails++; console.log('FAIL verdict shown without call'); } }
   must('trades targets', SE.view(b.state, Object.assign({}, u, { tab: 'trades' })), /My targets/); must('trades targets hit', SE.view(b.state, Object.assign({}, u, { tab: 'trades' })), /TARGET HIT|STOP HIT|Target reached|Stop reached/);
   must('today ideas', SE.view(b.state, Object.assign({}, u, { tab: 'today' })), /Best setups now/); must('setups ideas', SE.view(b.state, Object.assign({}, u, { tab: 'setups' })), /Best setups now/);
+  must('setups live scan', SE.view(b.state, Object.assign({}, u, { tab: 'setups' })), /Live scan[\s\S]*TATAMOTORS[\s\S]*52-week high breakout/);
+  must('today live line', SE.view(b.state, Object.assign({}, u, { tab: 'today', fullCards: false })), /Live scan: 3,412 stocks · 9 breakouts · 4 in buy zone/);
+  must('live scan reply rows', SE.liveScanView(b.state, Object.assign({}, u, { tab: 'setups', liveScan: mockReply('liveScan', {}) })), /data-c="stock" data-id="RELIANCE"[\s\S]*Target 1 hit/);
+  must('live scan closed', SE.liveScanView({ liveScan: { mode: 'closed', total: 0 } }, { tab: 'setups' }), /Starts once the whole-market scan/);
   must('target sheet', SE.sheet('target', b.state, u3, { id: 'RELIANCE' }), /(Save|Update) target/);
   must('chartfull sheet', SE.sheet('chartfull', b.state, u3, { id: 'RELIANCE' }), /cf-canvas/);
   must('search', SE.sheet('search', b.state, u, {}), /TATAMOTORS/); must('watchlist', SE.view(b.state, u), /My watchlist/);

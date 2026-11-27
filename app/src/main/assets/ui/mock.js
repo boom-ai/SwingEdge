@@ -680,6 +680,7 @@
     });
     s.myWatch = defaultWatch(); s.track = trackData();
     s.ideas = ideasList(); s.targets = defaultTargets();
+    s.liveScan = scenario === 'empty' ? { mode: 'closed', running: false, swept: 0, total: 0, events: 0, latest: [] } : liveScanMock(false);
     s.optOpen = [{ idx: 'NIFTY', side: 'CE', strike: 24850, entry: 118.6, limit: 119.8, stop: 83.0, target: 177.9, last: 121.0, lots: 1, spotStop: 24735, spotTgt: 25010, openedAt: Date.now() - 5 * 60000, lot: 65 }];
     s.optRecord = { trades: 12, wins: 5, netRs: 3925, proven: false };
     if (scenario === 'empty') { s.watch = []; s.myWatch = []; s.ideas = []; s.targets = []; s.track = emptyTrack(); }
@@ -836,7 +837,28 @@
     try { state.portfolio = portfolioOf(state.holdings); } catch (e) { /* ignore */ }
   }
 
+  /* ---------- live whole-market scan (LiveScan.kt): summary in state.liveScan, full reply for the liveScan action ---------- */
+  var LIVE_BG = false;
+  function liveScanMock(full) {
+    var t = Date.now(), M = 60000;
+    var ev = [['TATAMOTORS', 'BREAKOUT', 'New 52-week high above ₹1,012.40, volume 2.4× normal', 1018.6, 3.1, true],
+      ['ITC', 'ZONE', 'In the buy zone ₹432.10–₹436.80', 433.5, 0.4, true], ['DIXON', 'VOL_SHOCK', 'Volume 3.1× a normal day by now', 17240, 4.2, false],
+      ['SUZLON', 'UC_NEAR', 'Pressing the upper circuit (~5%)', 61.2, 4.9, false], ['PAYTM', 'GAP_DOWN', 'Opened 3.4% below the last close', 871.4, -3.9, false],
+      ['HAL', 'BREAKOUT', 'New 52-week high above ₹5,120.00, volume 1.8× normal', 5161, 2.2, false], ['RELIANCE', 'TARGET', 'Reached target 1 ₹1,512.00', 1514.2, 1.1, true]
+    ].map(function (x, i) { return { at: t - (i * 7 + 2) * M, sym: x[0], name: x[0] + ' Ltd', kind: x[1], label: { BREAKOUT: '52-week high breakout', ZONE: 'In buy zone', VOL_SHOCK: 'Volume shock', UC_NEAR: 'Near upper circuit', GAP_DOWN: 'Gap down', TARGET: 'Target 1 hit' }[x[1]], text: x[2], price: x[3], pct: x[4], rel: x[5] }; });
+    var sum = { mode: 'live', running: true, at: t - 1500, swept: 3412, total: 5829, breakouts: 9, inZone: 4, events: ev.length, relevant: 3, lastSweepMs: 46000,
+      source: 'Whole market: TradingView, 15 min delayed · real-time: 240 top and your stocks', bg: LIVE_BG, latest: ev.slice(0, 3) };
+    if (!full) return sum;
+    var r = {}; for (var k in sum) r[k] = sum[k];
+    r.ok = true; r.eventList = ev; r.callsPerMin = 31; r.hot = 240; r.notify = true;
+    r.movers = { up: [{ sym: 'SUZLON', ltp: 61.2, pct: 4.9 }, { sym: 'DIXON', ltp: 17240, pct: 4.2 }], down: [{ sym: 'PAYTM', ltp: 871.4, pct: -3.9 }] };
+    r.liveTop = [{ sym: 'TATAMOTORS', score: 93.4, rank: 1, nightlyRank: 3, ltp: 1018.6 }, { sym: 'HAL', score: 91.0, rank: 2, nightlyRank: 1, ltp: 5161 }];
+    return r;
+  }
+
   var actions = {
+    liveScan: function () { finish('liveScan', scenario === 'broken' ? { ok: false, error: 'live scan unavailable' } : liveScanMock(true), 150); },
+    liveScanSet: function (a) { if (typeof a.bg === 'boolean') LIVE_BG = a.bg; state.liveScan = liveScanMock(false); finish('liveScanSet', { ok: true, bg: LIVE_BG, notify: true }, 150); },
     scanNow: function () {
       long('scanNow', 'Scanning 190 stocks…', 3200, function () {
         state.lastScanAt = Date.now(); state.nextScanAt = Date.now() + 15 * MIN;

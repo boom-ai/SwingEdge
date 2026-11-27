@@ -1444,3 +1444,8 @@ tr.spotr td span { position: absolute; left: 50%; transform: translate(-50%, -50
 .mk-nw .t { font-size: var(--t-sec); font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
 .mk-nw .m { font-size: var(--t-cap); color: var(--muted); }
 /* ===================================================================== end MARKETS TERMINAL */
+/* nightly calls: Today "Tomorrow" card */
+.card.nt { padding: 0 0 4px; overflow: hidden; }
+.card.nt .sec { padding-top: 10px; }
+.card.nt .lrow small.ntw { font-size: var(--t-cap); line-height: 1.35; }
+.card.nt .bt { margin: 8px var(--pad); }

@@ -8,6 +8,8 @@ import com.boomai.swingedge.core.MarketHistory
 import com.boomai.swingedge.core.MarketStock
 import com.boomai.swingedge.core.MarketScan
 import com.boomai.swingedge.core.StockList
+import com.boomai.swingedge.core.Holidays
+import com.boomai.swingedge.core.NightCalls
 import java.io.File
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
@@ -62,6 +64,7 @@ fun main(args: Array<String>) {
     diagnostics(stocks)
 
     val out = File(args[3])
+    try { nightCalls(stocks, dir, out.absoluteFile.parentFile) } catch (t: Throwable) { System.err.println("intraday calls failed: $t"); t.printStackTrace() }
     val old = if (out.exists()) MarketScan.parse(out.readText()) else null
     when {
         data.rows.size < MIN_WRITE_ROWS -> { println("NOT written: only ${data.rows.size} stocks (need $MIN_WRITE_ROWS)"); exitProcess(2) }
@@ -77,6 +80,30 @@ fun main(args: Array<String>) {
 }
 
 private const val MIN_WRITE_ROWS = 1000
+
+/**
+ * nightly-calls: next-session intraday setups + swing entries with their back-test record -> data/intraday.csv.
+ * Reads data/holidays.json (written by the workflow's holiday step, committed fallback otherwise), data/fo_lots.csv and
+ * BHAV_DIR/ind_close_all.csv (NSE index closes of the last session, for Nifty / Bank Nifty levels; optional).
+ */
+private fun nightCalls(stocks: List<MarketStock>, bhavDir: File, dataDir: File) {
+    val t0 = System.currentTimeMillis()
+    File(dataDir, "holidays.json").takeIf { it.exists() }?.let { Holidays.install(it.readText()) }
+    val fno = NightCalls.fnoSymbols(File(dataDir, "fo_lots.csv").takeIf { it.exists() }?.readText())
+    val idx = NightCalls.indexLevels(File(bhavDir, "ind_close_all.csv").takeIf { it.exists() }?.readText())
+    val d = NightCalls.build(stocks, fno, idx, Holidays.all(), System.currentTimeMillis())
+    println("== intraday calls for ${java.time.LocalDate.ofEpochDay(d.forDay.toLong())} (data as of ${java.time.LocalDate.ofEpochDay(d.asof.toLong())}); ${d.stocks} stocks, ${d.sessions} sessions, F&O ${fno.size}, index levels ${idx.map { it.name }}; ${System.currentTimeMillis() - t0} ms")
+    for (r in d.rules) println("   %-8s %-8s trades %5d  win %5.1f%%  avgR %+.3f  worst-case avgR %+.3f  totalR %+.1f  %s".format(r.id, r.kind, r.trades, r.winPct, r.avgR, r.avgWorst, r.sumR, r.status))
+    for ((k, x) in d.setups.withIndex()) println("   %2d %-12s %-8s %-6s %s".format(k + 1, x.sym, x.rule, x.side, x.cond))
+    if (d.asof <= 0) { println("intraday.csv NOT written: no data"); return }
+    val f = File(dataDir, NightCalls.FILE)
+    val old = if (f.exists()) NightCalls.parse(f.readText()) else null
+    if (old != null && old.asof > d.asof) { println("intraday.csv NOT written: existing file is newer"); return }
+    val text = NightCalls.encode(d)
+    if (NightCalls.parse(text) == null) { println("intraday.csv NOT written: does not parse back"); return }
+    File(f.path + ".tmp").writeText(text); File(f.path + ".tmp").renameTo(f)
+    println("written ${f.path} (${d.setups.size} setups)")
+}
 
 /** Corporate-action diagnostics for the workflow log. */
 private fun diagnostics(stocks: List<MarketStock>) {

@@ -16,6 +16,11 @@ document.getElementById('f').onload=async()=>{
   if(q('[data-c="fullcards"]')&&!q('#view .card.k-buy')){click('[data-c="fullcards"]');await sleep(50);}
   ok(!!q('#view .fstrip'),'Today shows the F&O live strip');
   await sleep(2500);ok(qa('#view .fstrip .lti').length===5,'live ticker: Nifty, Bank Nifty, Fin Nifty, Midcap Nifty, VIX');
+  {ok(calls.includes('intraday')||!!q('#view .card.nt'),'Today asks the app for tomorrow\'s intraday calls');
+   const nt=q('#view .card.nt');ok(!!nt&&/Tomorrow · \w{3} \d+ \w{3}/.test(nt.textContent)&&nt.querySelectorAll('.lrow').length===6,'Tomorrow card: date + first 6 setups');
+   ok(!!nt&&/Buy &gt;|Buy >/.test(nt.innerHTML)&&/stop ₹/.test(nt.textContent)&&/NIFTY pivot/.test(nt.textContent.replace(/\s+/g,' ')),'Tomorrow card: trigger, stop and Nifty levels');
+   click('#view [data-c="night-more"]');await sleep(100);const n2=q('#view .card.nt');ok(n2.querySelectorAll('.lrow').length===7&&/Worst/.test(n2.textContent),'Show all lists every setup and the rule record');
+   click('#view [data-c="night-more"]');await sleep(100);ok(q('#view .card.nt').querySelectorAll('.lrow').length===6,'Show fewer');}
   click('#view .fstrip');await sleep(1500);
   ok(!!q('#sheet-root .fcall')&&/BUY CE/.test(q('#sheet-root .fcall').textContent)&&/Stop/.test(q('#sheet-root .fcall').textContent),'F&O live shows today\'s calls with buy/stop/target');
   ok(!!q('#sheet-root .ltk.big .lti')&&/Self-learning lab/.test(q('#sheet-root').textContent)&&/champion/i.test(q('#sheet-root').textContent),'F&O live: big ticker + self-learning lab with champion thresholds');

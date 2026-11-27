@@ -605,9 +605,9 @@
   function today(S, ui) {
     var now = ui.now, items = actItems(S), bs = buyStatus(S, now);
     if (ui.fullCards !== true) { var L = simpleLists(S, ui, items);
-      return banner(ui) + hero(S, ui, L) + statusPanel(S, ui, now) + fnoStrip(S, ui) + simpleToday(S, ui, items, bs, L) + liveScanView(S, ui) +
+      return banner(ui) + hero(S, ui, L) + statusPanel(S, ui, now) + fnoStrip(S, ui) + intradayView(S, ui) + simpleToday(S, ui, items, bs, L) + liveScanView(S, ui) +
       '<div class="btns hintpad">' + btn('fullcards', null, 'Detailed view', 'sm ghost', { icon: 'layers' }) + '</div>'; }
-    var h = banner(ui) + fnoStrip(S, ui) + statusPanel(S, ui, now) + glance(S) + plan(S, items, bs) + liveScanView(S, ui);
+    var h = banner(ui) + fnoStrip(S, ui) + statusPanel(S, ui, now) + intradayView(S, ui) + glance(S) + plan(S, items, bs) + liveScanView(S, ui);
     if (ui.fullCards === true || !items.length) h += '<div class="sec"><h2>Act now</h2>' + (items.length ? '<span class="cnt">' + items.length + '</span>' : '') + '</div>';
     if (!items.length) {
       h += '<div class="empty"><div class="ei">' + ic(bs.icon) + '</div><h3>' + esc(bs.title) + '</h3><p>' + esc(bs.text) + '</p>' +
@@ -1665,6 +1665,32 @@
     var L = O(ui.lab), n = A(L.today).filter(function (x) { return T(x.status) === 'OPEN'; }).length;
     return '<button type="button" class="card fstrip" data-c="fno-open"><div class="fsh"><b>F&amp;O live</b><span class="mut">' + (n ? n + ' open call' + (n > 1 ? 's' : '') : 'calls · chain · paper') + ' ›</span></div>' + liveTicker(ui, false, S) + '</button>';
   }
+  /* ---------- nightly calls: the "Tomorrow" card (data = ui.intraday from the `intraday` read action) ---------- */
+  function intradayView(S, ui) {
+    var d = O(ui.intraday);
+    if (d.ok !== true || d.none === true || d.stale === true || !T(d.forLabel)) return '';
+    var rows = A(d.setups), rules = A(d.rules), all = ui.ntMore === true, shown = all ? rows : rows.slice(0, 6), r2 = function (v) { var n = N(v); return n === null ? DASH : (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(2) + 'R'; };
+    var h = '<section class="card nt" aria-label="Intraday calls">' + sech((d.isToday === true ? 'Today' : 'Tomorrow') + ' · ' + esc(T(d.forLabel)), { id: 'night', cnt: rows.length,
+      info: ['night', texts(d.notes).join(' ') || 'Mechanical rules, back-tested on daily bars only. Not proven live.', 'About these calls'], right: '<span class="sr2">intraday</span>' }, ui);
+    h += rows.length ? '<div class="list">' + shown.map(function (x) {
+      var side = T(x.side), sw = T(x.kind) === 'swing', gap = side === 'IF GAP';
+      var lead = gap ? 'If gap' : side === 'SELL' ? 'Sell < ' + px(x.trigger) : (sw ? 'Buy ≈ ' : 'Buy > ') + px(x.trigger);
+      var sub = gap ? 'at the open' : 'stop ' + px(x.stop) + (N(x.target) > 0 ? ' · tgt ' + px(x.target) : '') + (N(x.qty) > 0 ? ' · ' + (N(x.qty) | 0) + ' sh' : '');
+      return '<button type="button" class="lrow" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
+        '<span class="l"><b>' + tx(x.sym) + (x.fno === true ? ' <i class="qt">F&amp;O</i>' : '') + (sw ? ' <i class="qt">swing</i>' : '') + '</b><small>' + tx(x.ruleName) + ' · ' + (N(x.trades) || 0) + ' tests, ' + (N(x.winPct) === null ? DASH : Math.round(N(x.winPct)) + '%') + ' won, ' + r2(x.avgR) + '</small>' +
+        '<small class="ntw">' + tx(x.when) + '</small></span>' +
+        '<span class="r"><b class="num ' + (side === 'SELL' ? 'down' : gap ? '' : 'up') + '">' + esc(lead) + '</b><small class="num">' + esc(sub) + '</small></span></button>';
+    }).join('') + '</div>' : '<p class="none">No rule has a positive back-test record right now — sit out.</p>';
+    if (rows.length > shown.length || all && rows.length > 6) h += '<div class="btns hintpad">' + btn('night-more', null, all ? 'Show fewer' : 'Show all ' + rows.length, 'sm ghost') + '</div>';
+    A(d.index).forEach(function (x) {
+      h += '<div class="hint hintpad"><span class="t"><b>' + tx(x.name) + '</b> pivot ' + pxBare(x.pivot) + ' · CPR ' + pxBare(x.bc) + '–' + pxBare(x.tc) + ' · PDH ' + pxBare(x.pdh) + ' · PDL ' + pxBare(x.pdl) + ' · R1 ' + pxBare(x.r1) + ' · S1 ' + pxBare(x.s1) + '</span></div>';
+    });
+    if (all && rules.length) h += tbl(['Rule', 'Tests', 'Won', 'Avg', 'Worst'], rules.map(function (r) {
+      return '<tr><td>' + tx(r.name) + '</td><td>' + (N(r.trades) || 0) + '</td><td>' + (N(r.winPct) === null ? DASH : Math.round(N(r.winPct)) + '%') + '</td><td class="' + tone(r.avgR) + '">' + r2(r.avgR) + '</td><td class="' + tone(r.avgWorst) + '">' + r2(r.avgWorst) + '</td></tr>';
+    }));
+    h += '<div class="hint hintpad">' + ic('warn') + '<span class="t">Back-tested on ' + (N(d.sessions) || 0) + ' daily sessions, not proven live. Size: ₹1 lakh, 1% risk. Exit intraday trades by 15:15.</span></div>';
+    return h + '</section>';
+  }
   /* ---------- Money flow ---------- */
   function crSigned(v) {
     var n = N(v); if (n === null) return DASH;
@@ -2660,6 +2686,7 @@
     stockPart: stockPart, searchBody: searchBody, view: view, sheet: sheet, deviceList: deviceList, deviceIssues: deviceIssues,
     takeCalc: takeCalc, closeCalc: closeCalc, settingsCalc: settingsCalc, isBusy: function (S) { return isBusy(O(S)); },
     actItems: function (S) { return actItems(O(S)); },
+    intradayView: function (S, ui) { return intradayView(O(S), O(ui)); },
     fnoPart: fnoPart, tickTile: tickTile, tickLabel: function (S, ui) { return tickLabel(O(S), O(ui)); }, fmtIdx: fmtIdx, tickChg: tickChg, liveTicker: function (ui, big, S) { return liveTicker(O(ui), big, O(S)); },
     liveScanView: function (S, ui) { return liveScanView(O(S), O(ui)); }
   };

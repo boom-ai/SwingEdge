@@ -26,6 +26,7 @@ const STOCKS = ['TATAMOTORS', 'POLYCAB', 'ILLIQTEXTILE', 'NEWSYM', 'M&M', 'YESBA
 }));
 const NEWL = mockReply('newListings', { days: 365 }); const BROKEN_INFO = mockReply('stockInfo', { sym: 'RELIANCE' }, 'broken'); const BROKEN_NEW = mockReply('stockInfo', { sym: 'NEWIPO' }, 'broken');
 const FAILED = mockReply('stockInfo', { sym: 'ZZTEST' });
+const NIGHT = mockReply('intraday', {}); const NIGHT_NONE = mockReply('intraday', {}, 'empty');
 const SEARCHES = [mockReply('search', { q: 'tata' }), mockReply('search', { q: 'zzqx' }), mockReply('search', { q: 'tata mot' }), mockReply('search', { q: 'kraft' })];
 const LISTS = [SEARCHES[0].list, mockReply('search', { q: '' }, 'broken').list, { count: 3000, updatedAt: Date.now() - 5 * 864e5, source: 'saved', stale: true, newCount: 2 }, { count: 0, updatedAt: 0, source: 'bundled', stale: false, newCount: 0 }];
 // markets terminal replies (every segment, plus the broken / empty scenarios)
@@ -173,6 +174,11 @@ bases.forEach((b, i) => run(b.state, { tab: 'today', expanded: {}, pending: {}, 
     must('search stale', SE.searchBody(b.state, Object.assign({}, u, { listMeta: LISTS[2], search: { q: '', filter: 'all' } })), /data-c="refresh-symbols"/);
     must('new filter', SE.searchBody(b.state, Object.assign({}, u, { listMeta: LISTS[0], search: { q: '', filter: 'new', newList: NEWL.results } })), /listed /);
   }
+  { const nu = Object.assign({}, u, { tab: 'today', fullCards: false, intraday: NIGHT, ntMore: true }), nh = SE.view(b.state, nu);
+    must('tomorrow card', nh, /class="card nt"/); must('tomorrow card', nh, /Tomorrow · (Mon|Tue|Wed|Thu|Fri) \d+ /); must('tomorrow rows', nh, /data-c="stock" data-id="TATAPOWER"/); must('tomorrow record', nh, /NR7 inside-day breakout/); must('tomorrow index', nh, /NIFTY<\/b> pivot/);
+    must('tomorrow detailed', SE.view(b.state, Object.assign({}, nu, { fullCards: true })), /class="card nt"/);
+    renders++; if (/class="card nt"/.test(SE.view(b.state, Object.assign({}, nu, { intraday: NIGHT_NONE }))) || /class="card nt"/.test(SE.view(b.state, Object.assign({}, nu, { intraday: Object.assign({}, NIGHT, { stale: true }) })))) { fails++; console.log('FAIL tomorrow card shown without fresh data'); }
+    for (let k = 0; k < 300; k++) check('intradayView', SE.intradayView(b.state, { intraday: mutate(NIGHT, 0), ntMore: pick([true, false, JUNK()]), expanded: pick([{}, { 'i:night': true }, JUNK()]) }), 'night' + k); }
   must('search-empty', SE.searchBody(b.state, Object.assign({}, u, { search: { q: 'zzqx', sent: 'zzqx', shown: 'zzqx', results: [] } })), /No NSE stock matches/);
   must('search-lookup', SE.searchBody(b.state, Object.assign({}, u, { search: { q: 'zzqx', sent: 'zzqx', shown: 'zzqx', results: [] } })), /Look up ZZQX anyway/);
 }
@@ -183,7 +189,7 @@ for (let i = 0; i < N; i++) {
   [].concat(S && S.signals, S && S.holdings, S && S.trades).forEach(x => { if (x && rnd() < 0.5) { exp['sig:' + x.id] = 1; exp['hold:' + x.sym] = 1; exp['act-hold:' + x.sym] = 1; pend['takeTrade:' + x.id] = 1; pend['removeHolding:' + x.sym] = 1; pend['closeTrade:' + x.id] = 1; } });
   if (rnd() < 0.3) { pend.scanNow = 1; pend.runBacktest = 1; pend.importHoldings = 1; pend.clearFeed = 1; }
   const ui = { tab: 'today', expanded: rnd() < 0.1 ? JUNK() : exp, pending: rnd() < 0.1 ? JUNK() : pend, device: rnd() < 0.5 ? mutate(b.device, 0) : JUNK(),
-    bannerDismissed: rnd() < 0.3, importResult: rnd() < 0.5 ? mutate({ ok: true, added: 3, skipped: ['Total,,', 'bad line', EVIL] }, 0) : JUNK(), now: rnd() < 0.9 ? Date.now() : JUNK() };
+    intraday: rnd() < 0.7 ? mutate(rnd() < 0.9 ? NIGHT : NIGHT_NONE, 0) : JUNK(), ntMore: pick([true, false, JUNK()]), bannerDismissed: rnd() < 0.3, importResult: rnd() < 0.5 ? mutate({ ok: true, added: 3, skipped: ['Total,,', 'bad line', EVIL] }, 0) : JUNK(), now: rnd() < 0.9 ? Date.now() : JUNK() };
   run(S, ui, 'iter' + i + ' seed' + seed);
 }
 console.log((fails ? 'FAILED ' + fails : 'OK') + ' — ' + renders + ' renders over ' + (N + bases.length + 18) + ' states, 0 tolerated throws');

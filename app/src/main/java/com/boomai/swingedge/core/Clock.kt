@@ -25,7 +25,7 @@ object Clock {
 
     fun isMarketOpen(ms: Long): Boolean {
         val m = minuteOfDay(ms)
-        return isWeekday(epochDay(ms)) && m >= OPEN_MIN && m < CLOSE_MIN
+        return isWeekday(epochDay(ms)) && m >= OPEN_MIN && m < CLOSE_MIN && !Holidays.isHoliday(epochDay(ms))
     }
 
     /** Scan slot within a day: 0 for 09:20-09:30, then one per quarter hour (09:31.., last 15:16-15:30); -1 outside. */
@@ -55,11 +55,11 @@ object Clock {
         l.toIntArray()
     }
 
-    /** Next wake strictly after [ms]: 08:55 brief, 09:20 first scan, every quarter hour + 1 min to 15:16, 15:40 EOD; weekdays only. */
+    /** Next wake strictly after [ms]: 08:55 brief, 09:20 first scan, every quarter hour + 1 min to 15:16, 15:40 EOD; trading days only (weekends and known NSE holidays skipped). */
     fun nextWake(ms: Long): Long {
         val d0 = epochDay(ms)
-        for (d in d0..d0 + 8) {
-            if (!isWeekday(d)) continue
+        for (d in d0..d0 + 14) {
+            if (!isWeekday(d) || Holidays.isHoliday(d)) continue
             for (m in wakeMinutes) {
                 val t = msAt(d, m)
                 if (t > ms) return t

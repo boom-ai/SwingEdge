@@ -170,6 +170,7 @@
       if (name === 'fnoTicker' || name === 'fnoLab') { onLive(name, res, ok); return; }
       if (name === 'liveQuotes') { onStockLive(res, ok); return; }
       if (name === 'liveScan' || name === 'liveScanSet') { onLiveScan(name, res, ok); return; }
+      if (name === 'intraday') { ntBusy = 0; if (ok) { ui.intraday = res; ntAt = Date.now(); if (!sheet && ui.tab === 'today') render(true); } return; }
       if (name === 'brokerStatus') { if (ok) { ui.broker = res; if (sheet && (sheet.kind === 'settings' || sheet.kind === 'broker') && !sheet.waiting) { var bb = document.getElementById('brokerbox'); if (sheet.kind === 'settings') { try { var sb = elSheet.querySelector('.sb'), y = sb ? sb.scrollTop : 0; paintSheet(true); if (sb) elSheet.querySelector('.sb').scrollTop = y; } catch (e) {} } } } return; }
       if (name === 'brokerConnect') { clearPending('brokerConnect', true);
         if (!ok) { sheetIdle(err || 'Could not connect'); return; }
@@ -608,6 +609,16 @@
     } catch (e) { tickBusy = 0; }
   }
   setInterval(liveLoop, 1000);
+  /* ---------- nightly calls: the Today "Tomorrow" card asks for intraday.csv's view every 10 min (and once at start) ---------- */
+  var ntAt = 0, ntBusy = 0;
+  function nightLoop() {
+    try {
+      if (document.hidden || ui.tab !== 'today') return;
+      var t = Date.now();
+      if ((t - ntAt >= 600000 || !ui.intraday) && !(ntBusy && t - ntBusy < 15000)) { ntBusy = t; ntAt = t; bridge().action('intraday', '{}'); }
+    } catch (e) { ntBusy = 0; }
+  }
+  setInterval(nightLoop, 2000); setTimeout(nightLoop, 300);
   /* ---------- live stock prices everywhere: one batch call every 2 s for the stocks on screen ---------- */
   ui.live = {};
   var liveAt = 0, liveBusy = 0;
@@ -1124,6 +1135,7 @@
       case 'index-pick': loadIndex(id); break;
       case 'live-bg': case 'live-all': liveScanCmd(c); break;
       case 'short-toggle': ui.showShort = !ui.showShort; render(); break;
+      case 'night-more': ui.ntMore = !ui.ntMore; render(); break;
       case 'fullcards': ui.fullCards = !ui.fullCards; try { localStorage.setItem('se.fullCards', ui.fullCards ? '1' : '0'); } catch (e) {} render(); break;
       case 'money-seg': if (ui.money) { ui.money.seg = id; render(); } break;
       case 'sector': openSector(id); break;

@@ -28,6 +28,8 @@ const NEWL = mockReply('newListings', { days: 365 }); const BROKEN_INFO = mockRe
 const FAILED = mockReply('stockInfo', { sym: 'ZZTEST' });
 const SEARCHES = [mockReply('search', { q: 'tata' }), mockReply('search', { q: 'zzqx' }), mockReply('search', { q: 'tata mot' }), mockReply('search', { q: 'kraft' })];
 const LISTS = [SEARCHES[0].list, mockReply('search', { q: '' }, 'broken').list, { count: 3000, updatedAt: Date.now() - 5 * 864e5, source: 'saved', stale: true, newCount: 2 }, { count: 0, updatedAt: 0, source: 'bundled', stale: false, newCount: 0 }];
+// markets terminal replies (every segment, plus the broken / empty scenarios)
+const MK = ['overview', 'money', 'breadth', 'calendar', 'news'].map(seg => mockReply('markets', { seg })).concat([mockReply('markets', { seg: 'overview' }, 'broken'), mockReply('markets', { seg: 'news' }, 'empty')]);
 let seed = Number(process.env.SEED || 12345);
 function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
 function pick(a) { return a[Math.floor(rnd() * a.length)]; }
@@ -119,6 +121,11 @@ function run(S, ui, tag) {
     CM.priceRange(mutate(b.chart2, 0), JUNK(), JUNK(), JUNK(), JUNK()); CM.niceTicks(JUNK(), JUNK(), JUNK()); CM.pinchView(JUNK(), JUNK(), JUNK(), JUNK(), JUNK(), JUNK(), JUNK());
     CM.zoomAt(JUNK(), JUNK(), JUNK(), JUNK(), JUNK()); CM.panBy(JUNK(), JUNK(), JUNK(), JUNK());
     for (const t of ['today', 'setups', 'trades']) { u2.tab = t; check('view:' + t + '+v3', SE.view(S, u2), tag); }
+    // markets terminal: every segment and part on mutilated replies
+    const mu = Object.assign({}, u2, { tab: 'markets', mk: rnd() < 0.05 ? JUNK() : { seg: pick(['overview', 'money', 'breadth', 'calendar', 'news', JUNK()]), res: rnd() < 0.85 ? mutate(pick(MK), 0) : JUNK(),
+      err: pick(['', 'boom', JUNK()]), loading: pick([true, false, JUNK()]), prev: pick([{}, { 'i:Nifty 50': 1, 'g:ES=F': 'x' }, JUNK()]), mv: pick(['gainers', 'losers', 'volume', JUNK()]), hl: pick(['highs', 'lows', JUNK()]), ev: pick(['all', 'results', 'actions', JUNK()]) } });
+    check('view:markets', SE.view(S, mu), tag);
+    ['status', 'india', 'global', 'pulse', 'heat', 'secagg', 'movers', 'breadth', 'hilo', 'fii', 'events', 'holidays', 'econ', 'headlines', 'news', 'nope'].forEach(p => check('mkPart:' + p, SE.mkPart(p, S, mu), tag));
   } catch (e) { if (fails++ < 5) console.log('THROW', tag, e.stack.split('\n').slice(0, 4).join('\n')); }
 }
 // unmutated states first, then junk roots, then random mutations
@@ -130,6 +137,12 @@ bases.forEach((b, i) => run(b.state, { tab: 'today', expanded: {}, pending: {}, 
   const html = SE.sheet('stock', b.state, u, { id: t.sym });
   must('stock page', html, /Tata Motors Ltd/); must('stock page', html, /10 \/ 20 EMA/); must('stock page', html, /Technical checklist/); must('stock page', html, /Setups it matches/); must('stock page', html, /aria-label="Price chart with volume"/);
   must('stock page', html, /Add to watchlist/); must('stock page', html, /In your portfolio/);
+  { const mo = { tab: 'markets', now: Date.now(), mk: { seg: 'overview', res: MK[0] } }, mh = SE.view(b.state, mo);
+    [/GIFT Nifty/, /Dollar index/, /US 10Y/, /bp</, /Above 200 DMA/, /FII today/, /mk-heat/, /KAYNES/, /Coming up/, /Headlines/, /href="https:\/\/news.google.com/].forEach(re => must('markets overview', mh, re));
+    must('markets breadth', SE.view(b.state, Object.assign({}, mo, { mk: { seg: 'breadth', res: MK[2], hl: 'lows' } })), /HINDZINC/);
+    must('markets calendar', SE.view(b.state, Object.assign({}, mo, { mk: { seg: 'calendar', res: MK[3] } })), /Non-Farm Employment Change/);
+    must('markets money', SE.view(b.state, Object.assign({}, mo, { mk: { seg: 'money', res: MK[1] } })), /Money flow/);
+    const bad = SE.view(b.state, Object.assign({}, mo, { mk: { seg: 'news', res: MK[5] } })); renders++; if (/javascript:/.test(bad)) { fails++; console.log('FAIL markets news javascript: link'); } }
   const hb = SE.sheet('stock', b.state, u, { id: 'RELIANCE' }); const ri = mockReply('stockInfo', { sym: 'RELIANCE' });
   const u3 = Object.assign({}, u, { stock: { sym: 'RELIANCE', info: ri, chart: t.chart, want: 260, range: 260 } });
   const vb = SE.stockPart('verdict', b.state, u3, { id: 'RELIANCE' });

@@ -146,7 +146,7 @@ class SwingApp(private val p: Platform) {
 
     fun action(name: String, argsJson: String): String {
         if (name == "liveScan" || name == "liveScanSet") return liveAction(name, argsJson)
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes" || name == "priceHealth") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes" || name == "priceHealth" || name == "markets") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1803,6 +1803,7 @@ class SwingApp(private val p: Platform) {
                     val idx = Indices.parse(try { p.read("mf_indices.csv") } catch (t: Throwable) { null })
                     Indices.view(idx, a.str("index"), flowCache?.flows ?: emptyMap(), scoreTable?.entries ?: emptyMap(), marketGate != false) { displayName(it) }
                 }
+                "markets" -> desk.view(a.str("seg").ifEmpty { "overview" }, a.bool("force"))
                 "flowSector" -> MoneyFlow.sector(flowData(false), a.str("name"), scoreTable?.entries ?: emptyMap()) { displayName(it) }
                 else -> chart(a)
             }
@@ -2369,6 +2370,12 @@ class SwingApp(private val p: Platform) {
             v["result"] = res
             return v
         }
+    }
+
+    // ------------------------------------------------------------------ Markets terminal (core/Terminal.kt)
+    private val desk: MarketsDesk by lazy {
+        MarketsDesk(p, { path -> fnoGet { it + path } }, { growwIndices() }, { marketData(false, fetch = false) },
+            { flowData(false, fetch = false).flows }, { displayName(it) })
     }
 
     // ------------------------------------------------------------------ F&O lab: learning intraday calls + live ticker

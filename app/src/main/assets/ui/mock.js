@@ -793,6 +793,50 @@
     if (state.feed.length > 100) state.feed.length = 100;
   }
   function notify() { try { if (typeof window.onStateChanged === 'function') window.onStateChanged(); } catch (e) { /* ignore */ } }
+  /* ---------- markets terminal (markets dept) ---------- */
+  function mkMock(a) {
+    var now = Date.now(), j = function (b, k) { return Math.round((b + (Math.random() - 0.5) * b * (k || 0.0006)) * 100) / 100; };
+    var iso = function (d) { var t = new Date(now + 19800000 + d * 864e5); return t.toISOString().slice(0, 10); };
+    var sp = function (b, up) { var o = []; for (var i = 0; i < 30; i++) o.push(Math.round((b * (1 + (up ? 1 : -1) * i * 0.0004 + Math.sin(i / 3) * 0.002)) * 100) / 100); return o; };
+    var G = [['YM=F', 'Dow fut', 'US futures', '', 44210, 0.21], ['ES=F', 'S&P 500 fut', 'US futures', '', 6012.5, 0.38], ['NQ=F', 'Nasdaq fut', 'US futures', '', 21540.25, 0.62],
+      ['^N225', 'Nikkei 225', 'Asia', '', 38720.4, -0.41], ['^HSI', 'Hang Seng', 'Asia', '', 19650.2, 1.12], ['^TNX', 'US 10Y', 'Rates & FX', 'yld', 4.312, -0.55],
+      ['DX-Y.NYB', 'Dollar index', 'Rates & FX', '', 106.42, 0.08], ['INR=X', 'USD/INR', 'Rates & FX', 'inr', 84.452, 0.05], ['BZ=F', 'Brent', 'Commodities', 'usd', 73.18, -1.24],
+      ['CL=F', 'WTI crude', 'Commodities', 'usd', 69.42, -1.31], ['GC=F', 'Gold', 'Commodities', 'usd', 2648.3, 0.44], ['SI=F', 'Silver', 'Commodities', 'usd', 30.91, 0.87], ['BTC-USD', 'Bitcoin', 'Crypto', 'usd', 96250, 2.35]];
+    var mv = function (s, n, ltp, pct, vx, mc) { return { sym: s, name: n, ltp: ltp, pct: pct, volX: vx, valCr: 40, mcapCr: mc }; };
+    var res = { ok: true, seg: a.seg || 'overview', at: now, marketOpen: true, loading: false,
+      india: [['Nifty 50', 25387.4, 0.38], ['Bank Nifty', 54110.2, -0.13], ['Fin Nifty', 25120, 0.15], ['Midcap Nifty', 13150, 0.42], ['Midcap 100', 58420.6, 0.71], ['Smallcap 100', 19105.3, 0.95], ['India VIX', 12.4, -1.6]]
+        .map(function (x) { var l = j(x[1]); return { name: x[0], last: l, chg: Math.round(l * x[2]) / 100, pct: x[2], src: 'live' }; }),
+      gift: { name: 'GIFT Nifty', last: j(25440.5), chg: 52, pct: 0.2 },
+      global: G.map(function (g) { var l = j(g[4]); return { sym: g[0], name: g[1], grp: g[2], unit: g[3], last: l, chg: Math.round(l * g[5]) / 100, pct: g[5], ts: now - 60000, spark: sp(g[4], g[5] > 0) }; }),
+      sectors: [['IT', 1.42, 8, 2], ['Pharma', 0.95, 14, 6], ['Auto', 0.61, 9, 6], ['Realty', 0.55, 7, 3], ['FMCG', 0.21, 8, 7], ['Financials', 0.05, 11, 9], ['Energy', -0.12, 18, 22], ['Bank', -0.13, 5, 7], ['PSU Bank', -0.84, 3, 9], ['Media', -1.12, 3, 7], ['Metal', -1.65, 2, 13], ['Oil & Gas', -0.31, 6, 9]]
+        .map(function (x) { return { name: x[0], pct: x[1], adv: x[2], dec: x[3] }; }),
+      sectorAgg: [['Information Technology', 1.21, 88, 31, 125], ['Healthcare', 0.84, 102, 61, 170], ['Automobile and Auto Components', 0.52, 70, 52, 128], ['Fast Moving Consumer Goods', 0.18, 61, 58, 125], ['Financial Services', 0.02, 180, 171, 360], ['Capital Goods', -0.22, 120, 131, 260], ['Metals & Mining', -1.4, 22, 71, 96]]
+        .map(function (x) { return { name: x[0], pct: x[1], adv: x[2], dec: x[3], n: x[4] }; }),
+      breadth: { adv: 1684, dec: 1102, unch: 88, total: 2874, adRatio: 1.53, above50: 58.4, n50: 2702, above200: 49.1, n200: 2511, hi52: 74, lo52: 21 },
+      movers: { gainers: [mv('KAYNES', 'Kaynes Technology India Ltd', 6120.5, 9.84, 4.2, 39000), mv('BSE', 'BSE Ltd', 5480, 7.12, 3.1, 74000), mv('PERSISTENT', 'Persistent Systems Ltd', 6190, 5.4, 2.2, 96000), mv('SUZLON', 'Suzlon Energy Ltd', 61.2, 4.9, 1.8, 83000), mv('DIXON', 'Dixon Technologies (India) Ltd', 16200, 4.4, 1.6, 97000)],
+        losers: [mv('VEDL', 'Vedanta Ltd', 448.3, -4.9, 2.1, 175000), mv('HINDZINC', 'Hindustan Zinc Ltd', 470.1, -4.2, 1.7, 198000), mv('NMDC', 'NMDC Ltd', 228.4, -3.6, 1.4, 67000), mv('SAIL', 'Steel Authority of India Ltd', 118.2, -3.1, 1.2, 49000), mv('IDEA', 'Vodafone Idea Ltd', 7.9, -2.9, 0.9, 55000)],
+        volume: [mv('KAYNES', 'Kaynes Technology India Ltd', 6120.5, 9.84, 4.2, 39000), mv('VEDL', 'Vedanta Ltd', 448.3, -4.9, 3.6, 175000), mv('BSE', 'BSE Ltd', 5480, 7.12, 3.1, 74000)],
+        highs: [mv('PERSISTENT', 'Persistent Systems Ltd', 6190, 5.4, 2.2, 96000), mv('BSE', 'BSE Ltd', 5480, 7.12, 3.1, 74000)], lows: [mv('HINDZINC', 'Hindustan Zinc Ltd', 470.1, -4.2, 1.7, 198000)] },
+      fii: { ready: true, date: iso(-1), fii: -1842, dii: 2310, fii5: -6120, dii5: 8840, fii20: -21000, dii20: 30100, n: 20,
+        days: [-1842, 950, -2400, -1300, -1528, 610, -880, 1500, -2100, 300].map(function (v, i) { return { date: iso(-1 - i), fii: v, dii: -v * 1.2 + 300 }; }) },
+      src: { india: now - 2000, nse: now - 9000, global: now - 15000, stocks: 'tv', stocksAt: now - 120000, stocksAsof: '', delayMin: 15, lowApprox: false, files: now - 3600000, fiiLive: now - 600000, news: now - 120000, econ: now - 600000 } };
+    if (res.seg === 'calendar' || res.seg === 'overview') {
+      res.events = [[0, 'INFY', 'RESULTS', 'Financial Results'], [0, 'ITC', 'DIVIDEND', 'Ex-date: Interim Dividend - Rs 6.50 Per Share'], [1, 'TCS', 'BOARD', 'Buyback proposal'], [2, 'HDFCBANK', 'RESULTS', 'Quarterly results'],
+        [3, 'POLYCAB', 'BONUS', 'Ex-date: Bonus 1:1'], [6, 'NESTLEIND', 'SPLIT', 'Ex-date: Face Value Split From Rs 10 To Rs 1']].map(function (x) { return { date: iso(x[0]), sym: x[1], name: x[1] + ' Ltd', kind: x[2], detail: x[3] }; });
+      res.holidays = [{ date: iso(28), name: 'Christmas' }, { date: iso(60), name: 'Republic Day' }];
+      res.econ = [[1, 'USD', 'ISM Manufacturing PMI', 'High', '48.6', ''], [3, 'USD', 'Non-Farm Employment Change', 'High', '150K', ''], [2, 'EUR', 'ECB President Speaks', 'Medium', '', ''], [0, 'CNY', 'Caixin Manufacturing PMI', 'Medium', '50.5', '51.2']]
+        .map(function (x) { return { at: now + x[0] * 864e5 + 3600000, ccy: x[1], title: x[2], impact: x[3], forecast: x[4], previous: '', actual: x[5] }; }).sort(function (p, q) { return p.at - q.at; });
+    }
+    if (res.seg === 'news' || res.seg === 'overview') {
+      var N = [['Sensex jumps 500 points, Nifty ends above 25,350 as IT stocks rally', 'Moneycontrol', 8], ['FIIs sell ₹1,842 crore; DIIs buy ₹2,310 crore on Friday', 'Business Standard', 25], ['Rupee settles 3 paise lower at 84.45 against US dollar', 'The Economic Times', 40],
+        ['Metal stocks drag as China demand worries weigh on prices', 'Mint', 65], ['Stocks to watch: Infosys, ITC, TCS, Polycab, Nestle India', 'NDTV Profit', 120], ['RBI policy preview: economists see rates on hold in December', 'Reuters', 200], ['Kaynes Technology surges 10% on order win', 'CNBC-TV18', 230]];
+      res.news = N.map(function (x, i) { return { title: x[0], src: x[1], at: now - x[2] * 60000, url: 'https://news.google.com/rss/articles/mock' + i }; });
+      if (res.seg === 'overview') res.news = res.news.slice(0, 5);
+    }
+    if (scenario === 'broken') res = { ok: true, seg: a.seg, india: [{ name: '<b>x</b>', last: 'NaN' }, null], global: [{ name: null, last: 1e21, spark: [1, null, 'x'] }], breadth: { total: 'x' }, movers: { gainers: [null, { sym: '<i>' }] }, fii: { ready: true, days: 'x' }, events: [{ date: 'bad' }], news: [{ title: 'x', url: 'javascript:alert(1)' }] };
+    if (scenario === 'empty') res = { ok: true, seg: a.seg, loading: true, india: [], global: [], sectors: [], src: {} };
+    return res;
+  }
   function finish(name, res, delay) {
     setTimeout(function () {
       try { if (typeof window.onActionResult === 'function') window.onActionResult(name, JSON.stringify(res)); } catch (e) { /* ignore */ }
@@ -978,6 +1022,7 @@
         indices: Object.keys(IX).map(function (k) { return { name: k, n: IX[k].length }; }) }, 0); }, 200); },
     funds: function (a) { setTimeout(function () { finish('funds', mfFunds(), 0); }, 300); },
     fundInfo: function (a) { setTimeout(function () { finish('fundInfo', mfInfo(String(a.code || '')), 0); }, 200); },
+    markets: function (a) { setTimeout(function () { finish('markets', mkMock(a || {}), 0); }, 150); },
     moneyFlow: function (a) { setTimeout(function () { finish('moneyFlow', mfView(), 0); }, 350); },
     flowSector: function (a) { setTimeout(function () { finish('flowSector', mfSector(String(a.name || '')), 0); }, 250); },
     newListings: function (a) { setTimeout(function () { finish('newListings', { ok: true, results: newListingsList() }, 0); }, 120); },

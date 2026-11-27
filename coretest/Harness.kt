@@ -54,7 +54,7 @@ fun main(args: Array<String>) {
         Sample.run()
         return
     }
-    val all: List<Pair<String, () -> Unit>> = UnitTests.all() + SimTests.all() + V2Tests.all() + V3Tests.all() + V4Tests.all() + V5Tests.all() + V6Tests.all() + V7Tests.all() + V8Tests.all() + V9Tests.all() + V10Tests.all() + V11Tests.all() + V12Tests.all() + V15Tests.all() + V16Tests.all() + V17Tests.all() + V18Tests.all() + V19Tests.all() + ScanTests.all() + LiveScanTests.all() + V20Tests.all() + PriceTests.all()
+    val all: List<Pair<String, () -> Unit>> = UnitTests.all() + SimTests.all() + V2Tests.all() + V3Tests.all() + V4Tests.all() + V5Tests.all() + V6Tests.all() + V7Tests.all() + V8Tests.all() + V9Tests.all() + V10Tests.all() + V11Tests.all() + V12Tests.all() + V15Tests.all() + V16Tests.all() + V17Tests.all() + V18Tests.all() + V19Tests.all() + ScanTests.all() + LiveScanTests.all() + V20Tests.all() + PriceTests.all() + TerminalTests.all()
     for ((name, body) in all) if (only == null || name.contains(only, true)) T.section(name, body)
     println()
     println("RESULT: ${T.pass} checks passed, ${T.fail} failed")

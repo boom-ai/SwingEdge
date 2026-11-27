@@ -24,3 +24,6 @@ captures/
 
 # NOTE: app/swingedge-debug.jks is committed ON PURPOSE (stable signing key). Do not ignore *.jks.
 !app/swingedge-debug.jks
+
+# Python
+__pycache__/

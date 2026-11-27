@@ -295,7 +295,7 @@ class SymbolIndex private constructor(
             val nameKey = Array(n) { k -> nameWords[k].map { it.joinToString("") }.toTypedArray() }
             val nameLen = IntArray(n) { k -> nameWords[k].minOfOrNull { it.size } ?: 99 }
             val listed = IntArray(n) { listedBy[order[it]] ?: 0 }
-            val board = Array(n) { if (boardBy[order[it]] == StockList.SME) StockList.SME else StockList.EQ }
+            val board = Array(n) { when (boardBy[order[it]]) { StockList.SME -> StockList.SME; StockList.BSE -> StockList.BSE; else -> StockList.EQ } }
             val ix = SymbolIndex(syms, names, tracked, symKey, nameWords, nameKey, nameLen, listed, board)
             try { ix.setChanges(SymbolChanges.parseNse(changesCsv), SymbolChanges.parseCorp(corpCsv)) } catch (t: Throwable) {}
             return ix

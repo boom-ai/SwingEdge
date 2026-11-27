@@ -908,7 +908,6 @@ BATAINDIA,2026-09-30,2026-10-19,50.16,5.75,14.6,11.57,14.65,https://nsearchives.
 BBL,2026-03-31,2026-04-17,33.65,4.1,11.33,6.62,34.22,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1653205_17042026041641_WEB.xml
 BBL,2026-06-30,2026-07-21,33.65,5.84,9.58,6.05,34.86,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1697835_21072026121249_WEB.xml
 BBL,2026-09-30,2026-10-21,33.65,4.04,8.45,5.91,37.15,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1742466_21102026111434_WEB.xml
-BBOX,2026-03-18,2026-03-31,70.49,3.32,2.34,0.04,9.07,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1644311_31032026054731_WEB.xml
 BBOX,2026-03-31,2026-04-15,69.99,3.26,2.95,0.04,8.61,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1651105_15042026123528_WEB.xml
 BBOX,2026-06-30,2026-07-17,69.95,4.69,3.4,0.01,7.37,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1694791_17072026105505_WEB.xml
 BBOX,2026-09-30,2026-10-13,69.95,3.78,3.32,0.01,8.27,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1736789_13102026023115_WEB.xml
@@ -4854,14 +4853,14 @@ PANACEABIO,2026-09-30,2026-10-15,72.48,2.75,0.0,2.47,14.77,https://nsearchives.n
 PANACHE,2026-03-31,2026-04-17,54.05,0.0,0.0,0.0,9.34,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1653263_17042026043751_WEB.xml
 PANACHE,2026-06-30,2026-07-17,54.05,0.0,0.0,0.0,9.3,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1695146_17072026033924_WEB.xml
 PANACHE,2026-09-30,2026-10-19,54.05,0.0,0.0,0.0,9.01,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1742124_19102026102500_WEB.xml
-PANAMAPET,2026-03-31,2026-04-13,63.16,,,,,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1649532_13042026114910_WEB.xml
+PANAMAPET,2026-03-31,2026-04-13,63.16,11.29,0.0,0.67,11.73,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1649532_13042026114910_WEB.xml
 PANAMAPET,2026-06-30,2026-07-10,63.16,11.72,0.0,0.67,11.68,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1690188_10072026115613_WEB.xml
 PANAMAPET,2026-09-30,2026-10-07,63.16,11.13,0.0,0.01,12.88,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1733725_07102026014702_WEB.xml
 PANSARI,2026-03-31,2026-05-02,73.88,0.0,0.0,0.0,1.5,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1662947_02052026025453_WEB.xml
 PANSARI,2026-06-30,2026-07-10,73.88,0.0,0.0,0.0,1.56,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1690548_10072026051852_WEB.xml
 PANSARI,2026-09-30,2026-10-10,73.88,0.0,0.0,0.0,1.77,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1735328_10102026124631_WEB.xml
 PAR,2026-03-31,2026-04-18,73.41,0.0,0.0,0.0,18.81,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1653873_18042026110035_WEB.xml
-PAR,2026-06-30,2026-07-16,73.41,,,,,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1694338_16072026050227_WEB.xml
+PAR,2026-06-30,2026-07-16,73.41,0.0,0.0,0.09,18.59,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1694338_16072026050227_WEB.xml
 PAR,2026-09-30,2026-10-14,73.41,0.0,0.0,0.09,18.19,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1737341_14102026094932_WEB.xml
 PARACABLES,2026-03-31,2026-04-21,49.18,0.51,0.0,0.11,31.42,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1656444_21042026054201_WEB.xml
 PARACABLES,2026-06-30,2026-07-20,49.18,0.48,0.0,0.11,29.27,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1697115_20072026053047_WEB.xml
@@ -4923,7 +4922,6 @@ PAYTM,2026-09-30,2026-10-14,0.0,43.52,21.17,8.34,8.09,https://nsearchives.nseind
 PCBL,2026-03-31,2026-04-20,53.38,5.56,5.52,5.46,21.95,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1655387_20042026063748_WEB.xml
 PCBL,2026-06-30,2026-07-21,53.38,5.79,5.62,5.65,21.39,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1698467_21072026052512_WEB.xml
 PCBL,2026-09-30,2026-10-16,53.38,6.34,6.72,6.99,19.97,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1739688_16102026013916_WEB.xml
-PCJEWELLER,2026-03-23,2026-03-31,39.83,9.61,0.12,5.54,17.79,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1644051_31032026034545_WEB.xml
 PCJEWELLER,2026-03-28,2026-04-07,41.1,9.52,0.12,5.33,17.42,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1646602_07042026014732_WEB.xml
 PCJEWELLER,2026-03-31,2026-04-16,40.72,10.4,0.14,5.28,17.23,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1652439_16042026053918_WEB.xml
 PCJEWELLER,2026-04-10,2026-04-20,38.49,13.28,0.12,4.63,15.66,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1654940_20042026035025_WEB.xml
@@ -5929,7 +5927,6 @@ SHAREINDIA,2026-11-04,2026-11-14,47.76,1.57,0.09,0.48,11.45,https://nsearchives.
 SHEKHAWATI,2026-03-31,2026-04-13,64.12,0.0,0.0,0.0,18.61,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1649612_13042026125108_WEB.xml
 SHEKHAWATI,2026-06-30,2026-07-17,64.08,0.0,0.0,0.0,18.71,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1695032_17072026023625_WEB.xml
 SHEKHAWATI,2026-09-30,2026-10-19,65.55,0.0,0.0,0.0,17.23,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1741150_19102026111402_WEB.xml
-SHEMAROO,2026-03-27,2026-03-31,67.24,0.0,0.0,0.0,14.71,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1643882_31032026011857_WEB.xml
 SHEMAROO,2026-03-31,2026-04-14,67.24,0.0,0.0,0.0,14.78,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1650547_14042026031504_WEB.xml
 SHEMAROO,2026-06-30,2026-07-14,67.24,0.0,0.0,0.0,13.85,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1692128_14072026025831_WEB.xml
 SHEMAROO,2026-09-30,2026-10-15,67.24,0.0,0.0,0.0,13.74,https://nsearchives.nseindia.in/corporate/xbrl/SHP_1738461_15102026105857_WEB.xml

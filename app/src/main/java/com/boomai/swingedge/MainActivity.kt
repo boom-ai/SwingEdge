@@ -217,7 +217,7 @@ class MainActivity : Activity() {
         if (name == "updateCheck" || name == "updateInstall" || name == "updatePermission") { updateAction(name); return }
         try {
             // look-ups must not queue behind a scan/backtest or behind each other's network waits
-            val exec = if (name == "search") searchExec else if (name == "stockInfo" || name == "getChart" || name == "refreshSymbols" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes" || name == "markets" || name == "priceHealth" || name == "liveScan" || name == "intraday") readExec else actionExec
+            val exec = if (name == "search") searchExec else if (name == "stockInfo" || name == "getChart" || name == "refreshSymbols" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes" || name == "markets" || name == "priceHealth" || name == "liveScan" || name == "intraday" || name == "ratings" || name == "ratingOf") readExec else actionExec
             exec.execute {
                 val result = try {
                     App.from(this).swing.action(name, argsJson)

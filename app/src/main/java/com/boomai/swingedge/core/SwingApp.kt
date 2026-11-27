@@ -32,6 +32,8 @@ class SwingApp(private val p: Platform) {
     private val cache = DailyCache(p)
     /** nightly-calls: tomorrow's intraday calls (Nightly.kt) */
     private val night = NightDesk(p)
+    /** multi-factor rating (FactorModel.kt, data/rating.csv) */
+    private val ratings = RatingDesk(p)
     @Volatile private var universe: List<String> = emptyList()
     @Volatile private var universeSet: Set<String> = emptySet()
     @Volatile private var names: Map<String, String> = emptyMap()
@@ -148,7 +150,7 @@ class SwingApp(private val p: Platform) {
 
     fun action(name: String, argsJson: String): String {
         if (name == "liveScan" || name == "liveScanSet") return liveAction(name, argsJson)
-        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes" || name == "priceHealth" || name == "markets" || name == "intraday") return readAction(name, argsJson)
+        if (name == "search" || name == "stockInfo" || name == "getChart" || name == "newListings" || name == "moneyFlow" || name == "flowSector" || name == "funds" || name == "fundInfo" || name == "fundSearch" || name == "indexView" || name == "options" || name.startsWith("fno") || name == "liveQuotes" || name == "brokerStatus" || name == "brokerQuotes" || name == "priceHealth" || name == "markets" || name == "intraday" || name == "ratings" || name == "ratingOf") return readAction(name, argsJson)
         if (name == "refreshSymbols") return refreshSymbolsAction()
         lock.lock()
         try {
@@ -1797,6 +1799,8 @@ class SwingApp(private val p: Platform) {
                 "fnoLab" -> labView()
                 "liveQuotes" -> liveQuotes(a)
                 "intraday" -> night.view(now(), refresh = !a.bool("cached"))
+                "ratings" -> ratings.list(now(), a.bool("fno"), a.str("sector"), a.str("side").ifEmpty { "top" }, a.int("limit").let { if (it <= 0) 50 else it })
+                "ratingOf" -> ratings.of(now(), a.str("sym"))
                 "brokerStatus" -> brokerStatus()
                 "brokerQuotes" -> brokerQuotes(a)
                 "priceHealth" -> priceHealth()

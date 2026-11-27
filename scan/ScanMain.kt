@@ -10,6 +10,7 @@ import com.boomai.swingedge.core.MarketScan
 import com.boomai.swingedge.core.StockList
 import com.boomai.swingedge.core.Holidays
 import com.boomai.swingedge.core.NightCalls
+import com.boomai.swingedge.core.FactorModel
 import java.io.File
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream

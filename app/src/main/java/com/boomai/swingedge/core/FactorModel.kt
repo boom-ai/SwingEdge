@@ -364,3 +364,50 @@ object FactorModel {
             "count" to rows.size, "rows" to rows.take(limit.coerceIn(1, 500)).map { row(p, it, false) })
     }
 }
+
+/** Phone side: rating.csv cached in a file, refreshed at most every 3 hours when a screen asks for it. */
+class RatingDesk(private val p: Platform) {
+    @Volatile var data: FactorModel.Parsed? = null
+        private set
+    private var fetchedAt = 0L
+    private var loaded = false
+
+    @Synchronized private fun load() {
+        if (loaded) return
+        loaded = true
+        try { data = FactorModel.parse(p.read(FactorModel.FILE)) } catch (t: Throwable) {}
+    }
+
+    @Synchronized fun refresh(now: Long, force: Boolean = false): Boolean {
+        load()
+        if (!force && now - fetchedAt in 0 until GAP_MS) return false
+        fetchedAt = now
+        val text = try { p.httpGetAll(listOf(FactorModel.URL)).getOrNull(0) } catch (t: Throwable) { null } ?: return false
+        val d = FactorModel.parse(text) ?: return false
+        val cur = data
+        if (cur != null && d.asof < cur.asof) return false
+        try { p.write(FactorModel.FILE, text) } catch (t: Throwable) {}
+        data = d
+        return true
+    }
+
+    fun list(now: Long, fno: Boolean, sector: String, side: String, limit: Int): Map<String, Any?> {
+        try { refresh(now) } catch (t: Throwable) {}
+        load()
+        return FactorModel.list(data, fno, sector, side, limit)
+    }
+
+    fun of(now: Long, sym: String): Map<String, Any?> {
+        try { refresh(now) } catch (t: Throwable) {}
+        load()
+        val d = data ?: return linkedMapOf("ok" to true, "none" to true)
+        val x = d.bySym[sym.uppercase()] ?: return linkedMapOf("ok" to true, "none" to false, "rated" to false, "sym" to sym, "meta" to FactorModel.meta(d))
+        val m = LinkedHashMap(FactorModel.row(d, x, true)); m["ok"] = true; m["none"] = false; m["rated"] = true; m["meta"] = FactorModel.meta(d)
+        return m
+    }
+
+    /** rating / rank of a symbol without network (for lists built elsewhere) */
+    fun peek(sym: String): FactorModel.Rated? { load(); return data?.bySym?.get(sym.uppercase()) }
+
+    companion object { const val GAP_MS = 3L * 3600 * 1000 }
+}

@@ -547,7 +547,6 @@ Nifty 500,DIVISLAB
 Nifty 500,DIXON
 Nifty 500,LALPATHLAB
 Nifty 500,DRREDDY
-Nifty 500,DUMMYHEG
 Nifty 500,EIDPARRY
 Nifty 500,EIHOTEL
 Nifty 500,EMBASSY
@@ -602,6 +601,7 @@ Nifty 500,HDFCAMC
 Nifty 500,HDFCBANK
 Nifty 500,HDFCLIFE
 Nifty 500,HEGAM
+Nifty 500,HEGRAPHITE
 Nifty 500,HFCL
 Nifty 500,HAVELLS
 Nifty 500,HEROMOTOCO
@@ -1430,7 +1430,6 @@ Nifty Smallcap 250,DEEPAKNTR
 Nifty Smallcap 250,DELHIVERY
 Nifty Smallcap 250,DEVYANI
 Nifty Smallcap 250,LALPATHLAB
-Nifty Smallcap 250,DUMMYHEG
 Nifty Smallcap 250,EIDPARRY
 Nifty Smallcap 250,EIHOTEL
 Nifty Smallcap 250,ELECON
@@ -1457,6 +1456,7 @@ Nifty Smallcap 250,GESHIP
 Nifty Smallcap 250,GMDCLTD
 Nifty Smallcap 250,HBLENGINE
 Nifty Smallcap 250,HEGAM
+Nifty Smallcap 250,HEGRAPHITE
 Nifty Smallcap 250,HFCL
 Nifty Smallcap 250,HSCL
 Nifty Smallcap 250,HOMEFIRST
@@ -2219,7 +2219,6 @@ Nifty MidSmallcap 400,DELHIVERY
 Nifty MidSmallcap 400,DEVYANI
 Nifty MidSmallcap 400,DIXON
 Nifty MidSmallcap 400,LALPATHLAB
-Nifty MidSmallcap 400,DUMMYHEG
 Nifty MidSmallcap 400,EIDPARRY
 Nifty MidSmallcap 400,EIHOTEL
 Nifty MidSmallcap 400,EMBASSY
@@ -2265,6 +2264,7 @@ Nifty MidSmallcap 400,GMDCLTD
 Nifty MidSmallcap 400,HBLENGINE
 Nifty MidSmallcap 400,HDBFS
 Nifty MidSmallcap 400,HEGAM
+Nifty MidSmallcap 400,HEGRAPHITE
 Nifty MidSmallcap 400,HFCL
 Nifty MidSmallcap 400,HAVELLS
 Nifty MidSmallcap 400,HEROMOTOCO
@@ -3234,7 +3234,6 @@ Nifty Total Market,DIVISLAB
 Nifty Total Market,DIXON
 Nifty Total Market,LALPATHLAB
 Nifty Total Market,DRREDDY
-Nifty Total Market,DUMMYHEG
 Nifty Total Market,DUMMYINXGN
 Nifty Total Market,DYNAMATECH
 Nifty Total Market,EIDPARRY
@@ -3322,6 +3321,7 @@ Nifty Total Market,HDFCAMC
 Nifty Total Market,HDFCBANK
 Nifty Total Market,HDFCLIFE
 Nifty Total Market,HEGAM
+Nifty Total Market,HEGRAPHITE
 Nifty Total Market,HFCL
 Nifty Total Market,HAPPSTMNDS
 Nifty Total Market,HAPPYFORGE

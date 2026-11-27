@@ -1,4 +1,4 @@
-#SWINGEDGE_RATING,v=1,asof=2026-11-27,builtAt=1795793138177,sessions=259,universe=1357,h=10,oosDays=48,oosSpread=0.0079,oosHit=77.08,oosIc=0.0664,oosTop=0.0053,oosAll=-0.0026,model=PRIOR,cands=GATED:5.0E-4:56.25:48;SHRUNK:0.0064:79.17:48;BLEND:0.0071:83.33:48;PRIOR:0.0079:77.08:48
+#SWINGEDGE_RATING,v=1,asof=2026-11-27,builtAt=1795801702632,sessions=259,universe=1357,h=10,oosDays=48,oosSpread=0.0079,oosHit=77.08,oosIc=0.0664,oosTop=0.0053,oosAll=-0.0026,model=PRIOR,cands=GATED:5.0E-4:56.25:48;SHRUNK:0.0064:79.17:48;BLEND:0.0071:83.33:48;PRIOR:0.0079:77.08:48
 #FACTOR,mom6,6-month momentum,0.0302,0.2702,0.94,0.25,60,Return from 6 months ago to 1 month ago (skips the last month).
 #FACTOR,mom3,3-month momentum,0.0189,0.2067,0.72,0.0,60,Return over the last 3 months.
 #FACTOR,rev5,1-week pullback,0.0147,0.2676,0.93,0.1,60,Minus the last 5 days' return: high when the stock just dipped.

@@ -1,4 +1,4 @@
-#SWINGEDGE_INTRADAY,v=1,asof=2026-11-27,for=2026-11-30,builtAt=1795793135346,sessions=259,stocks=5244,capital=100000,riskPct=1.0
+#SWINGEDGE_INTRADAY,v=1,asof=2026-11-27,for=2026-11-30,builtAt=1795801699699,sessions=259,stocks=5244,capital=100000,riskPct=1.0
 #RULE,nr7,intraday,7341,47.69,0.121,884.86,TESTED+,NR7 breakout,Yesterday was the narrowest range of 7 days. With the trend (close vs 50-day average): buy above its high / sell below its low; stop at the bar's midpoint; target 2R; else exit 15:15.,-0.603
 #RULE,nr7id,intraday,4159,46.74,0.132,548.56,TESTED+,NR7 inside-day breakout,NR7 that is also an inside day (Crabel's NR7ID). Same orders as NR7.,-0.674
 #RULE,cpr,intraday,5781,46.25,0.088,508.61,TESTED+,Narrow CPR breakout,"Central pivot range under 0.15% of price (trend day expected). Close above the CPR and the 20-day average: buy above the previous high, stop below the CPR; mirror for shorts; target 2R; else exit 15:15.",-0.567
@@ -18,53 +18,112 @@
 #NOTE,Back-test on 259 sessions of NSE bhavcopies (daily bars). Fill/exit order from the OHLC path assumption (up-close day: open-low-high-close; down-close day: open-high-low-close); a gap through the trigger fills at the open; no stop/target hit = exit at the close (15:15 proxy). Costs 0.10% (intraday) / 0.25% (swing) per round trip.
 #NOTE,"Only rules with >= 30 back-test trades and a positive average R (path model) are listed; the worst-case column assumes the stop was hit whenever the day reached it. Past results on one year of data are not a promise. Size: ₹1,00,000 capital, 1% (₹1,000) risk per trade."
 #NOTE,Market proxy for the swing modes: equal-weight index of liquid NSE stocks (not the official Nifty 500).
-RANK,SYMBOL,NAME,RULE,KIND,SIDE,TRIGGER,STOP,TARGET,EXIT,QTY,RISK_RS,FNO,WHEN
-1,HDFCBANK,HDFC Bank Limited,gapgo,intraday,IF GAP,870.1,0.0,0.0,15:15,114,8.16,1,"If it opens at or above ₹870.10: buy above open + ₹2.04 after 9:30, stop open − ₹6.12, target 2R, exit 15:15."
-2,RELIANCE,Reliance Industries Limited,gapgo,intraday,IF GAP,1403.35,0.0,0.0,15:15,71,12.34,1,"If it opens at or above ₹1,403: buy above open + ₹3.09 after 9:30, stop open − ₹9.26, target 2R, exit 15:15."
-3,ICICIBANK,ICICI Bank Limited,gapgo,intraday,IF GAP,1617.3,0.0,0.0,15:15,61,14.34,1,"If it opens at or above ₹1,617: buy above open + ₹3.58 after 9:30, stop open − ₹10.75, target 2R, exit 15:15."
-4,SBIN,State Bank of India,gapgo,intraday,IF GAP,1147.55,0.0,0.0,15:15,86,10.25,1,"If it opens at or above ₹1,148: buy above open + ₹2.56 after 9:30, stop open − ₹7.69, target 2R, exit 15:15."
-5,BSE,BSE Limited,gapgo,intraday,IF GAP,4079.95,0.0,0.0,15:15,20,48.62,1,"If it opens at or above ₹4,080: buy above open + ₹12.15 after 9:30, stop open − ₹36.46, target 2R, exit 15:15."
-6,ABB,ABB India Limited,nr7id,intraday,BUY,7080.55,7033.25,7175.15,15:15,14,662.2,1,"After 9:30: buy above ₹7,081, stop ₹7,033, target ₹7,175, exit 15:15"
-7,BHEL,Bharat Heavy Electricals Limited,nr7id,intraday,BUY,425.6,421.0,434.8,15:15,217,998.2,1,"After 9:30: buy above ₹425.60, stop ₹421.00, target ₹434.80, exit 15:15"
-8,CGPOWER,CG Power and Industrial Solutions Limited,nr7id,intraday,SELL,782.4,788.9,769.4,15:15,127,825.5,1,"After 9:30: sell below ₹782.40, stop ₹788.90, target ₹769.40, exit 15:15"
-9,CIPLA,Cipla Limited,nr7id,intraday,BUY,1453.7,1443.95,1473.2,15:15,68,663.0,1,"After 9:30: buy above ₹1,454, stop ₹1,444, target ₹1,473, exit 15:15"
-10,COROMANDEL,Coromandel International Limited,nr7id,intraday,BUY,1969.8,1956.9,1995.6,15:15,50,645.0,1,"After 9:30: buy above ₹1,970, stop ₹1,957, target ₹1,996, exit 15:15"
-11,ALKEM,Alkem Laboratories Limited,nr7,intraday,SELL,5071.45,5103.5,5007.35,15:15,19,608.95,1,"After 9:30: sell below ₹5,071, stop ₹5,104, target ₹5,007, exit 15:15"
-12,ATHERENERG,Ather Energy Limited,nr7,intraday,BUY,1915.85,1897.95,1951.65,15:15,52,930.8,1,"After 9:30: buy above ₹1,916, stop ₹1,898, target ₹1,952, exit 15:15"
-13,FORTIS,Fortis Healthcare Limited,nr7,intraday,BUY,835.4,829.0,848.2,15:15,119,761.6,1,"After 9:30: buy above ₹835.40, stop ₹829.00, target ₹848.20, exit 15:15"
-14,ICICIGI,ICICI Lombard General Insurance Company Limited,nr7,intraday,BUY,1756.45,1743.4,1782.55,15:15,56,730.8,1,"After 9:30: buy above ₹1,756, stop ₹1,743, target ₹1,783, exit 15:15"
-15,ICICILIFE,ICICI Life Insurance Limited,nr7,intraday,BUY,472.9,468.95,480.85,15:15,211,833.45,1,"After 9:30: buy above ₹472.90, stop ₹468.95, target ₹480.85, exit 15:15"
-16,BEML,BEML Limited,vols,swing,BUY,2346.1,2157.4,2723.5,max 15 days,5,943.5,0,"Buy at the open (near ₹2,346)"
-17,TEXRAIL,Texmaco Rail & Engineering Limited,vols,swing,BUY,124.85,114.7,145.2,max 15 days,98,994.7,0,Buy at the open (near ₹124.85)
-18,GEOJITFSL,Geojit Financial Services Limited,vols,swing,BUY,78.25,72.1,90.65,max 15 days,162,999.54,0,Buy at the open (near ₹78.25)
-19,IDEAFORGE,Ideaforge Technology Limited,vols,swing,BUY,789.2,718.25,931.1,max 15 days,14,993.3,0,Buy at the open (near ₹789.20)
-20,WAAREERTL,Waaree Renewable Technologies Limited,vols,swing,BUY,825.7,764.8,947.45,max 15 days,16,974.4,0,Buy at the open (near ₹825.70)
-21,SOLARWORLD,Solarworld Energy Solutions Limited,vols,swing,BUY,121.55,108.5,147.65,max 15 days,76,992.56,0,Buy at the open (near ₹121.55)
-22,JLHL,Jupiter Life Line Hospitals Limited,vols,swing,BUY,345.3,307.15,421.65,max 15 days,26,991.9,0,Buy at the open (near ₹345.30)
-23,SHALPAINTS,Shalimar Paints Limited,hi52,swing,BUY,108.55,92.7,140.25,max 30 days,63,999.81,0,Buy at the open (near ₹108.55)
-24,UTTAMSUGAR,Uttam Sugar Mills Limited,hi52,swing,BUY,390.65,333.45,505.05,max 30 days,17,972.4,0,Buy at the open (near ₹390.65)
-25,ACE,Action Construction Equipment Limited,hi52,swing,BUY,1325.7,1209.5,1558.1,max 30 days,8,929.6,0,"Buy at the open (near ₹1,326)"
-26,SPORTKING,Sportking India Limited,hi52,swing,BUY,249.05,215.45,316.15,max 30 days,29,973.82,0,Buy at the open (near ₹249.05)
-27,BEML,BEML Limited,hi52,swing,BUY,2346.1,2110.2,2817.85,max 30 days,4,943.6,0,"Buy at the open (near ₹2,346)"
-28,AGARWALEYE,Dr. Agarwal's Health Care Limited,hi52,swing,BUY,581.35,532.5,679.05,max 30 days,20,977.0,0,Buy at the open (near ₹581.35)
-29,ACE,Action Construction Equipment Limited,brk,swing,BUY,1325.7,1232.75,1511.6,max 20 days,10,929.5,0,"Buy at the open (near ₹1,326)"
-30,SPORTKING,Sportking India Limited,brk,swing,BUY,249.05,222.2,302.75,max 20 days,37,992.71,0,Buy at the open (near ₹249.05)
-31,BEML,BEML Limited,brk,swing,BUY,2346.1,2157.4,2723.5,max 20 days,5,943.5,0,"Buy at the open (near ₹2,346)"
-32,J&KBANK,The Jammu & Kashmir Bank Limited,brk,swing,BUY,166.4,154.4,190.3,max 20 days,83,995.17,0,Buy at the open (near ₹166.40)
-33,JLHL,Jupiter Life Line Hospitals Limited,brk,swing,BUY,345.3,307.15,421.65,max 20 days,26,991.9,0,Buy at the open (near ₹345.30)
-34,UNIMECH,Unimech Aerospace and Manufacturing Limited,pb20,swing,BUY,1848.9,1710.95,2124.85,max 10 days,7,965.65,0,"Buy at the open (near ₹1,849)"
-35,MANAKCOAT,Manaksia Coated Metals & Industries Limited,pb20,swing,BUY,165.7,151.8,193.5,max 10 days,72,999.36,0,Buy at the open (near ₹165.70)
-36,COFORGE,Coforge Limited,pb20,swing,BUY,2071.0,1946.5,2320.0,max 10 days,8,996.0,1,"Buy at the open (near ₹2,071)"
-37,DALMIASUG,Dalmia Bharat Sugar and Industries Limited,pb20,swing,BUY,486.05,449.1,559.9,max 10 days,27,997.65,0,Buy at the open (near ₹486.05)
-38,LENSKART,Lenskart Solutions Limited,pb20,swing,BUY,718.35,684.55,785.95,max 10 days,29,980.2,0,Buy at the open (near ₹718.35)
-39,NITINSPIN,Nitin Spinners Limited,pb20,swing,BUY,693.65,657.3,766.3,max 10 days,27,981.45,0,Buy at the open (near ₹693.65)
-40,KSHINTL,KSH International Limited,pb20,swing,BUY,1018.6,944.8,1166.25,max 10 days,13,959.4,0,"Buy at the open (near ₹1,019)"
-41,MMFL,MM Forgings Limited,pb20,swing,BUY,631.65,582.9,729.15,max 10 days,20,975.0,0,Buy at the open (near ₹631.65)
-42,RAYMOND,Raymond Limited,darvas,swing,BUY,1278.6,1088.1,1659.55,max 20 days,5,952.5,0,"Buy at the open (near ₹1,279)"
-43,UTTAMSUGAR,Uttam Sugar Mills Limited,darvas,swing,BUY,390.65,334.65,502.65,max 20 days,17,952.0,0,Buy at the open (near ₹390.65)
-44,PTCIL,PTC Industries Limited,darvas,swing,BUY,25460.0,23220.0,29940.0,max 20 days,0,0.0,0,"Buy at the open (near ₹25,460)"
-45,DHAMPURSUG,Dhampur Sugar Mills Limited,darvas,swing,BUY,195.45,162.9,260.65,max 20 days,30,976.8,0,Buy at the open (near ₹195.45)
-46,BEML,BEML Limited,darvas,swing,BUY,2346.1,2063.05,2912.2,max 20 days,3,849.15,0,"Buy at the open (near ₹2,346)"
-47,TEXRAIL,Texmaco Rail & Engineering Limited,darvas,swing,BUY,124.85,109.6,155.35,max 20 days,65,991.25,0,Buy at the open (near ₹124.85)
-48,CHOICEIN,Choice International Limited,darvas,swing,BUY,770.45,714.2,882.9,max 20 days,17,956.25,0,Buy at the open (near ₹770.45)
-49,GEOJITFSL,Geojit Financial Services Limited,darvas,swing,BUY,78.25,69.0,96.85,max 20 days,107,991.89,0,Buy at the open (near ₹78.25)
+#CONV,quick,3,1,1,0.215,0.167,101,0.082,65.35,102,0.147,71.57,102,0.204,79.41
+#CONV,darvas,-1,1,0,-0.37,-0.277,0,0.0,0.0,390,-0.42,22.31,0,0.0,0.0
+#CONV,cpr,0,1,1,0.16,0.138,1927,-0.014,43.23,1927,0.136,47.69,1927,0.142,47.85
+#CONV,pb20,-1,1,0,-0.643,-0.488,0,0.0,0.0,995,-0.415,25.83,0,0.0,0.0
+#CONV,gapgo,2,1,1,0.552,0.32,372,-0.002,42.2,372,0.227,48.12,372,0.361,54.3
+#CONV,nr7id,5,-1,1,0.22,0.166,1386,0.072,41.49,1386,0.093,44.44,1387,0.231,54.29
+#CONV,hi52,1,1,1,-0.183,-0.307,907,-0.077,36.93,1073,-0.091,36.53,908,-0.014,40.75
+#CONV,gapfade,4,1,1,0.028,-0.135,887,-0.175,50.51,1483,-0.092,55.02,888,0.019,60.59
+#CONV,nr7,5,-1,1,0.22,0.14,2447,0.068,43.56,2447,0.091,46.96,2447,0.203,52.55
+#CONV,pdh,5,-1,1,0.047,-0.023,6074,-0.068,40.71,6074,-0.047,44.16,6074,0.072,51.1
+#CONV,daily,-1,1,0,,0.133,0,0.0,0.0,15,0.133,73.33,0,0.0,0.0
+#CONV,vols,2,-1,1,-0.103,-0.138,607,-0.136,36.41,608,-0.033,42.27,608,0.08,46.05
+#CONV,brk,-1,1,0,-0.249,-0.184,0,0.0,0.0,2521,-0.091,36.81,0,0.0,0.0
+#CONV,washout,-1,1,0,,0.279,0,0.0,0.0,240,0.279,63.75,0,0.0,0.0
+RANK,SYMBOL,NAME,RULE,KIND,SIDE,TRIGGER,STOP,TARGET,EXIT,QTY,RISK_RS,FNO,WHEN,CONV,CONV_WIN,CONV_N,HC,WHY
+1,ABCAPITAL,Aditya Birla Capital Limited,gapgo,intraday,IF GAP,417.65,0.0,0.0,15:15,216,4.62,1,"If it opens at or above ₹417.65: buy above open + ₹1.16 after 9:30, stop open − ₹3.47, target 2R, exit 15:15.",0.361,54.3,372,1,heavy volume
+2,AGIIL,Agi Infra Limited,gapgo,intraday,IF GAP,321.9,0.0,0.0,15:15,155,6.43,0,"If it opens at or above ₹321.90: buy above open + ₹1.61 after 9:30, stop open − ₹4.82, target 2R, exit 15:15.",0.361,54.3,372,1,heavy volume
+3,ANGELONE,Angel One Limited,gapgo,intraday,IF GAP,382.95,0.0,0.0,15:15,164,6.09,1,"If it opens at or above ₹382.95: buy above open + ₹1.52 after 9:30, stop open − ₹4.57, target 2R, exit 15:15.",0.361,54.3,372,1,heavy volume
+4,BANKINDIA,Bank of India,gapgo,intraday,IF GAP,169.05,0.0,0.0,15:15,473,2.11,1,"If it opens at or above ₹169.05: buy above open + ₹0.53 after 9:30, stop open − ₹1.58, target 2R, exit 15:15.",0.361,54.3,372,1,heavy volume
+5,BEL,Bharat Electronics Limited,gapgo,intraday,IF GAP,417.6,0.0,0.0,15:15,238,3.32,1,"If it opens at or above ₹417.60: buy above open + ₹0.83 after 9:30, stop open − ₹2.49, target 2R, exit 15:15.",0.361,54.3,372,1,heavy volume
+6,BEML,BEML Limited,gapgo,intraday,IF GAP,2383.35,0.0,0.0,15:15,26,37.74,0,"If it opens at or above ₹2,383: buy above open + ₹9.44 after 9:30, stop open − ₹28.31, target 2R, exit 15:15.",0.361,54.3,372,1,heavy volume
+7,CDSL,Central Depository Services (India) Limited,gapgo,intraday,IF GAP,1479.05,0.0,0.0,15:15,61,16.27,1,"If it opens at or above ₹1,479: buy above open + ₹4.07 after 9:30, stop open − ₹12.20, target 2R, exit 15:15.",0.361,54.3,372,1,heavy volume
+8,CHOICEIN,Choice International Limited,gapgo,intraday,IF GAP,782.0,0.0,0.0,15:15,127,7.5,0,"If it opens at or above ₹782.00: buy above open + ₹1.87 after 9:30, stop open − ₹5.62, target 2R, exit 15:15.",0.361,54.3,372,1,heavy volume
+9,COFORGE,Coforge Limited,gapgo,intraday,IF GAP,2102.05,0.0,0.0,15:15,30,33.2,1,"If it opens at or above ₹2,102: buy above open + ₹8.30 after 9:30, stop open − ₹24.90, target 2R, exit 15:15.",0.361,54.3,372,1,heavy volume
+10,CUPID,Cupid Limited,gapgo,intraday,IF GAP,395.35,0.0,0.0,15:15,163,6.11,0,"If it opens at or above ₹395.35: buy above open + ₹1.53 after 9:30, stop open − ₹4.58, target 2R, exit 15:15.",0.361,54.3,372,1,heavy volume
+11,CARTRADE,Cartrade Tech Limited,nr7id,intraday,SELL,2569.2,2597.45,2512.7,15:15,35,988.75,0,"After 9:30: sell below ₹2,569, stop ₹2,597, target ₹2,513, exit 15:15",0.231,54.29,1387,1,below / near the 50-day average
+12,CGPOWER,CG Power and Industrial Solutions Limited,nr7id,intraday,SELL,782.4,788.9,769.4,15:15,127,825.5,1,"After 9:30: sell below ₹782.40, stop ₹788.90, target ₹769.40, exit 15:15",0.231,54.29,1387,1,below / near the 50-day average
+13,CLEANMAX,Clean Max Enviro Energy Solutions Limited,nr7id,intraday,SELL,1244.35,1252.45,1228.15,15:15,80,648.0,0,"After 9:30: sell below ₹1,244, stop ₹1,252, target ₹1,228, exit 15:15",0.231,54.29,1387,1,below / near the 50-day average
+14,GLOBUSSPR,Globus Spirits Limited,nr7id,intraday,SELL,736.05,743.2,721.8,15:15,135,965.25,0,"After 9:30: sell below ₹736.05, stop ₹743.20, target ₹721.80, exit 15:15",0.231,54.29,1387,1,below / near the 50-day average
+15,HUDCO,Housing & Urban Development Corporation Limited,nr7id,intraday,SELL,154.0,155.4,151.2,15:15,649,908.6,0,"After 9:30: sell below ₹154.00, stop ₹155.40, target ₹151.20, exit 15:15",0.231,54.29,1387,1,below / near the 50-day average
+16,INDIAGLYCO,India Glycols Limited,nr7id,intraday,SELL,268.85,272.35,261.85,15:15,285,997.5,0,"After 9:30: sell below ₹268.85, stop ₹272.35, target ₹261.85, exit 15:15",0.231,54.29,1387,1,below / near the 50-day average
+17,INDSWFTLAB,Ind-Swift Laboratories Limited,nr7id,intraday,SELL,309.85,314.3,300.95,15:15,224,996.8,0,"After 9:30: sell below ₹309.85, stop ₹314.30, target ₹300.95, exit 15:15",0.231,54.29,1387,1,below / near the 50-day average
+18,INOXWIND,Inox Wind Limited,nr7id,intraday,SELL,52.95,53.55,51.75,15:15,1666,999.6,1,"After 9:30: sell below ₹52.95, stop ₹53.55, target ₹51.75, exit 15:15",0.231,54.29,1387,1,below / near the 50-day average
+19,MVELECTRO,MV Electrosystems Limited,nr7id,intraday,SELL,758.3,766.85,741.2,15:15,116,991.8,0,"After 9:30: sell below ₹758.30, stop ₹766.85, target ₹741.20, exit 15:15",0.231,54.29,1387,1,below / near the 50-day average
+20,OFSS,Oracle Financial Services Software Limited,nr7id,intraday,SELL,9244.4,9311.25,9110.7,15:15,10,668.5,1,"After 9:30: sell below ₹9,244, stop ₹9,311, target ₹9,111, exit 15:15",0.231,54.29,1387,1,below / near the 50-day average
+21,AARTIIND,Aarti Industries Limited,nr7,intraday,SELL,435.9,439.85,428.0,15:15,229,904.55,0,"After 9:30: sell below ₹435.90, stop ₹439.85, target ₹428.00, exit 15:15",0.203,52.55,2447,1,below / near the 50-day average
+22,APOLLOPIPE,Apollo Pipes Limited,nr7,intraday,SELL,469.7,478.2,452.7,15:15,117,994.5,0,"After 9:30: sell below ₹469.70, stop ₹478.20, target ₹452.70, exit 15:15",0.203,52.55,2447,1,below / near the 50-day average
+23,AUGMONT,Augmont Enterprises Limited,nr7,intraday,SELL,899.65,911.0,876.95,15:15,88,998.8,0,"After 9:30: sell below ₹899.65, stop ₹911.00, target ₹876.95, exit 15:15",0.203,52.55,2447,1,below / near the 50-day average
+24,DELTACORP,Delta Corp Limited,nr7,intraday,SELL,70.75,71.75,68.7,15:15,1000,1000.0,0,"After 9:30: sell below ₹70.75, stop ₹71.75, target ₹68.70, exit 15:15",0.203,52.55,2447,1,below / near the 50-day average
+25,FIRSTCRY,Brainbees Solutions Limited,nr7,intraday,SELL,158.5,160.8,153.9,15:15,434,998.2,0,"After 9:30: sell below ₹158.50, stop ₹160.80, target ₹153.90, exit 15:15",0.203,52.55,2447,1,below / near the 50-day average
+26,HDBFS,HDB Financial Services Limited,nr7,intraday,SELL,546.5,551.4,536.7,15:15,182,891.8,0,"After 9:30: sell below ₹546.50, stop ₹551.40, target ₹536.70, exit 15:15",0.203,52.55,2447,1,below / near the 50-day average
+27,HINDCOPPER,Hindustan Copper Limited,nr7,intraday,SELL,416.85,420.9,408.75,15:15,239,967.95,0,"After 9:30: sell below ₹416.85, stop ₹420.90, target ₹408.75, exit 15:15",0.203,52.55,2447,1,below / near the 50-day average
+28,JAMNAAUTO,Jamna Auto Industries Limited,nr7,intraday,SELL,127.95,129.25,125.35,15:15,769,999.7,0,"After 9:30: sell below ₹127.95, stop ₹129.25, target ₹125.35, exit 15:15",0.203,52.55,2447,1,below / near the 50-day average
+29,KRN,KRN Heat Exchanger and Refrigeration Limited,nr7,intraday,SELL,965.5,977.2,942.1,15:15,85,994.5,0,"After 9:30: sell below ₹965.50, stop ₹977.20, target ₹942.10, exit 15:15",0.203,52.55,2447,1,below / near the 50-day average
+30,LUMINO,Lumino Industries Limited,nr7,intraday,SELL,86.35,87.55,84.0,15:15,833,999.6,0,"After 9:30: sell below ₹86.35, stop ₹87.55, target ₹84.00, exit 15:15",0.203,52.55,2447,1,below / near the 50-day average
+31,AEQUS,Aequs Limited,cpr,intraday,SELL,219.05,223.05,211.05,15:15,250,1000.0,0,"After 9:30: sell below ₹219.05, stop ₹223.05, target ₹211.05, exit 15:15",0.142,47.85,1927,1,high volatility
+32,APTUS,Aptus Value Housing Finance India Limited,cpr,intraday,BUY,189.75,187.5,194.25,15:15,444,999.0,0,"After 9:30: buy above ₹189.75, stop ₹187.50, target ₹194.25, exit 15:15",0.142,47.85,1927,1,high volatility
+33,BALAMINES,Balaji Amines Limited,cpr,intraday,SELL,1735.1,1793.4,1618.5,15:15,17,991.1,0,"After 9:30: sell below ₹1,735, stop ₹1,793, target ₹1,619, exit 15:15",0.142,47.85,1927,1,high volatility
+34,CHEMPLASTS,Chemplast Sanmar Limited,cpr,intraday,BUY,256.0,253.3,261.4,15:15,370,999.0,0,"After 9:30: buy above ₹256.00, stop ₹253.30, target ₹261.40, exit 15:15",0.142,47.85,1927,1,high volatility
+35,CLEANMAX,Clean Max Enviro Energy Solutions Limited,cpr,intraday,SELL,1244.35,1253.1,1226.85,15:15,80,700.0,0,"After 9:30: sell below ₹1,244, stop ₹1,253, target ₹1,227, exit 15:15",0.142,47.85,1927,1,high volatility
+36,IIFL,IIFL Finance Limited,cpr,intraday,SELL,592.8,599.35,579.7,15:15,152,995.6,0,"After 9:30: sell below ₹592.80, stop ₹599.35, target ₹579.70, exit 15:15",0.142,47.85,1927,1,high volatility
+37,LEAPIND,LEAP India Limited,cpr,intraday,BUY,131.55,128.8,137.05,15:15,363,998.25,0,"After 9:30: buy above ₹131.55, stop ₹128.80, target ₹137.05, exit 15:15",0.142,47.85,1927,1,high volatility
+38,MOBIKWIK,One Mobikwik Systems Limited,cpr,intraday,SELL,208.35,210.95,203.15,15:15,384,998.4,0,"After 9:30: sell below ₹208.35, stop ₹210.95, target ₹203.15, exit 15:15",0.142,47.85,1927,1,high volatility
+39,NETWEB,Netweb Technologies India Limited,cpr,intraday,BUY,4170.05,4126.95,4256.25,15:15,23,991.3,0,"After 9:30: buy above ₹4,170, stop ₹4,127, target ₹4,256, exit 15:15",0.142,47.85,1927,1,high volatility
+40,PARADEEP,Paradeep Phosphates Limited,cpr,intraday,BUY,142.75,141.3,145.65,15:15,689,999.05,0,"After 9:30: buy above ₹142.75, stop ₹141.30, target ₹145.65, exit 15:15",0.142,47.85,1927,1,high volatility
+41,AARTIIND,Aarti Industries Limited,pdh,intraday,SELL,435.9,443.65,420.35,15:15,129,999.75,0,"After 9:30: sell below ₹435.90, stop ₹443.65, target ₹420.35, exit 15:15",0.072,51.1,6074,0,below / near the 50-day average
+42,ANANTRAJ,Anant Raj Limited,pdh,intraday,SELL,446.0,454.2,429.6,15:15,121,992.2,0,"After 9:30: sell below ₹446.00, stop ₹454.20, target ₹429.60, exit 15:15",0.072,51.1,6074,0,below / near the 50-day average
+43,APARINDS,Apar Industries Limited,pdh,intraday,SELL,14112.9,14422.7,13493.3,15:15,3,929.4,1,"After 9:30: sell below ₹14,113, stop ₹14,423, target ₹13,493, exit 15:15",0.072,51.1,6074,0,below / near the 50-day average
+44,ASTRAL,Astral Limited,pdh,intraday,SELL,1257.35,1274.25,1223.55,15:15,59,997.1,1,"After 9:30: sell below ₹1,257, stop ₹1,274, target ₹1,224, exit 15:15",0.072,51.1,6074,0,below / near the 50-day average
+45,CGCL,Capri Global Capital Limited,pdh,intraday,SELL,226.05,229.65,218.8,15:15,277,997.2,0,"After 9:30: sell below ₹226.05, stop ₹229.65, target ₹218.80, exit 15:15",0.072,51.1,6074,0,below / near the 50-day average
+46,CHENNPETRO,Chennai Petroleum Corporation Limited,pdh,intraday,SELL,1344.4,1375.55,1282.1,15:15,32,996.8,0,"After 9:30: sell below ₹1,344, stop ₹1,376, target ₹1,282, exit 15:15",0.072,51.1,6074,0,below / near the 50-day average
+47,CREDITACC,CREDITACCESS GRAMEEN LIMITED,pdh,intraday,SELL,995.1,1017.6,950.05,15:15,44,990.0,0,"After 9:30: sell below ₹995.10, stop ₹1,018, target ₹950.05, exit 15:15",0.072,51.1,6074,0,below / near the 50-day average
+48,EQUITASBNK,Equitas Small Finance Bank Limited,pdh,intraday,SELL,53.7,55.0,51.05,15:15,769,999.7,0,"After 9:30: sell below ₹53.70, stop ₹55.00, target ₹51.05, exit 15:15",0.072,51.1,6074,0,below / near the 50-day average
+49,FIVESTAR,Five-Star Business Finance Limited,pdh,intraday,SELL,399.8,408.35,382.7,15:15,116,991.8,0,"After 9:30: sell below ₹399.80, stop ₹408.35, target ₹382.70, exit 15:15",0.072,51.1,6074,0,below / near the 50-day average
+50,HINDCOPPER,Hindustan Copper Limited,pdh,intraday,SELL,416.85,424.5,401.55,15:15,130,994.5,0,"After 9:30: sell below ₹416.85, stop ₹424.50, target ₹401.55, exit 15:15",0.072,51.1,6074,0,below / near the 50-day average
+51,ADANIPORTS,Adani Ports and Special Economic Zone Limited,gapfade,intraday,IF GAP,1880.0,0.0,1880.0,15:15,52,0.0,1,"If it opens ₹1,886–₹1,899 (0.3–1% up): sell at 9:30, target ₹1,880, stop = open + gap. If it opens 0.3–1% down: buy, target ₹1,880.",0.019,60.59,888,0,near the 52-week high
+52,AUROPHARMA,Aurobindo Pharma Limited,gapfade,intraday,IF GAP,1791.8,0.0,1791.8,15:15,55,0.0,1,"If it opens ₹1,797–₹1,810 (0.3–1% up): sell at 9:30, target ₹1,792, stop = open + gap. If it opens 0.3–1% down: buy, target ₹1,792.",0.019,60.59,888,0,near the 52-week high
+53,BHARTIARTL,Bharti Airtel Limited,gapfade,intraday,IF GAP,2067.9,0.0,2067.9,15:15,48,0.0,1,"If it opens ₹2,074–₹2,089 (0.3–1% up): sell at 9:30, target ₹2,068, stop = open + gap. If it opens 0.3–1% down: buy, target ₹2,068.",0.019,60.59,888,0,near the 52-week high
+54,BOSCHLTD,Bosch Limited,gapfade,intraday,IF GAP,49170.0,0.0,49170.0,15:15,2,0.0,1,"If it opens ₹49,318–₹49,662 (0.3–1% up): sell at 9:30, target ₹49,170, stop = open + gap. If it opens 0.3–1% down: buy, target ₹49,170.",0.019,60.59,888,0,near the 52-week high
+55,CASHIETF,ICICIPRAMC - CASHIETF,gapfade,intraday,IF GAP,1091.15,0.0,1091.15,15:15,91,0.0,0,"If it opens ₹1,094–₹1,102 (0.3–1% up): sell at 9:30, target ₹1,091, stop = open + gap. If it opens 0.3–1% down: buy, target ₹1,091.",0.019,60.59,888,0,near the 52-week high
+56,CASTROLIND,Castrol India Limited,gapfade,intraday,IF GAP,189.65,0.0,189.65,15:15,524,0.0,0,"If it opens ₹190.20–₹191.55 (0.3–1% up): sell at 9:30, target ₹189.65, stop = open + gap. If it opens 0.3–1% down: buy, target ₹189.65.",0.019,60.59,888,0,near the 52-week high
+57,DRREDDY,Dr. Reddy's Laboratories Limited,gapfade,intraday,IF GAP,1381.7,0.0,1381.7,15:15,71,0.0,1,"If it opens ₹1,386–₹1,396 (0.3–1% up): sell at 9:30, target ₹1,382, stop = open + gap. If it opens 0.3–1% down: buy, target ₹1,382.",0.019,60.59,888,0,near the 52-week high
+58,GAIL,GAIL (India) Limited,gapfade,intraday,IF GAP,185.0,0.0,185.0,15:15,537,0.0,1,"If it opens ₹185.55–₹186.85 (0.3–1% up): sell at 9:30, target ₹185.00, stop = open + gap. If it opens 0.3–1% down: buy, target ₹185.00.",0.019,60.59,888,0,near the 52-week high
+59,GRASIM,Grasim Industries Limited,gapfade,intraday,IF GAP,3124.2,0.0,3124.2,15:15,31,0.0,1,"If it opens ₹3,134–₹3,155 (0.3–1% up): sell at 9:30, target ₹3,124, stop = open + gap. If it opens 0.3–1% down: buy, target ₹3,124.",0.019,60.59,888,0,near the 52-week high
+60,HDFCSML250,HDFCAMC - HDFCSML250,gapfade,intraday,IF GAP,179.6,0.0,179.6,15:15,553,0.0,0,"If it opens ₹180.15–₹181.40 (0.3–1% up): sell at 9:30, target ₹179.60, stop = open + gap. If it opens 0.3–1% down: buy, target ₹179.60.",0.019,60.59,888,0,near the 52-week high
+61,IDEAFORGE,Ideaforge Technology Limited,vols,swing,BUY,789.2,718.25,931.1,max 15 days,14,993.3,0,Buy at the open (near ₹789.20),0.08,46.05,608,0,light volume
+62,JLHL,Jupiter Life Line Hospitals Limited,vols,swing,BUY,345.3,307.15,421.65,max 15 days,26,991.9,0,Buy at the open (near ₹345.30),0.08,46.05,608,0,light volume
+63,TEXRAIL,Texmaco Rail & Engineering Limited,vols,swing,BUY,124.85,114.7,145.2,max 15 days,98,994.7,0,Buy at the open (near ₹124.85),0.08,46.05,608,0,light volume
+64,ACE,Action Construction Equipment Limited,hi52,swing,BUY,1325.7,1209.5,1558.1,max 30 days,8,929.6,0,"Buy at the open (near ₹1,326)",-0.014,40.75,908,0,strong 6-month strength
+65,SHALPAINTS,Shalimar Paints Limited,hi52,swing,BUY,108.55,92.7,140.25,max 30 days,63,999.81,0,Buy at the open (near ₹108.55),-0.014,40.75,908,0,strong 6-month strength
+66,UTTAMSUGAR,Uttam Sugar Mills Limited,hi52,swing,BUY,390.65,333.45,505.05,max 30 days,17,972.4,0,Buy at the open (near ₹390.65),-0.014,40.75,908,0,strong 6-month strength
+67,AGARWALEYE,Dr. Agarwal's Health Care Limited,hi52,swing,BUY,581.35,532.5,679.05,max 30 days,20,977.0,0,Buy at the open (near ₹581.35),-0.091,36.53,1073,0,middle 6-month strength
+68,BEML,BEML Limited,hi52,swing,BUY,2346.1,2110.2,2817.85,max 30 days,4,943.6,0,"Buy at the open (near ₹2,346)",-0.091,36.53,1073,0,middle 6-month strength
+69,SPORTKING,Sportking India Limited,hi52,swing,BUY,249.05,215.45,316.15,max 30 days,29,973.82,0,Buy at the open (near ₹249.05),-0.091,36.53,1073,0,middle 6-month strength
+70,ACE,Action Construction Equipment Limited,brk,swing,BUY,1325.7,1232.75,1511.6,max 20 days,10,929.5,0,"Buy at the open (near ₹1,326)",-0.091,36.81,2521,0,
+71,BEML,BEML Limited,brk,swing,BUY,2346.1,2157.4,2723.5,max 20 days,5,943.5,0,"Buy at the open (near ₹2,346)",-0.091,36.81,2521,0,
+72,J&KBANK,The Jammu & Kashmir Bank Limited,brk,swing,BUY,166.4,154.4,190.3,max 20 days,83,995.17,0,Buy at the open (near ₹166.40),-0.091,36.81,2521,0,
+73,JLHL,Jupiter Life Line Hospitals Limited,brk,swing,BUY,345.3,307.15,421.65,max 20 days,26,991.9,0,Buy at the open (near ₹345.30),-0.091,36.81,2521,0,
+74,SPORTKING,Sportking India Limited,brk,swing,BUY,249.05,222.2,302.75,max 20 days,37,992.71,0,Buy at the open (near ₹249.05),-0.091,36.81,2521,0,
+75,BEML,BEML Limited,vols,swing,BUY,2346.1,2157.4,2723.5,max 15 days,5,943.5,0,"Buy at the open (near ₹2,346)",-0.136,36.41,607,0,heavy volume
+76,GEOJITFSL,Geojit Financial Services Limited,vols,swing,BUY,78.25,72.1,90.65,max 15 days,162,999.54,0,Buy at the open (near ₹78.25),-0.136,36.41,607,0,heavy volume
+77,SOLARWORLD,Solarworld Energy Solutions Limited,vols,swing,BUY,121.55,108.5,147.65,max 15 days,76,992.56,0,Buy at the open (near ₹121.55),-0.136,36.41,607,0,heavy volume
+78,WAAREERTL,Waaree Renewable Technologies Limited,vols,swing,BUY,825.7,764.8,947.45,max 15 days,16,974.4,0,Buy at the open (near ₹825.70),-0.136,36.41,607,0,heavy volume
+79,ASTRAMICRO,Astra Microwave Products Limited,pb20,swing,BUY,1666.9,1579.05,1842.6,max 10 days,11,966.35,0,"Buy at the open (near ₹1,667)",-0.415,25.83,995,0,
+80,BEML,BEML Limited,pb20,swing,BUY,2346.1,2204.55,2629.15,max 10 days,7,990.85,0,"Buy at the open (near ₹2,346)",-0.415,25.83,995,0,
+81,COFORGE,Coforge Limited,pb20,swing,BUY,2071.0,1946.5,2320.0,max 10 days,8,996.0,1,"Buy at the open (near ₹2,071)",-0.415,25.83,995,0,
+82,DALMIASUG,Dalmia Bharat Sugar and Industries Limited,pb20,swing,BUY,486.05,449.1,559.9,max 10 days,27,997.65,0,Buy at the open (near ₹486.05),-0.415,25.83,995,0,
+83,ENGINERSIN,Engineers India Limited,pb20,swing,BUY,300.75,282.15,337.95,max 10 days,53,985.8,0,Buy at the open (near ₹300.75),-0.415,25.83,995,0,
+84,HAL,Hindustan Aeronautics Limited,pb20,swing,BUY,5074.0,4882.25,5457.45,max 10 days,5,958.75,1,"Buy at the open (near ₹5,074)",-0.415,25.83,995,0,
+85,KSHINTL,KSH International Limited,pb20,swing,BUY,1018.6,944.8,1166.25,max 10 days,13,959.4,0,"Buy at the open (near ₹1,019)",-0.415,25.83,995,0,
+86,LENSKART,Lenskart Solutions Limited,pb20,swing,BUY,718.35,684.55,785.95,max 10 days,29,980.2,0,Buy at the open (near ₹718.35),-0.415,25.83,995,0,
+87,BEML,BEML Limited,darvas,swing,BUY,2346.1,2063.05,2912.2,max 20 days,3,849.15,0,"Buy at the open (near ₹2,346)",-0.42,22.31,390,0,
+88,CHOICEIN,Choice International Limited,darvas,swing,BUY,770.45,714.2,882.9,max 20 days,17,956.25,0,Buy at the open (near ₹770.45),-0.42,22.31,390,0,
+89,DHAMPURSUG,Dhampur Sugar Mills Limited,darvas,swing,BUY,195.45,162.9,260.65,max 20 days,30,976.8,0,Buy at the open (near ₹195.45),-0.42,22.31,390,0,
+90,GEOJITFSL,Geojit Financial Services Limited,darvas,swing,BUY,78.25,69.0,96.85,max 20 days,107,991.89,0,Buy at the open (near ₹78.25),-0.42,22.31,390,0,
+91,IDEAFORGE,Ideaforge Technology Limited,darvas,swing,BUY,789.2,682.8,1002.05,max 20 days,9,957.6,0,Buy at the open (near ₹789.20),-0.42,22.31,390,0,
+92,PTCIL,PTC Industries Limited,darvas,swing,BUY,25460.0,23220.0,29940.0,max 20 days,0,0.0,0,"Buy at the open (near ₹25,460)",-0.42,22.31,390,0,
+93,RAYMOND,Raymond Limited,darvas,swing,BUY,1278.6,1088.1,1659.55,max 20 days,5,952.5,0,"Buy at the open (near ₹1,279)",-0.42,22.31,390,0,
+94,TEXRAIL,Texmaco Rail & Engineering Limited,darvas,swing,BUY,124.85,109.6,155.35,max 20 days,65,991.25,0,Buy at the open (near ₹124.85),-0.42,22.31,390,0,

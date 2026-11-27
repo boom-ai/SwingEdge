@@ -1180,7 +1180,7 @@
     var sym = T(data.id).trim() || T(O(ui.cf).sym).trim(), msg = cfMsg(ui);
     return '<div class="scrim"></div><section class="sheet full cfs" role="dialog" aria-modal="true" aria-label="' + esc((sym || 'Stock') + ' full-screen chart') + '">' +
       '<div class="sh cfh" id="cf-head">' + cfHead(S, ui, sym) + '</div>' +
-      '<div class="cfbar"><div class="rc" id="cf-rng" role="group" aria-label="Chart range">' + cfRangeChips(T(O(ui.cfOpts).rangeOn), isObj(O(O(ui.stock).info).listing)) + '</div></div>' +
+      '<div class="cfbar"><div class="rc" id="cf-rng" role="group" aria-label="Chart range">' + cfRangeChips(T(O(ui.cfOpts).rangeOn), isObj(O(O(ui.stock).info).listing)) + '</div>' + cfIndBtn() + '</div>' +
       '<div class="cfstage" id="cf-stage"><canvas id="cf-canvas" class="cfcv" role="img" aria-label="' + esc((sym || 'Stock') + ' price chart. Pinch to zoom, drag to pan, press and hold for a crosshair.') + '"></canvas>' +
       '<div class="cfro" id="cf-ro" hidden></div><div class="cfmsg" id="cf-msg"' + (msg ? '' : ' hidden') + '>' + msg + '</div></div>' +
       '<div class="cftog" id="cf-tog">' + cfToggles(ui) + '</div>' +
@@ -1853,6 +1853,8 @@
     var Wd = 360, L = 6, R = o ? 50 : 52, Tp = 8, pw = Wd - L - R, i;
     var ph = o ? 190 : 202, vTop = Tp + ph + 6, vh = useVol ? 44 : 0;
     var Ht = o ? (useVol ? vTop + vh + 18 : Tp + ph + 22) : 230, labY = Ht - 5;
+    var xa = o && o.ext ? chartExt(res) : null, rTop = Ht - 12, rH = 40;            /* indicators (chartind.js): RSI pane, Darvas boxes */
+    if (xa && O(o.ext).rsi) { Ht += rH + 6; labY = Ht - 5; }
     var mn = Infinity, mx = -Infinity;
     for (i = 0; i < n; i++) { if (lo[i] > 0 && lo[i] < mn) mn = lo[i]; if (hi[i] > mx) mx = hi[i]; }
     if (!(mx > mn)) { mx = mn * 1.01 + 1; }
@@ -1920,7 +1922,9 @@
       ls += '<line x1="' + L + '" x2="' + (Wd - R) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" class="lvl ' + cls + '"/>';
       if (o && x.t) { var ly = Math.max(y - 3, prevY + 10); if (ly > Tp + ph - 2) ly = Tp + ph - 2; prevY = ly; lbl += '<text x="' + (L + 3) + '" y="' + ly.toFixed(1) + '" class="lvt ' + cls + '">' + esc(x.t.slice(0, 18) + ' ' + pxNum(x.v)) + '</text>'; }
     });
-    g += '<g clip-path="url(#cclip)">' + cl + cs + ls + '</g>' + lbl;
+    var dvx = xa && O(o.ext).dv ? CIx().svgBoxes(xa, X, Y, Math.max(0.6, Math.min(5, pw / n * 0.62)) / 2) : '';
+    g += '<g clip-path="url(#cclip)">' + dvx + cl + cs + ls + '</g>' + lbl;
+    if (xa && O(o.ext).rsi) g += CIx().svgRsi(xa, X, L, pw, rTop, rH, 0);
     if (o) {
       var lc = c[n - 1];
       if (lc > 0 && lc >= mn && lc <= mx) {
@@ -2044,7 +2048,8 @@
     if (N(lv.resistance) > 0) lvls.push({ k: 'res', t: 'Resistance', v: lv.resistance });
     if (N(lv.trailStop) > 0) lvls.push({ k: 'stop', t: 'Trail stop', v: lv.trailStop });
     var body;
-    if (res) body = chartSvg(res, O(ui).fullCards === true ? { emas: on, vol: true, levels: lvls } : { emas: {}, vol: true, levels: [], area: true }) + '<button type="button" class="xpand" data-c="chartfull" aria-label="Expand the chart to full screen">' + ic('expand') + '</button>';
+    var cx = CIx() ? CIx().inlineOpts() : null, xa = cx && res ? chartExt(res) : null, alv = xa && cx.lv ? CIx().inlineLevels(xa) : [];
+    if (res) body = chartSvg(res, O(ui).fullCards === true ? { emas: on, vol: true, levels: lvls.concat(alv), ext: cx } : { emas: {}, vol: true, levels: alv, area: true, ext: cx }) + '<button type="button" class="xpand" data-c="chartfull" aria-label="Expand the chart to full screen">' + ic('expand') + '</button>';
     else if (T(st.chartErr).trim()) body = '<div class="cerr">' + ic('warn') + '<span>' + esc(T(st.chartErr).trim()) + '</span>' + btn('chart-retry', null, 'Retry', 'sm') + '</div>';
     else body = '<div class="skel chartsk"></div>';
     var ema = EMAS.map(function (k) {
@@ -2056,8 +2061,24 @@
     }).join('');
     var legend = lvls.length ? '<div class="clg">' + lvls.map(function (x) { return '<span class="' + (x.k === 'stop' ? 'lstop' : x.k === 'sup' ? 'lsup' : 'lres') + '"><i></i>' + esc(x.t) + '</span>'; }).join('') + '</div>' : '';
     return chips + (res ? '<div class="cro" id="st-cro" aria-live="off">' + croHtml(null) + '</div>' : '') + '<div class="cwrap' + (loading && res ? ' loading' : '') + (res ? ' live' : '') + '">' + body + (loading && res ? '<div class="cov"><span class="spin"></span>Loading</div>' : '') + '</div>' +
-      '<div class="elg" role="group" aria-label="Moving averages">' + ema + '</div>' + legend;
+      '<div class="elg" role="group" aria-label="Moving averages">' + ema + '</div>' + (cx && res ? inlineIndChips(cx, xa) : '') + legend;
   }
+  /* ---------- chart indicators (chartind.js); absent in node unless required ---------- */
+  function CIx() {
+    if (root.CI) return root.CI;
+    try { if (typeof require === 'function') return require('./chartind.js'); } catch (e) { /* not available */ }
+    return null;
+  }
+  function chartExt(res) { var C = CIx(); if (!C) return null; try { var a = C.analyze(res); return a && a.ok ? a : null; } catch (e) { return null; } }
+  function inlineIndChips(cx, xa) {
+    var rv = xa ? xa.rsi[xa.n - 1] : NaN, nb = xa ? xa.sr.res.length + xa.sr.sup.length : 0, db = xa && xa.darvas.length ? xa.darvas[xa.darvas.length - 1] : null;
+    var items = [['rsi', 'RSI 14', rv === rv && rv !== undefined ? rv.toFixed(1) : DASH], ['lv', 'Levels', nb ? nb + ' auto' : DASH], ['dv', 'Darvas', db ? (db.out === 0 ? 'in box' : db.out > 0 ? 'broke out' : 'broke down') : 'none']];
+    return '<div class="elg xlg" role="group" aria-label="Chart indicators">' + items.map(function (it) {
+      var on = cx[it[0]] === true;
+      return '<button type="button" class="xchip' + (on ? ' on' : '') + '" data-c="cx" data-id="' + it[0] + '" aria-pressed="' + on + '"><span class="el">' + esc(it[1]) + '</span><span class="ev num">' + esc(it[2]) + '</span></button>';
+    }).join('') + '</div>';
+  }
+  function cfIndBtn() { return CIx() ? '<button type="button" class="cfib" id="cf-indb" data-c="cf-ind" aria-haspopup="dialog" aria-expanded="false">' + ic('layers') + '<span>Indicators</span><em></em></button>' : ''; }
 
   function daysAgo(n) { n = N(n); if (n === null) return ''; if (n < 0) return 'over 60 days ago'; if (n === 0) return 'today'; return n === 1 ? '1 day ago' : n + ' days ago'; }
   function crossCard(d) {

@@ -415,6 +415,44 @@ document.getElementById('f').onload=async()=>{
     ok(!!q('.echip[data-id="100"].on')===true,'EMA 100 turned on in the full chart shows on the stock page chips: '+qa('.echip').map(e=>e.getAttribute('data-id')+(e.classList.contains('on')?'+':'-')).join(' '));click('.echip[data-id="100"]');
     await closeAll();
   });
+  await sect('chart indicators',async()=>{
+    try{w.localStorage.removeItem('se_cf_ind');w.localStorage.removeItem('se_cx_ind');}catch(e){}
+    ok(!!w.CI&&typeof w.CI.analyze==='function','chartind.js is loaded (window.CI)');
+    await openSym('RELIANCE');
+    ok(!!q('#st-chart svg.chart polyline.rsil')&&/RSI 14/.test(q('#st-chart svg.chart').textContent),'stock-page chart shows the RSI mini pane by default');
+    ok(qa('#st-chart .xchip').length===3&&!!q('.xchip.on[data-id="rsi"]'),'inline toggles: RSI on, Levels / Darvas off');
+    ok(qa('.echip').length===5,'EMA chips unchanged (5)');
+    click('.xchip[data-id="dv"]');await sleep(80);click('.xchip[data-id="lv"]');await sleep(80);
+    ok(!!q('#st-chart svg.chart rect.dvx')&&!!q('.xchip.on[data-id="dv"]'),'Darvas toggle draws boxes on the stock-page chart');
+    ok(qa('#st-chart svg.chart text.lvt').some(e=>/^[RS] ×\d/.test(e.textContent)),'Levels toggle draws auto support/resistance: '+qa('#st-chart svg.chart text.lvt').map(e=>e.textContent).join(' | '));
+    ok(/"dv":true/.test(w.localStorage.getItem('se_cx_ind')||''),'inline choices persist in localStorage');
+    click('.xchip[data-id="rsi"]');await sleep(80);ok(!q('#st-chart svg.chart polyline.rsil'),'RSI pane can be turned off');
+    click('.xchip[data-id="rsi"]');click('.xchip[data-id="dv"]');click('.xchip[data-id="lv"]');await sleep(80);
+    click('#st-chart .xpand');await sleep(1600);
+    const I=cfi();I.flush();let s=I.state();
+    ok(s.n===500&&s.panes.join()==='rsi'&&s.ind.indexOf('sr')>=0,'full chart defaults: RSI pane + auto levels: '+JSON.stringify({panes:s.panes,ind:s.ind}));
+    ok(s.autoLabels.length>=2&&s.autoLabels.every(l=>/^(Support|Resistance) /.test(l.t)),'auto S/R tags drawn: '+s.autoLabels.map(l=>l.t).join(' | '));
+    ok(s.plot.b<s.h*0.8,'price pane leaves room for the lower pane: plot bottom '+s.plot.b.toFixed(0)+' of '+s.h);
+    const b=q('#cf-indb');ok(!!b&&b.querySelector('em').textContent==='3','Indicators button with the count of active items: '+(b&&b.textContent));
+    click(b);await sleep(60);ok(I.state().menu&&!!q('.cfim:not([hidden]) .cfic[data-ci="macd"]')&&b.getAttribute('aria-expanded')==='true','Indicators opens the toggle sheet');
+    ok(!q('.cfim .cfic[data-ci="vwap"]'),'VWAP is not offered for daily bars');
+    click('.cfim .cfic[data-ci="macd"]');click('.cfim .cfic[data-ci="atr"]');I.flush();s=I.state();
+    ok(s.panes.join()==='macd,atr'&&!q('.cfim .cfic.on[data-ci="rsi"]'),'at most 2 lower panes: the oldest (RSI) turns off: '+s.panes.join());
+    click('.cfim .cfic[data-ci="rsi2"]');I.flush();s=I.state();ok(s.panes.join()==='atr,rsi2','RSI(2) pane available: '+s.panes.join());
+    ['darvas','sx','sr2','bb','st'].forEach(k=>click('.cfim .cfic[data-ci="'+k+'"]'));I.flush();s=I.state();
+    ok(s.marks>0&&s.ind.indexOf('darvas')>=0&&s.ind.indexOf('st')>=0,'patterns and strategy markers drawn: '+s.marks+' markers');
+    const saved=JSON.parse(w.localStorage.getItem('se_cf_ind')||'{}');ok(saved.darvas===true&&saved.rsi===false&&saved._panes.join()==='atr,rsi2','choices persist in localStorage');
+    click('.cfim [data-ci="_close"]');await sleep(40);ok(!I.state().menu&&q('.cfim').hidden,'Done closes the sheet');
+    I.setCrossIdx(I.state().n-5);await sleep(40);const ro=q('#cf-ro').textContent;
+    ok(/ATR 14/.test(ro)&&/RSI 2/.test(ro)&&/Supertrend/.test(ro)&&/BB/.test(ro),'crosshair readout lists active indicator values: '+ro.replace(/\s+/g,' ').slice(0,200));
+    const ds=[];for(let k=0;k<30;k++){I.setView({s:k*10,c:126});I.flush();ds.push(I.state().lastDrawMs);}ds.sort((a,b)=>a-b);
+    ok(ds[15]<16,'draw stays under a frame with many layers on 500 bars (median '+ds[15].toFixed(2)+' ms)');
+    click('[data-c="cf-reset"]');await sleep(60);ok(I.state().c===126,'Reset still restores the default window');
+    hist();await sleep(250);click('#st-chart .xpand');await sleep(900);const I2=cfi();I2.flush();
+    ok(I2.state().panes.join()==='atr,rsi2'&&I2.state().ind.indexOf('darvas')>=0,'reopened chart restores the saved choices');
+    try{w.localStorage.removeItem('se_cf_ind');w.localStorage.removeItem('se_cx_ind');}catch(e){}
+    await closeAll();
+  });
   await sect('inline chart: hold + scroll',async()=>{
     await openSym('RELIANCE');const svg=q('#st-chart .cwrap.live svg.chart'),r=rect(svg),x=r.left+r.width*0.6,y=r.top+r.height/2;
     ok(getComputedStyle(q('.cwrap.live')).touchAction==='pan-y','inline chart leaves vertical panning to the page (touch-action: pan-y)');

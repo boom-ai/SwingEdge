@@ -10,8 +10,8 @@
   var CM = root.CM, SE = root.SE;
   if (!CM) return;
 
-  var COL = { bg: '#131314', grid: '#2A2B2E', axis: '#9AA0A6', text: '#E3E3E3', up: '#81C995', dn: '#F28B82', line: '#81C995', cross: '#9AA0A6', panel: 'rgba(30,31,32,.92)' };
-  var EMA_COL = { 10: '#F2B441', 20: '#FF8F6B', 50: '#6BB3FF', 100: '#4DD0E1', 200: '#C58BFF' };
+  var COL = { bg: '#0F1012', grid: '#212327', axis: '#7A8088', text: '#EDEEF0', up: '#31C48D', dn: '#F2555A', line: '#31C48D', cross: '#A9AEB5', panel: 'rgba(23,24,27,.96)' };
+  var EMA_COL = { 10: '#E5B04C', 20: '#F08A5D', 50: '#6BA6FF', 100: '#4DC4D8', 200: '#B48CF2' };
   var EMA_KEYS = [200, 100, 50, 20, 10];                      // draw order: slowest first
   var LV = {
     zone: { c: '#6BB3FF', d: [] }, stop: { c: '#FF6F6F', d: [5, 3] }, t1: { c: '#3FD68F', d: [5, 3] }, t2: { c: '#8DEBBC', d: [2, 3] },
@@ -252,7 +252,7 @@
         if (lx > fx) {
           ctx.lineTo(lx, pb); ctx.lineTo(fx, pb); ctx.closePath();
           var gr = ctx.createLinearGradient(0, G.t || 0, 0, pb);
-          gr.addColorStop(0, c1 >= c0 ? 'rgba(129,201,149,.34)' : 'rgba(242,139,130,.30)'); gr.addColorStop(1, 'rgba(19,19,20,0)');
+          gr.addColorStop(0, c1 >= c0 ? 'rgba(49,196,141,.28)' : 'rgba(242,85,90,.26)'); gr.addColorStop(1, 'rgba(15,16,18,0)');
           ctx.fillStyle = gr; ctx.fill();
           if (c0 > 0) { var py = Y(c0); ctx.save(); ctx.strokeStyle = 'rgba(154,160,166,.55)'; ctx.lineWidth = 1; ctx.setLineDash([2, 6]); ctx.beginPath(); ctx.moveTo(G.l, Math.round(py) + 0.5); ctx.lineTo(G.r, Math.round(py) + 0.5); ctx.stroke(); ctx.restore(); }
         }
@@ -265,7 +265,7 @@
         var vh = G.vb - G.vt, vw = Math.max(1, Math.min(14, step * 0.7));
         ctx.strokeStyle = COL.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(G.l, Math.round(G.vb) + 0.5); ctx.lineTo(G.r, Math.round(G.vb) + 0.5); ctx.stroke();
         for (var vp = 0; vp < 2; vp++) {
-          ctx.fillStyle = vp === 0 ? 'rgba(129,201,149,.55)' : 'rgba(242,139,130,.55)'; ctx.beginPath();
+          ctx.fillStyle = vp === 0 ? 'rgba(49,196,141,.45)' : 'rgba(242,85,90,.45)'; ctx.beginPath();
           for (i = i0; i <= i1; i++) {
             if (!(st.V[i] > 0) || !(maxV > 0)) continue;
             var upv = st.C[i] >= (st.O[i] > 0 ? st.O[i] : st.C[i]); if (upv !== (vp === 0)) continue;
@@ -331,12 +331,12 @@
       /* price tag on the axis */
       var price = CM.priceAt(cy, st.pr.min, st.pr.max, G.t, G.ph);
       ctx.fillStyle = COL.text; roundRect(G.r + 1, cy - 9, 53, 18, 4); ctx.fill();
-      text(CM.fmtPrice(price), G.r + 5, cy + 4, '#0B0F14', '700 11px ' + FONT, 'left');
+      text(CM.fmtPrice(price), G.r + 5, cy + 4, '#0F1012', '700 11px ' + FONT, 'left');
       /* date tag */
       var dlab = st.dRaw ? CM.fmtDate(st.dRaw[i]) : '#' + (i + 1);
       ctx.font = '700 11px ' + FONT; var dw = ctx.measureText(dlab).width + 14, dx = Math.max(G.l, Math.min(G.r - dw, x - dw / 2));
       ctx.fillStyle = COL.text; roundRect(dx, st.h - 19, dw, 17, 4); ctx.fill();
-      text(dlab, dx + dw / 2, st.h - 6.5, '#0B0F14', '700 11px ' + FONT, 'center');
+      text(dlab, dx + dw / 2, st.h - 6.5, '#0F1012', '700 11px ' + FONT, 'center');
       ctx.restore();
     }
 

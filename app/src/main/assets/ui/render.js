@@ -161,7 +161,7 @@
     bot: '<rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 12h.01M15 12h.01M9 16h6"/>',
     funds: '<circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/>',
     money: '<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/><path d="M3 21h18"/>',
-    logo: '<path d="M3 17.500l5-6 4 3.5 8.5-10" stroke="#3FD68F" stroke-width="2.4"/><path d="M15.5 5h5v5" stroke="#3FD68F" stroke-width="2.4"/><path d="M3 21h18" stroke="#2C3B4D" stroke-width="2"/>'
+    logo: '<path d="M3 17.500l5-6 4 3.5 8.5-10" stroke="#4B8BF5" stroke-width="2.4"/><path d="M15.5 5h5v5" stroke="#4B8BF5" stroke-width="2.4"/><path d="M3 21h18" stroke="#34373C" stroke-width="2"/>'
   };
   function ic(name) { return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + (IC[name] || IC.info) + '</svg>'; }
 
@@ -391,17 +391,17 @@
     var n = N(e.n);
     if (n === null || n <= 0) return '<div class="edge none">' + ic('info') + '<span>No tested track record available for this idea. Treat it with extra care.</span></div>';
     return '<div class="edge">' + ic('flask') + '<span>Tested: <b>' + cnt(n) + ' trades</b> · <b>' + pc(e.winPct) + ' won</b> · <b>' + pc(e.avgPct, true) + '</b> avg after charges' +
-      (N(e.pf) !== null && N(e.pf) > 0 ? ' · PF ' + (Math.round(N(e.pf) * 100) / 100 > 99 ? '>99' : (Math.round(N(e.pf) * 100) / 100)) : '') + '</span></div>';
+      (N(e.pf) !== null && N(e.pf) > 0 ? ' · ₹' + (Math.round(N(e.pf) * 100) / 100 > 99 ? '>99' : (Math.round(N(e.pf) * 100) / 100)) + ' won per ₹1 lost' : '') + '</span></div>';
   }
   function rrBar(g) {
     var risk = N(g.riskRs), rew = N(g.rewardRs);
     if (risk === null || rew === null || risk <= 0 || rew <= 0) {
-      return '<div class="rr"><div class="lab"><span>Risk <b class="down">' + (risk !== null && risk > 0 ? rs(risk) : DASH) + '</b></span><span>Reward at T2 <b class="up">' + (rew !== null && rew > 0 ? rs(rew) : DASH) + '</b></span></div></div>';
+      return '<div class="rr"><div class="lab"><span>Risk <b class="down">' + (risk !== null && risk > 0 ? rs(risk) : DASH) + '</b></span><span>Gain at target 2 <b class="up">' + (rew !== null && rew > 0 ? rs(rew) : DASH) + '</b></span></div></div>';
     }
     var rp = Math.max(8, Math.min(92, risk / (risk + rew) * 100));
     var ratio = rew / risk;
     return '<div class="rr"><div class="bar" role="img" aria-label="Risk versus reward"><i class="r" style="width:' + rp.toFixed(1) + '%"></i><i class="w" style="width:' + (100 - rp).toFixed(1) + '%"></i></div>' +
-      '<div class="lab"><span>Risk <b class="down">' + rs(risk) + '</b></span><span>Reward at T2 <b class="up">' + rs(rew) + '</b> <span class="num mut">1 : ' + (ratio > 99 ? '>99' : ratio.toFixed(1)) + '</span></span></div></div>';
+      '<div class="lab"><span>Risk <b class="down">' + rs(risk) + '</b></span><span>Gain at target 2 <b class="up">' + rs(rew) + '</b> <span class="num mut">1 : ' + (ratio > 99 ? '>99' : ratio.toFixed(1)) + '</span></span></div></div>';
   }
   function signalCard(g, ui, now) {
     var id = T(g.id), busyTake = pend(ui, 'takeTrade:' + id), busySkip = pend(ui, 'skipSignal:' + id);
@@ -1508,10 +1508,10 @@
           return '<div class="ofq"><span>LTP <b>₹' + f1(q.ltp) + '</b></span><span>Bid <b>' + f1(q.bid) + '</b></span><span>Ask <b>' + f1(q.ask) + '</b></span><span>Cost <b>' + rsB((N(q.ask) || 0) * lot * ln) + '</b></span></div>' +
             '<div class="stepper"><button type="button" class="iconbtn" data-c="fno-lots" data-id="-1" aria-label="Fewer lots">−</button><span><b>' + ln + '</b> lot' + (ln > 1 ? 's' : '') + ' · ' + (lot * ln) + ' qty</span><button type="button" class="iconbtn" data-c="fno-lots" data-id="1" aria-label="More lots">+</button></div>' +
             '<input type="hidden" name="flots" value="' + ln + '">'; })() +
-        ((T(fm.type) === 'LIMIT') ? field('flimit', 'Limit price', N(fm.limit) ? String(fm.limit) : '', { pre: '₹' }) : '') +
+        ((T(fm.type) === 'LIMIT') ? field('flimit', 'Limit price', N(fm.limit) ? String(Math.round(N(fm.limit) * 100) / 100) : '', { pre: '₹' }) : '') +
         (fm.buy === false ? '' : '<div class="ixc qk">' + [['sl', 20], ['sl', 30], ['tg', 30], ['tg', 50], ['tg', 100]].map(function (z) { return '<button type="button" class="rchip" data-c="fno-quick" data-id="' + z[0] + ':' + z[1] + '"><span>' + (z[0] === 'sl' ? 'SL −' : 'Tgt +') + z[1] + '%</span></button>'; }).join('') + '</div>' +
-          field('fsl', 'Stop-loss (premium)', N(fm.sl) ? String(fm.sl) : '', { pre: '₹', ph: 'optional' }) + field('ftgt', 'Target (premium)', N(fm.tgt) ? String(fm.tgt) : '', { pre: '₹', ph: 'optional' })) +
-        '<div class="btns">' + btn('fno-place', null, (fm.buy === false ? 'Sell' : 'Buy') + ' (paper)', fm.buy === false ? 'danger' : '', {}) + btn('fno-cancelform', null, 'Cancel', 'ghost', {}) + '</div></div>';
+          field('fsl', 'Stop-loss (premium)', N(fm.sl) ? String(Math.round(N(fm.sl) * 100) / 100) : '', { pre: '₹', ph: 'optional' }) + field('ftgt', 'Target (premium)', N(fm.tgt) ? String(Math.round(N(fm.tgt) * 100) / 100) : '', { pre: '₹', ph: 'optional' })) +
+        '<div class="btns">' + btn('fno-place', null, (fm.buy === false ? 'Sell' : 'Buy') + ' (paper)', fm.buy === false ? 'danger' : 'pri', {}) + btn('fno-cancelform', null, 'Cancel', 'ghost', {}) + '</div></div>';
     }
     // positions
     var ps = A(r.positions);
@@ -1971,7 +1971,7 @@
   }
   /* ---------- stock page ---------- */
   var EMAS = [10, 20, 50, 100, 200];
-  var EMA_COL = { 10: '#F2B441', 20: '#FF8F6B', 50: '#6BB3FF', 100: '#4DD0E1', 200: '#C58BFF' };
+  var EMA_COL = { 10: '#E5B04C', 20: '#F08A5D', 50: '#6BA6FF', 100: '#4DC4D8', 200: '#B48CF2' };
   var RANGES = [[130, '6M'], [260, '1Y'], [500, '2Y']];
   function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
   function emaOn(ui) { var o = O(ui.emaOn), r = {}; EMAS.forEach(function (k) { r[k] = (k in o) ? !!o[k] : k !== 100; }); return r; }
@@ -2462,8 +2462,8 @@
       h += '<h3>Live record' + (dayNum(t.startedDay) ? ' <small>since ' + dayTxt(t.startedDay) + '</small>' : '') + '</h3>';
       if (L.upgraded === true) h += '<div class="vevid ok">' + ic('check') + '<div><b>Upgraded to BUY</b><span>BUY beat the random control in live trading, so the label no longer says candidate.</span></div></div>';
       if (!anyLive) h += '<div class="hint hintpad">' + ic('info') + '<span class="t">No picks have closed yet. A pick closes at its exit or after 60 sessions, so the first results take a few weeks.</span></div>';
-      h += '<div class="trkh">P1 · earlier plan <small>stop 3 × ATR, exit on a close below the 50-day average</small></div>' + statTable(O(L.P1).buy, O(L.P1).control, 'BUY', 'CONTROL') + (false ? edgeBox(L.edgePct, L.edgeT) : '') +
-        '<div class="trkh">P2 · the app’s plan <small>5 × ATR stop, otherwise hold 60 trading days</small></div>' + statTable(O(L.P2).buy, O(L.P2).control, 'BUY', 'CONTROL') + (gC(O(L.P2).buy) && gC(O(L.P2).control) ? edgeBox(L.edgePct, L.edgeT) : '');
+      h += '<div class="trkh">P1 · earlier plan <small>stop 3× the typical daily move (ATR), exit on a close below the 50-day average</small></div>' + statTable(O(L.P1).buy, O(L.P1).control, 'BUY', 'CONTROL') + (false ? edgeBox(L.edgePct, L.edgeT) : '') +
+        '<div class="trkh">P2 · the app’s plan <small>stop 5× the typical daily move (ATR), otherwise hold 60 trading days</small></div>' + statTable(O(L.P2).buy, O(L.P2).control, 'BUY', 'CONTROL') + (gC(O(L.P2).buy) && gC(O(L.P2).control) ? edgeBox(L.edgePct, L.edgeT) : '');
       h += '<h3>Progress to the upgrade</h3>' + trkBar('BUY, closed P2 trades', gC(O(L.P2).buy)) + trkBar('CONTROL, closed P2 trades', gC(O(L.P2).control)) +
         (T(L.needText).trim() ? '<p class="trkneed">' + esc(T(L.needText).trim()) + '</p>' : '');
       h += '<h3>AVOID calls <small>should do worse than random</small></h3>' + statTable(L.avoid, L.avoidCtrl, 'AVOID', 'CONTROL');

@@ -1218,6 +1218,7 @@
 
   /* ---------- boot ---------- */
   try { ui.fullCards = localStorage.getItem('se.fullCards') === '1'; } catch (e) {}
+  if (qs.full === '1') ui.fullCards = true;   /* screenshots / tests: open the detailed view directly */
   pull();
   if (ui.tab === 'money') loadMoney(false);
   if (ui.tab === 'funds') loadFunds(false);

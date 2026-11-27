@@ -196,6 +196,18 @@ document.getElementById('f').onload=async()=>{
     click('#view [data-c="tab"][data-id="setups"]');await sleep(80);
     ok(qa('#view .srow.idea2').length>5&&/screen|guarantee/i.test(q('#view').textContent),'Setups lists the full ranked list ('+qa('#view .srow.idea2').length+') with the explanation line');
     ok(q('#view').innerHTML.indexOf('Best setups now')<q('#view').innerHTML.indexOf('EMA'),'ideas sit above the EMA crossovers');
+    {const cap=q('#view .icap[data-i="ideas"]'),ibt=q('#view [data-c="info"][data-id="ideas"]');
+     ok(!!cap&&cap.hidden&&!!ibt&&ibt.getAttribute('aria-expanded')==='false','explainer sits behind a collapsed (i)');
+     ibt.click();ok(!q('#view .icap[data-i="ideas"]').hidden&&q('#view [data-c="info"][data-id="ideas"]').getAttribute('aria-expanded')==='true','(i) shows the caption');
+     w.onStateChanged();await sleep(60);ok(!q('#view .icap[data-i="ideas"]').hidden,'(i) caption stays open after a poll');
+     click('#view [data-c="info"][data-id="ideas"]');ok(q('#view .icap[data-i="ideas"]').hidden,'(i) hides it again');}
+    {click('[data-c="tab"][data-id="today"]');await sleep(60);const was=w.localStorage.getItem('se.fullCards');
+     if(q('#view .card.k-buy'))click('[data-c="fullcards"]');await sleep(60);
+     ok(!!q('#view .hero .hv')&&qa('#view .hero .td').length===3,'simple Today opens with the money hero and 3 to-do counts');
+     {const n=+q('#view .hero [data-id="first-sell"] b').textContent;ok(n>0&&n===qa('#first-sell + .list .lrow').length&&+q('#view .hero [data-id="first-buy"] b').textContent===((l=>l?l.querySelectorAll('.lrow').length:0)(q('#first-buy ~ .list'))),'hero counts match the sell and buy lists ('+n+')');}
+     ok(qa('#view .list .lrow[data-c="stock"]').length>0,'Today lists are tappable rows that open the stock page');
+     if(was==='1'||!q('#view .card.k-buy'))click('[data-c="fullcards"]');await sleep(60);
+     click('[data-c="tab"][data-id="setups"]');await sleep(60);}
   });
   await sect('verdict BUY',async()=>{
     await openSym('RELIANCE');

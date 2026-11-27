@@ -51,8 +51,8 @@ function mutate(v, depth) {
 }
 const N = Number(process.argv[2] || 4000);
 const bases = ['', 'empty', 'paused', 'closed', 'broken'].map(mockState);
-const TABS = ['today', 'setups', 'trades', 'portfolio', 'alerts', undefined, 'zzz'];
-const SHEETS = ['take', 'close', 'add', 'paste', 'remove', 'sold', 'clearfeed', 'track', 'resettrack', 'settings', 'chartfull', 'target', 'nope'];
+const TABS = ['today', 'setups', 'money', 'funds', 'trades', 'portfolio', 'alerts', undefined, 'zzz'];
+const SHEETS = ['take', 'close', 'add', 'paste', 'remove', 'sold', 'clearfeed', 'track', 'resettrack', 'settings', 'chartfull', 'target', 'fno', 'opt', 'index', 'nope'];
 let fails = 0, renders = 0;
 function check(what, html, info) {
   renders++;

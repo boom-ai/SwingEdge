@@ -107,6 +107,7 @@ jobs:
           head -c 600 data/intraday.csv 2>/dev/null || true; echo
           git add data/scan.csv data/scan_meta.json data/holidays.json
           [ -f data/intraday.csv ] && git add data/intraday.csv
+          [ -f data/rating.csv ] && git add data/rating.csv
           if git diff --cached --quiet; then echo "no changes"; exit 0; fi
           git commit -qm "Whole-market scan $(python3 -c 'import json;print(json.load(open("data/scan_meta.json"))["asof"])')"
           for i in 1 2 3 4 5; do git pull -q --rebase origin main && git push -q origin main && break; sleep $((i * 5)); done

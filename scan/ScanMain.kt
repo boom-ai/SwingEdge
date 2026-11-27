@@ -65,6 +65,7 @@ fun main(args: Array<String>) {
 
     val out = File(args[3])
     try { nightCalls(stocks, dir, out.absoluteFile.parentFile) } catch (t: Throwable) { System.err.println("intraday calls failed: $t"); t.printStackTrace() }
+    try { rating(stocks, sectors, out.absoluteFile.parentFile) } catch (t: Throwable) { System.err.println("rating failed: $t"); t.printStackTrace() }
     val old = if (out.exists()) MarketScan.parse(out.readText()) else null
     when {
         data.rows.size < MIN_WRITE_ROWS -> { println("NOT written: only ${data.rows.size} stocks (need $MIN_WRITE_ROWS)"); exitProcess(2) }
@@ -103,6 +104,24 @@ private fun nightCalls(stocks: List<MarketStock>, bhavDir: File, dataDir: File) 
     if (NightCalls.parse(text) == null) { println("intraday.csv NOT written: does not parse back"); return }
     File(f.path + ".tmp").writeText(text); File(f.path + ".tmp").renameTo(f)
     println("written ${f.path} (${d.setups.size} setups)")
+}
+
+/** Multi-factor rating of every liquid NSE stock, walk-forward tested -> data/rating.csv */
+private fun rating(stocks: List<MarketStock>, sectors: Map<String, String>, dataDir: File) {
+    val t0 = System.currentTimeMillis()
+    val fno = NightCalls.fnoSymbols(File(dataDir, "fo_lots.csv").takeIf { it.exists() }?.readText())
+    val r = FactorModel.build(stocks, sectors, fno)
+    println("== factor rating: ${r.universe} stocks rated, ${r.sessions} sessions, as of ${if (r.asof > 0) java.time.LocalDate.ofEpochDay(r.asof.toLong()) else "-"}; ${System.currentTimeMillis() - t0} ms")
+    for (s in r.stats) println("   %-8s IC %+.4f  ICIR %+.3f  t %+.2f  weight %+.3f  (%d days)  %s".format(s.f.id, s.mean, s.icir, s.tstat, s.weight, s.ics.size, s.f.name))
+    println("   walk-forward: %d test days; top 10%% %+.2f%% vs all %+.2f%% per %d sessions (spread %+.2f%%), top beat all on %.0f%% of days, composite IC %+.4f"
+        .format(r.oosDays, r.oosTopRet * 100, r.oosAllRet * 100, FactorModel.H, r.oosSpread * 100, r.oosHit, r.oosIc))
+    for (x in r.rated.take(15)) println("   %3d %-12s rating %3d  %s".format(x.rank, x.sym, x.rating, x.sector))
+    if (r.rated.size < 200) { println("rating.csv NOT written: only ${r.rated.size} stocks"); return }
+    val text = FactorModel.encode(r, System.currentTimeMillis())
+    if (FactorModel.parse(text) == null) { println("rating.csv NOT written: does not parse back"); return }
+    val f = File(dataDir, FactorModel.FILE)
+    File(f.path + ".tmp").writeText(text); File(f.path + ".tmp").renameTo(f)
+    println("written ${f.path} (${text.length / 1024} KB)")
 }
 
 /** Corporate-action diagnostics for the workflow log. */

@@ -1796,7 +1796,7 @@ class SwingApp(private val p: Platform) {
                 "fundSearch" -> linkedMapOf("ok" to true, "q" to a.str("q"), "results" to Funds.search(fundData(false), a.str("q")))
                 "fnoLab" -> labView()
                 "liveQuotes" -> liveQuotes(a)
-                "intraday" -> night.view(now())
+                "intraday" -> night.view(now(), refresh = !a.bool("cached"))
                 "brokerStatus" -> brokerStatus()
                 "brokerQuotes" -> brokerQuotes(a)
                 "priceHealth" -> priceHealth()

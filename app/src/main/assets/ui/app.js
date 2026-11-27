@@ -170,7 +170,7 @@
       if (name === 'fnoTicker' || name === 'fnoLab') { onLive(name, res, ok); return; }
       if (name === 'liveQuotes') { onStockLive(res, ok); return; }
       if (name === 'liveScan' || name === 'liveScanSet') { onLiveScan(name, res, ok); return; }
-      if (name === 'intraday') { ntBusy = 0; if (ok) { ui.intraday = res; ntAt = Date.now(); if (!sheet && ui.tab === 'today') render(true); } return; }
+      if (name === 'intraday') { ntBusy = 0; if (ok) { ui.intraday = res; ntAt = Date.now(); if (!sheet && (ui.tab === 'today' || ui.tab === 'setups')) render(true); } return; }
       if (name === 'updateCheck' || name === 'updateProgress' || name === 'updateInstall') { onUpdate(name, res, ok, err); return; }
       if (name === 'brokerStatus') { if (ok) { ui.broker = res; if (sheet && (sheet.kind === 'settings' || sheet.kind === 'broker') && !sheet.waiting) { var bb = document.getElementById('brokerbox'); if (sheet.kind === 'settings') { try { var sb = elSheet.querySelector('.sb'), y = sb ? sb.scrollTop : 0; paintSheet(true); if (sb) elSheet.querySelector('.sb').scrollTop = y; } catch (e) {} } } } return; }
       if (name === 'brokerConnect') { clearPending('brokerConnect', true);
@@ -212,6 +212,14 @@
   };
 
   /* ---------- toasts ---------- */
+  /* ---------- Setups filters (remembered on this phone) ---------- */
+  try { ui.sf = JSON.parse(localStorage.getItem('se_sf') || '{}') || {}; } catch (e) { ui.sf = {}; }
+  function sfSet(p) {
+    var f = ui.sf || (ui.sf = {}); for (var k in p) f[k] = p[k];
+    ui.sfMore = false;
+    try { localStorage.setItem('se_sf', JSON.stringify(f)); } catch (e) {}
+    render(true);
+  }
   /* ---------- in-app update ---------- */
   function updPaint() {
     if (sheet && sheet.kind === 'settings' && !sheet.waiting) { var box = document.getElementById('updbox'); if (box) box.innerHTML = SE.updRow(ui); return; }
@@ -630,7 +638,7 @@
   var ntAt = 0, ntBusy = 0;
   function nightLoop() {
     try {
-      if (document.hidden || ui.tab !== 'today') return;
+      if (document.hidden || (ui.tab !== 'today' && ui.tab !== 'setups')) return;
       var t = Date.now();
       if ((t - ntAt >= 600000 || !ui.intraday) && !(ntBusy && t - ntBusy < 15000)) { ntBusy = t; ntAt = t; bridge().action('intraday', '{}'); }
     } catch (e) { ntBusy = 0; }
@@ -1195,6 +1203,12 @@
         break;
       case 'dismiss-banner': ui.bannerDismissed = true; render(true); break;
       case 'upd-check': updCheck(); break;
+      case 'sf-type': sfSet({ type: id }); break;
+      case 'sf-fno': sfSet({ fno: !(ui.sf && ui.sf.fno) }); break;
+      case 'sf-lose': sfSet({ lose: !(ui.sf && ui.sf.lose) }); break;
+      case 'sf-price': { var ps = ['any', 'lt200', 'm', 'gt1k'], cp = ps.indexOf((ui.sf && ui.sf.price) || 'any'); sfSet({ price: ps[(cp + 1) % ps.length] }); break; }
+      case 'sf-clear': ui.sf = {}; sfSet({}); break;
+      case 'sf-more': ui.sfMore = true; render(true); break;
       case 'upd-go': updGo(); break;
       case 'upd-perm': try { bridge().action('updatePermission', '{}'); } catch (e) {} break;
       case 'upd-hide': ui.updHidden = true; render(true); break;

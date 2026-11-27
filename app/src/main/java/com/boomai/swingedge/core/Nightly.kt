@@ -153,7 +153,8 @@ object NightCalls {
     const val MIN_TRADES = 30
     const val MAX_SETUPS = 15
     const val MAX_PER_RULE = 5
-    const val MAX_SWING = 5
+    const val MAX_SWING = 40
+    const val MAX_PER_SWING_RULE = 8
     const val COST_INTRADAY = 0.001
     const val COST_SWING = 0.0025
     /** liquidity screen for intraday: price and 20-day average turnover (rupees) */
@@ -177,9 +178,27 @@ object NightCalls {
         Triple("gapgo", "Gap-and-go", "Only knowable at the open: in an uptrend, if it opens at least 1.5% up and above the previous high, buy above the open + 0.1 ATR after 9:30 (opening-range high proxy), stop 0.3 ATR under the open, target 2R; exit 15:15."),
         Triple("washout", "Washout dip (swing)", "OMEGA washout: market RSI(2) ≤ 10; stock relative strength ≥ 80th pct, above its 200-day average, RSI(2) ≤ 5. Buy next open; stop 2 ATR, target 3 ATR, max 8 days."),
         Triple("quick", "Quick bounce (swing)", "OMEGA quick: market RSI(2) ≤ 5 and stock RSI(2) ≤ 2 above its 200-day average. Buy next open; sell on the first close with RSI(2) > 70 or on day 5; 3 ATR disaster stop."),
-        Triple("daily", "Daily leader dip (swing)", "OMEGA daily (non-washout days): top 10% strength, above its 200-day average, RSI(2) ≤ 1. Half size. Buy next open; exit RSI(2) > 70 or day 5; 3 ATR disaster stop.")
+        Triple("daily", "Daily leader dip (swing)", "OMEGA daily (non-washout days): top 10% strength, above its 200-day average, RSI(2) ≤ 1. Half size. Buy next open; exit RSI(2) > 70 or day 5; 3 ATR disaster stop."),
+        Triple("brk", "55-day breakout (swing)", "Close above the highest high of the last 55 days on at least 1.5× average volume, above the 50-day average, closing in the top 30% of the day's range. Buy next open; stop 2 ATR, target 4 ATR, max 20 days."),
+        Triple("darvas", "Darvas / tight-base breakout (swing)", "Uptrend (50-day > 200-day average) within 25% of the 52-week high; the last 15 days sat in a box no wider than 3.5 ATR; today closed above the box top on 1.3× volume. Buy next open; stop at the box bottom (max 3 ATR), target 2× the risk, max 20 days."),
+        Triple("pb20", "Pullback to 20-day average (swing)", "Strong trend (20 > 50 > 200-day average, top 30% 6-month strength); today dipped to the 20-day average and closed green above it. Buy next open; stop 1.5 ATR, target 3 ATR, max 10 days."),
+        Triple("hi52", "52-week high on volume (swing)", "New 52-week closing high on at least 1.5× average volume. Buy next open; stop 2.5 ATR, target 5 ATR, max 30 days."),
+        Triple("vols", "Volume surge (swing)", "Volume at least 3× its 20-day average, up 4% or more, closing in the top 25% of the range, above the 50-day average. Buy next open; stop 2 ATR, target 4 ATR, max 15 days.")
     )
-    fun isSwing(rule: String) = rule == "washout" || rule == "quick" || rule == "daily"
+    val SWING_RULES = setOf("washout", "quick", "daily", "brk", "darvas", "pb20", "hi52", "vols")
+    fun isSwing(rule: String) = rule in SWING_RULES
+    /** max of a[k] over [i - w, i - 1] (NaN until a full window exists) */
+    fun priorMax(a: DoubleArray, n: Int, w: Int): DoubleArray {
+        val out = DoubleArray(n) { Double.NaN }; val dq = java.util.ArrayDeque<Int>()
+        for (i in 0 until n) {
+            while (dq.isNotEmpty() && dq.peekFirst() < i - w) dq.pollFirst()
+            if (i >= w) out[i] = a[dq.peekFirst()]
+            while (dq.isNotEmpty() && a[dq.peekLast()] <= a[i]) dq.pollLast()
+            dq.addLast(i)
+        }
+        return out
+    }
+    fun priorMin(a: DoubleArray, n: Int, w: Int): DoubleArray { val neg = DoubleArray(n) { -a[it] }; return priorMax(neg, n, w).map { -it }.toDoubleArray() }
 
     // ------------------------------------------------------------------ evening schedule (pure)
 
@@ -227,7 +246,16 @@ object NightCalls {
         val rsi2 = DoubleArray(n) { Double.NaN }
         val to20 = DoubleArray(n) { Double.NaN }
         val r126 = DoubleArray(n) { Double.NaN }
+        /** 20-day average volume of the PRIOR 20 days, prior 55-day high, prior 251-day closing high, prior 15-day box */
+        val vavg = DoubleArray(n) { Double.NaN }
+        val hi55: DoubleArray by lazy { priorMax(s.h, n, 55) }
+        val chi251: DoubleArray by lazy { priorMax(s.c, n, 251) }
+        val hi252: DoubleArray by lazy { priorMax(s.h, n, 252) }
+        val box15h: DoubleArray by lazy { priorMax(s.h, n, 15) }
+        val box15l: DoubleArray by lazy { priorMin(s.l, n, 15) }
         init {
+            var vs = 0.0
+            for (i in 0 until n) { if (i >= 20) { vavg[i] = vs / 20; vs -= s.v[i - 20] }; vs += s.v[i] }
             var tr = 0.0; var a = Double.NaN; var g = 0.0; var ls = 0.0
             var s20 = 0.0; var s50 = 0.0; var s200 = 0.0; var t20 = 0.0
             for (i in 0 until n) {
@@ -388,6 +416,47 @@ object NightCalls {
         return rOf(true, entry, s.c[k - 1], r, COST_SWING)
     }
 
+    /** Long from the open of bar [e]; stop / target at fixed distances; else exit at the close of day [maxDays]. */
+    fun simLevels(f: Feat, e: Int, stopDist: Double, tgtDist: Double, maxDays: Int): Double? {
+        val s = f.s
+        if (e >= s.n || !(stopDist > 0)) return null
+        val entry = s.o[e]; val st = entry - stopDist; val tg = entry + tgtDist
+        var k = e
+        while (k < s.n && k < e + maxDays) {
+            val w = walk(s.o[k], s.h[k], s.l[k], s.c[k], true, Double.NaN, st, tg, entry)
+            if (w != null && !w.second.isNaN()) return rOf(true, entry, w.second, stopDist, COST_SWING)
+            k++
+        }
+        if (k < e + maxDays) return null
+        return rOf(true, entry, s.c[k - 1], stopDist, COST_SWING)
+    }
+
+    /** New swing setups on bar [i]: (rule, stop distance, target distance, max days, plain trigger text). */
+    fun swingSignals(f: Feat, i: Int, rs: Double): List<Sig> {
+        val s = f.s; val out = ArrayList<Sig>(2)
+        val a = f.atr[i]; val c = s.c[i]; val h = s.h[i]; val l = s.l[i]; val rng = h - l
+        if (!(a > 0) || f.sma50[i].isNaN() || !(f.vavg[i] > 0) || i < 1) return out
+        val vx = s.v[i] / f.vavg[i]; val pos = if (rng > 0) (c - l) / rng else 0.5
+        // 55-day breakout on volume
+        val h55 = f.hi55[i]
+        if (!h55.isNaN() && c > h55 && vx >= 1.5 && c > f.sma50[i] && pos >= 0.7) out.add(Sig("brk", "BUY", c, 2 * a, 4 * a, "20", 1.0))
+        // Darvas / tight base breakout
+        val bh = f.box15h[i]; val bl = f.box15l[i]; val y52 = f.hi252[i]
+        if (!bh.isNaN() && !bl.isNaN() && !f.sma200[i].isNaN() && f.sma50[i] > f.sma200[i] && bh - bl <= 3.5 * a && c > bh && vx >= 1.3 && !y52.isNaN() && c >= 0.75 * y52) {
+            val sd = minOf(c - bl, 3 * a)
+            if (sd > 0.3 * a) out.add(Sig("darvas", "BUY", c, sd, 2 * sd, "20", 1.0))
+        }
+        // pullback to the 20-day average
+        if (!f.sma200[i].isNaN() && f.sma20[i] > f.sma50[i] && f.sma50[i] > f.sma200[i] && !rs.isNaN() && rs >= 70 &&
+            l <= f.sma20[i] * 1.005 && c > f.sma20[i] && c > s.o[i]) out.add(Sig("pb20", "BUY", c, 1.5 * a, 3 * a, "10", 1.0))
+        // 52-week closing high on volume
+        val c251 = f.chi251[i]
+        if (!c251.isNaN() && c > c251 && vx >= 1.5) out.add(Sig("hi52", "BUY", c, 2.5 * a, 5 * a, "30", 1.0))
+        // volume surge
+        if (vx >= 3 && s.c[i - 1] > 0 && c / s.c[i - 1] - 1 >= 0.04 && pos >= 0.75 && c > f.sma50[i]) out.add(Sig("vols", "BUY", c, 2 * a, 4 * a, "15", 1.0))
+        return out
+    }
+
     // ------------------------------------------------------------------ whole run
 
     /**
@@ -467,6 +536,19 @@ object NightCalls {
                         }
                     }
                 }
+                // swing entries: breakout / base / pullback / 52w high / volume surge (stop + target distances in rupees)
+                if (swingLiquid) {
+                    val rsN = rsPct(p, f.r126[i])
+                    for (sg in swingSignals(f, i, rsN)) {
+                        val md = sg.cond.toInt()
+                        if (i < last) simLevels(f, i + 1, sg.stop, sg.target, md)?.let { stats[sg.rule]!!.add(it) }
+                        else {
+                            val e = s.c[i]; val st = tick(e - sg.stop); val tg = tick(e + sg.target); val q = qty(e, st)
+                            live.add(Pair(NightSetup(x.sym, x.name, sg.rule, "swing", "BUY", tick(e), st, tg, "max $md days", q, r2(q * (e - st)), x.sym in fno,
+                                "Buy at the open (near ₹${fmt(tick(e))})", if (rsN.isNaN()) 0.0 else rsN), sg.rule))
+                        }
+                    }
+                }
                 // swing entries (OMEGA modes)
                 if (swingLiquid && !f.sma200[i].isNaN() && s.c[i] > f.sma200[i] && !f.rsi2[i].isNaN()) {
                     val mr = mf.rsi2[p]; val rs = rsPct(p, f.r126[i]); val a = f.atr[i]
@@ -502,9 +584,13 @@ object NightCalls {
             if ((per[x.rule] ?: 0) >= MAX_PER_RULE || !seen.add(x.sym)) continue
             per[x.rule] = (per[x.rule] ?: 0) + 1; pick.add(x)
         }
-        val swing = live.filter { isSwing(it.second) && ok(it.second) }.map { it.first }
+        // swing: every rule with enough tests is listed (the app hides the ones that lost money unless asked), best record first,
+        // up to MAX_PER_SWING_RULE per rule; within a rule the strongest stocks (6-month strength percentile) first
+        val swPer = HashMap<String, Int>()
+        val swing = live.filter { isSwing(it.second) && stats[it.second]!!.status != "FEW" }.map { it.first }
             .sortedWith(compareByDescending<NightSetup> { exp(it.rule) }.thenByDescending { it.score }.thenBy { it.sym })
-            .distinctBy { it.sym }.take(MAX_SWING)
+            .filter { val k = swPer[it.rule] ?: 0; if (k >= MAX_PER_SWING_RULE) false else { swPer[it.rule] = k + 1; true } }
+            .take(MAX_SWING)
         val notes = listOf(
             "Back-test on ${nd} sessions of NSE bhavcopies (daily bars). Fill/exit order from the OHLC path assumption (up-close day: open-low-high-close; down-close day: open-high-low-close); a gap through the trigger fills at the open; no stop/target hit = exit at the close (15:15 proxy). Costs 0.10% (intraday) / 0.25% (swing) per round trip.",
             "Only rules with >= $MIN_TRADES back-test trades and a positive average R (path model) are listed; the worst-case column assumes the stop was hit whenever the day reached it. Past results on one year of data are not a promise. Size: ₹1,00,000 capital, 1% (₹1,000) risk per trade.",
@@ -632,7 +718,7 @@ object NightCalls {
         val names = HashMap<String, RuleStat>(); for (r in d.rules) names[r.id] = r
         return linkedMapOf("ok" to true, "none" to false, "asof" to iso(d.asof), "forDay" to iso(d.forDay), "forLabel" to Clock.dayLabel(d.forDay),
             "forMs" to Clock.msAt(d.forDay, Clock.OPEN_MIN), "isToday" to (d.forDay == today), "stale" to (d.forDay < today),
-            "builtAt" to d.builtAt, "sessions" to d.sessions, "notified" to (notifiedFor >= d.forDay), "capital" to CAPITAL, "riskPct" to RISK_PCT,
+            "builtAt" to d.builtAt, "sessions" to d.sessions, "stocks" to d.stocks, "notified" to (notifiedFor >= d.forDay), "capital" to CAPITAL, "riskPct" to RISK_PCT,
             "rules" to d.rules.map { linkedMapOf("id" to it.id, "kind" to it.kind, "name" to it.name, "text" to it.text, "trades" to it.trades, "winPct" to r2(it.winPct), "avgR" to Math.round(it.avgR * 100) / 100.0, "avgWorst" to Math.round(it.avgWorst * 100) / 100.0, "status" to it.status) },
             "setups" to d.setups.map { x -> linkedMapOf("sym" to x.sym, "name" to x.name, "rule" to x.rule, "ruleName" to (names[x.rule]?.name ?: x.rule), "kind" to x.kind, "side" to x.side,
                 "trigger" to x.trigger, "stop" to x.stop, "target" to x.target, "exit" to x.exit, "qty" to x.qty, "riskRs" to x.riskRs, "fno" to x.fno, "when" to x.cond,
@@ -669,7 +755,7 @@ class NightDesk(private val p: Platform) {
     private var fetchedAt = 0L
     private var loaded = false
 
-    private fun load() {
+    @Synchronized private fun load() {
         if (loaded) return
         loaded = true
         try {
@@ -684,7 +770,7 @@ class NightDesk(private val p: Platform) {
     fun nextWake(now: Long): Long { load(); return NightCalls.nextWake(now, notifiedFor) }
 
     /** Downloads intraday.csv + holidays.json (at most every 20 minutes). True when a newer file was installed. */
-    fun fetch(now: Long): Boolean {
+    @Synchronized fun fetch(now: Long): Boolean {
         load()
         if (now - fetchedAt in 0 until FETCH_GAP_MS) return false
         fetchedAt = now; save()
@@ -703,7 +789,7 @@ class NightDesk(private val p: Platform) {
      * Evening step. Returns (title, body) when the notification is due now, else null. From 20:35 on a notify evening it
      * fetches until the file for the next session is there; at 22:00 it announces it once; past 23:30 it gives up quietly.
      */
-    fun step(now: Long): Pair<String, String>? {
+    @Synchronized fun step(now: Long): Pair<String, String>? {
         load()
         val day = Clock.epochDay(now); val min = Clock.minuteOfDay(now)
         if (!NightCalls.notifyEvening(day) || min < NightCalls.FETCH_MIN) return null
@@ -717,7 +803,11 @@ class NightDesk(private val p: Platform) {
         return null
     }
 
-    fun view(now: Long): Map<String, Any?> { load(); return NightCalls.view(data, now, notifiedFor) }
+    /** Screen read: refreshes the file first (throttled to one download per 20 minutes), so it is there whenever the app opens. */
+    fun view(now: Long, refresh: Boolean = true): Map<String, Any?> {
+        if (refresh) try { fetch(now) } catch (t: Throwable) {}
+        synchronized(this) { load(); return NightCalls.view(data, now, notifiedFor) }
+    }
 
     companion object {
         const val STATE = "night.json"

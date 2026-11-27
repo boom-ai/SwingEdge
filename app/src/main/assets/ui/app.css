@@ -1513,3 +1513,18 @@ a, .lnk { color: var(--link); }
 .lrow .r { flex: 0 1 auto; max-width: 52%; }
 .lrow .r small, .lrow .r .num { white-space: normal; overflow-wrap: anywhere; }
 .lrow .l { flex: 1 1 48%; }
+/* Setups filters */
+.sfch, .sfch2 { margin-bottom: 6px; }
+.sfch2 .chip { min-height: 30px; font-size: var(--t-cap); }
+.chip em { font-style: normal; font-family: var(--mono); font-size: var(--t-cap); opacity: .75; margin-left: 2px; }
+.chip em.down { color: var(--red); opacity: 1; }
+.chip.on em { opacity: .8; color: #000; }
+.lrow small.rtag { color: var(--accent); text-transform: uppercase; letter-spacing: .05em; font-size: var(--t-cap); font-weight: 600; }
+.lrow.nr { min-height: 0; padding: 10px var(--pad); align-items: flex-start; }
+.lrow.nr .r { max-width: 56%; }
+.lrow.nr .r small { white-space: nowrap; }
+.lrow.nr small { margin-top: 1px; }
+.lrow.nr .l { flex: 1 1 0; min-width: 44%; }
+.lrow.nr .r { flex: 0 0 auto; max-width: 54%; }
+.lrow.nr .r b { font-size: var(--t-sec); }
+.lrow.nr .r small { font-size: var(--t-cap); }

@@ -614,10 +614,81 @@
       btn('live-bg', null, 'Screen-off scanning: ' + (L.bg === true ? 'on' : 'off'), 'sm ghost', { busy: pend(ui, 'liveScanSet') }) + '</div>';
   }
 
+  /* ---------- Setups: tonight's back-tested list (intraday.csv) with filters ---------- */
+  var SF_PRICE = [['any', 'Any price'], ['lt200', 'Under ₹200'], ['m', '₹200–1,000'], ['gt1k', 'Over ₹1,000']];
+  function sfOpts(ui) { var f = O(ui.sf); return { type: T(f.type) || 'all', fno: f.fno === true, price: T(f.price) || 'any', lose: f.lose === true }; }
+  function sfPriceOk(p, k) { var n = N(p); if (k === 'any' || n === null || n <= 0) return k === 'any'; return k === 'lt200' ? n < 200 : k === 'm' ? n >= 200 && n <= 1000 : n > 1000; }
+  function setupRows(d, f) {
+    var st = {}; A(d.rules).forEach(function (r) { st[T(r.id)] = O(r); });
+    var seen = {};
+    return A(d.setups).filter(function (x) {
+      x = O(x); var r = st[T(x.rule)] || {}, kind = T(x.kind);
+      if (!f.lose && T(r.status) === 'TESTED-') return false;
+      if (f.type === 'intraday' && kind !== 'intraday') return false;
+      if (f.type === 'swing' && kind !== 'swing') return false;
+      if (f.type !== 'all' && f.type !== 'intraday' && f.type !== 'swing' && T(x.rule) !== f.type) return false;
+      if (f.fno && x.fno !== true) return false;
+      if (!sfPriceOk(T(x.side) === 'IF GAP' ? x.trigger : x.trigger, f.price)) return false;
+      if (f.type === 'all' || f.type === 'intraday' || f.type === 'swing') { if (seen[T(x.sym)]) return false; seen[T(x.sym)] = 1; }
+      return true;
+    });
+  }
+  function nightRow(x) {
+    x = O(x);
+    var side = T(x.side), sw = T(x.kind) === 'swing', gap = side === 'IF GAP', av = N(x.avgR);
+    var cp = function (v) { var n = N(v); return n !== null && n >= 1000 ? '₹' + grp(String(Math.round(n))) : px(v); };
+    var lead = gap ? 'If gap ≥ ' + cp(x.trigger) : side === 'SELL' ? 'Sell < ' + cp(x.trigger) : (sw ? 'Buy ≈ ' : 'Buy > ') + cp(x.trigger);
+    var lv = gap ? 'at the open' : 'SL ' + cp(x.stop) + (N(x.target) > 0 ? ' · T ' + cp(x.target) : '');
+    var q = (N(x.qty) > 0 ? (N(x.qty) | 0) + ' sh · ' : '') + (sw ? T(x.exit) : 'exit 15:15');
+    var rec = (N(x.trades) || 0) + ' tests · ' + (N(x.winPct) === null ? DASH : Math.round(N(x.winPct)) + '%') + ' · ' + (av === null ? DASH : (av > 0 ? '+' : av < 0 ? '−' : '') + Math.abs(av).toFixed(2) + 'R');
+    return '<button type="button" class="lrow nr" data-c="stock" data-id="' + esc(T(x.sym)) + '" data-name="' + esc(T(x.name)) + '">' +
+      '<span class="l"><b>' + tx(x.sym) + (x.fno === true ? ' <i class="qt">F&amp;O</i>' : '') + '</b><small class="rtag">' + esc(T(x.ruleName).replace(/ \(swing\)$/, '')) + '</small>' +
+      '<small class="num ' + (av !== null && av < 0 ? 'down' : '') + '">' + esc(rec) + '</small>' + (gap ? '<small class="ntw">' + tx(x.when) + '</small>' : '') + '</span>' +
+      '<span class="r"><b class="num ' + (side === 'SELL' ? 'down' : gap ? '' : 'up') + '">' + esc(lead) + '</b><small class="num">' + esc(lv) + '</small><small class="mut">' + esc(q) + '</small></span></button>';
+  }
+  function nightSetups(S, ui) {
+    var d = O(ui.intraday), f = sfOpts(ui);
+    var chip = function (cmd, id, label, on, extra) { return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-c="' + cmd + '"' + (id !== null ? ' data-id="' + esc(id) + '"' : '') + ' aria-pressed="' + (on ? 'true' : 'false') + '">' + label + (extra || '') + '</button>'; };
+    var title = d.ok === true && d.none !== true && T(d.forLabel) ? (d.isToday === true ? 'Setups for today · ' : d.stale === true ? 'Last list · ' : 'Setups for ') + esc(T(d.forLabel)) : 'Setups for the next session';
+    var h = sech(title, { id: 'nsetups', info: ['nsetups', 'Built every trading evening at about 8:15 PM from the day’s NSE closing data for every liquid stock. Each setup type is back-tested on the last year of data: you see how many times it fired, how often it won and the average result in R (1R = the risk from entry to stop). Intraday setups trigger in the next session and close by 15:15; swing setups are bought at the next open and held for days. Setup types that lost money in testing are hidden unless you turn on “Show losing types”.', 'About these setups'],
+      right: N(d.stocks) > 0 ? '<span class="sr2">' + grp(String(N(d.stocks))) + ' stocks</span>' : '' }, ui);
+    if (d.ok !== true || d.none === true) {
+      h += '<div class="chips sfch">' + chip('sf-type', 'all', 'Tonight’s list', f.type !== 'leaders') + chip('sf-type', 'leaders', 'Trend leaders', f.type === 'leaders', ' <em class="num">' + A(S.ideas).length + '</em>') + '</div>';
+      if (f.type === 'leaders') return h + ideasBlock(S, 'setups', ui);
+      return h + (d.ok !== true ? skCard('', 4) : '<div class="empty"><div class="ei">' + ic('clock') + '</div><h3>Tonight’s list is not here yet</h3><p>It is built after the market closes (about 8:15 PM) and arrives by 10 PM.</p></div>');
+    }
+    var rules = A(d.rules), all = A(d.setups), cnt = {}, kinds = { intraday: 0, swing: 0 };
+    var f0 = { type: 'all', fno: f.fno, price: f.price, lose: f.lose };
+    setupRows(d, { type: 'intraday', fno: f.fno, price: f.price, lose: f.lose }).forEach(function () { kinds.intraday++; });
+    setupRows(d, { type: 'swing', fno: f.fno, price: f.price, lose: f.lose }).forEach(function () { kinds.swing++; });
+    all.forEach(function (x) { x = O(x); if (setupRows({ rules: rules, setups: [x] }, { type: T(x.rule), fno: f.fno, price: f.price, lose: f.lose }).length) cnt[T(x.rule)] = (cnt[T(x.rule)] || 0) + 1; });
+    var nAll = setupRows(d, f0).length;
+    var t1 = chip('sf-type', 'all', 'All', f.type === 'all', ' <em class="num">' + nAll + '</em>') + chip('sf-type', 'intraday', 'Intraday', f.type === 'intraday', ' <em class="num">' + kinds.intraday + '</em>') +
+      chip('sf-type', 'swing', 'Swing', f.type === 'swing', ' <em class="num">' + kinds.swing + '</em>');
+    rules.forEach(function (r) {
+      r = O(r); var id = T(r.id), lost = T(r.status) === 'TESTED-';
+      if (!cnt[id] && f.type !== id) return;
+      t1 += chip('sf-type', id, esc(T(r.name).replace(/ \(swing\)$/, '')), f.type === id, ' <em class="num' + (lost ? ' down' : '') + '">' + (cnt[id] || 0) + '</em>');
+    });
+    t1 += chip('sf-type', 'leaders', 'Trend leaders', f.type === 'leaders', ' <em class="num">' + A(S.ideas).length + '</em>');
+    var pl = SF_PRICE.filter(function (p) { return p[0] === f.price; })[0] || SF_PRICE[0];
+    var t2 = chip('sf-fno', null, 'F&amp;O only', f.fno) + chip('sf-price', null, esc(pl[1]) + ' ▾', f.price !== 'any') + chip('sf-lose', null, 'Show losing types', f.lose) +
+      (f.fno || f.price !== 'any' || f.lose || f.type !== 'all' ? chip('sf-clear', null, 'Clear', false) : '');
+    h += '<div class="chips sfch">' + t1 + '</div><div class="chips sfch2">' + t2 + '</div>';
+    if (f.type === 'leaders') return h + ideasBlock(S, 'setups', ui);
+    var cur = O(rules.filter(function (r) { return T(O(r).id) === f.type; })[0]);
+    if (T(cur.id)) h += '<div class="hint hintpad">' + ic(T(cur.status) === 'TESTED-' ? 'warn' : 'info') + '<span class="t"><b>' + tx(cur.name) + '.</b> ' + tx(cur.text) + ' Tested ' + (N(cur.trades) || 0) + ' times: ' + Math.round(N(cur.winPct) || 0) + '% won, average ' + ((N(cur.avgR) || 0) >= 0 ? '+' : '−') + Math.abs(N(cur.avgR) || 0).toFixed(2) + 'R.</span></div>';
+    var rows = setupRows(d, f), max = ui.sfMore === true ? rows.length : 25;
+    if (!rows.length) return h + '<p class="none">' + (all.length ? 'Nothing matches these filters.' : 'No setup type has a positive tested record tonight. Sitting out is a position.') + '</p>';
+    h += '<div class="card mv nt">' + rows.slice(0, max).map(nightRow).join('') + '</div>';
+    if (rows.length > max) h += '<div class="btns hintpad">' + btn('sf-more', null, 'Show all ' + rows.length, 'sm ghost') + '</div>';
+    if (d.stale === true) h += '<div class="hint hintpad">' + ic('clock') + '<span class="t">This list was for ' + esc(T(d.forLabel)) + '. Tonight’s list arrives after about 8:15 PM.</span></div>';
+    return h + '<div class="hint hintpad">' + ic('warn') + '<span class="t">Back-tested on ' + (N(d.sessions) || 0) + ' daily sessions, not proven live. Size: ₹1 lakh, 1% risk per trade.</span></div>';
+  }
   function setups(S, ui) {
     var ws = watchItems(S), asof = '';
-    var h = '<div class="links"><button type="button" class="card golink" data-c="index-open">' + ic('layers') + '<span class="gt"><b>Index stocks</b><span>Nifty 50, Bank, Midcap and more, with today’s call</span></span>' + ic('chev') + '</button>' +
-      trackRow(S) + '</div>' + ideasBlock(S, 'setups', ui) + liveScanView(S, ui) + myWatchSection(S, ui);
+    var h = nightSetups(S, ui) + '<div class="links"><button type="button" class="card golink" data-c="index-open">' + ic('layers') + '<span class="gt"><b>Index stocks</b><span>Nifty 50, Bank, Midcap and more, with today’s call</span></span>' + ic('chev') + '</button>' +
+      trackRow(S) + '</div>' + liveScanView(S, ui) + myWatchSection(S, ui);
     ws.forEach(function (x) { if (!asof) asof = barDayText(x.barDay); });
     h += sech('Fresh EMA crossovers', { info: ['xover', 'Stocks whose 10-day exponential moving average (EMA) just crossed above the 20-day, while staying above the 50-, 100- and 200-day, and that trade ₹25 crore or more a day. A screener for your own chart reading, not buy calls. On NSE data since 2013 it did no better than a random uptrend stock over 6 days; held about a month it averaged +1.2% a trade vs +0.7% for random, with losing years.', 'About this list'],
       right: asof ? '<span class="sr2">bar ' + asof + (S.marketOpen === true ? ', forming' : '') + '</span>' : '' }, ui);
@@ -1700,9 +1771,9 @@
   function intradayView(S, ui) {
     var d = O(ui.intraday);
     if (d.ok !== true || d.none === true || d.stale === true || !T(d.forLabel)) return '';
-    var rows = A(d.setups), rules = A(d.rules), all = ui.ntMore === true, shown = all ? rows : rows.slice(0, 6), r2 = function (v) { var n = N(v); return n === null ? DASH : (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(2) + 'R'; };
+    var rows = setupRows(d, { type: 'all', fno: false, price: 'any', lose: false }), rules = A(d.rules), all = ui.ntMore === true, shown = all ? rows : rows.slice(0, 6), r2 = function (v) { var n = N(v); return n === null ? DASH : (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(2) + 'R'; };
     var h = '<section class="card nt" aria-label="Intraday calls">' + sech((d.isToday === true ? 'Today' : 'Tomorrow') + ' · ' + esc(T(d.forLabel)), { id: 'night', cnt: rows.length,
-      info: ['night', texts(d.notes).join(' ') || 'Mechanical rules, back-tested on daily bars only. Not proven live.', 'About these calls'], right: '<span class="sr2">intraday</span>' }, ui);
+      info: ['night', texts(d.notes).join(' ') || 'Mechanical rules, back-tested on daily bars only. Not proven live.', 'About these calls'], right: '<button type="button" class="linkbtn" data-c="tab" data-id="setups">Filter</button>' }, ui);
     h += rows.length ? '<div class="list">' + shown.map(function (x) {
       var side = T(x.side), sw = T(x.kind) === 'swing', gap = side === 'IF GAP';
       var lead = gap ? 'If gap' : side === 'SELL' ? 'Sell < ' + px(x.trigger) : (sw ? 'Buy ≈ ' : 'Buy > ') + px(x.trigger);

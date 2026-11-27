@@ -7,7 +7,7 @@ import java.io.File
 object NightTests {
     fun all(): List<Pair<String, () -> Unit>> = listOf(
         "night-holidays" to ::holidays, "night-schedule" to ::schedule, "night-rules" to ::rules, "night-csv" to ::csv,
-        "night-desk" to ::desk, "night-build" to ::buildSynthetic, "night-fixture-backtest" to ::fixture).map { (n, f) -> n to { withHolidays(f) } }
+        "night-desk" to ::desk, "night-build" to ::buildSynthetic, "night-swing-rules" to ::swingRules, "night-fixture-backtest" to ::fixture).map { (n, f) -> n to { withHolidays(f) } }
 
     /** Real NSE holidays on for the body (the harness switches them off for the legacy synthetic-calendar simulations). */
     private fun withHolidays(f: () -> Unit) { val was = Holidays.enabled; Holidays.enabled = true; try { f() } finally { Holidays.enabled = was } }
@@ -252,5 +252,25 @@ object NightTests {
         T.check(d.rules.filter { it.kind == "intraday" }.sumOf { it.trades } > 300, "fixture intraday trades")
         T.check(d.rules.all { it.trades == 0 || (it.avgR > -1.5 && it.avgR < 2.5) }, "R within the stop/target bounds")
         T.check(d.rules.all { it.avgWorst <= it.avgR + 1e-9 }, "worst case never above the path model")
+    }
+
+    /** 260 days of a slow uptrend, a 15-day tight box, then a high-volume close above the box and the 55-day high. */
+    fun swingRules() {
+        val s = Series("TST", 300); var d = day(2026, 1, 1); var p = 100.0
+        for (k in 0 until 240) { while (!Clock.isWeekday(d)) d++; p *= 1.002; s.add(d, p, p * 1.01, p * 0.99, p, 1e5); d++ }
+        val top = p * 1.012
+        for (k in 0 until 15) { while (!Clock.isWeekday(d)) d++; s.add(d, p, top, p * 0.99, p * (1 + (k % 3 - 1) * 0.002), 1e5); d++ }
+        while (!Clock.isWeekday(d)) d++
+        val c = top * 1.03; s.add(d, top, c * 1.002, top * 0.998, c, 4e5)
+        val f = NightCalls.Feat(s); val i = s.n - 1
+        val ids = NightCalls.swingSignals(f, i, 85.0).map { it.rule }
+        T.check("brk" in ids, "55-day breakout on volume fires: $ids")
+        T.check("darvas" in ids, "tight-box (Darvas) breakout fires: $ids")
+        T.check("hi52" !in ids || f.chi251[i] < c, "52-week high only when the close beats the prior 251 closes")
+        T.check("vols" in ids, "4x volume, +3% close in the top of the range = volume surge: $ids")
+        val dv = NightCalls.swingSignals(f, i, 85.0).first { it.rule == "darvas" }
+        T.check(dv.stop > 0 && dv.target == 2 * dv.stop && dv.stop <= 3 * f.atr[i] + 1e-9, "Darvas stop at the box bottom capped at 3 ATR, target 2R")
+        T.check(NightCalls.swingSignals(f, i - 3, 85.0).none { it.rule == "brk" || it.rule == "darvas" }, "no breakout inside the box")
+        T.check(NightCalls.priorMax(doubleArrayOf(1.0, 5.0, 2.0, 3.0, 1.0), 5, 2).drop(2).toList() == listOf(5.0, 5.0, 3.0), "priorMax excludes the current bar")
     }
 }

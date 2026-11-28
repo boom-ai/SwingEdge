@@ -1,23 +1,4 @@
 DATE,SYMBOL,KIND,DETAIL
-2026-11-20,ALUFLUOR,DIVIDEND,Ex-date: Interim Dividend - Rs 2.50 Per Share
-2026-11-20,ASHOKLEY,DIVIDEND,Ex-date: Interim Dividend - Re 1 Per Share
-2026-11-20,BFINVEST,DIVIDEND,Ex-date: Interim Dividend - Rs 20 Per Share
-2026-11-20,GVPTECH,RESULTS,Financial Results
-2026-11-20,INDIANB,BOARD,Fund Raising
-2026-11-20,JAMNAAUTO,DIVIDEND,Ex-date: Interim Dividend - Re 1 Per Share
-2026-11-20,MARSONS,DIVIDEND,Ex-date: Interim Dividend - Re 0.05 Per Share
-2026-11-20,MEDIASSIST,BUYBACK,Ex-date: Buy Back
-2026-11-20,OIL,DIVIDEND,Ex-date: Interim Dividend - Rs 7 Per Share
-2026-11-20,POLYPLEX,DIVIDEND,Ex-date: Interim Dividend - Rs 12 Per Share
-2026-11-20,RAMAPHO,DIVIDEND,Ex-date: Interim Dividend - Re 0.50 Per Share
-2026-11-20,SKYWAYS,DIVIDEND,Ex-date: Interim Dividend - Re 0.40 Per Share
-2026-11-20,SMLMAH,RIGHTS,Ex-date: Rights 2:7 @ Premium Rs 3496/-
-2026-11-20,STEELCAS,DIVIDEND,Ex-date: Interim Dividend - Re 0.45 Per Share
-2026-11-20,SUKHJITS,BOARD,Buyback
-2026-11-20,TALBROAUTO,DIVIDEND,Ex-date: Interim Dividend - Re 0.30 Per Share
-2026-11-20,TTKHLTCARE,BOARD,Bonus/Other business matters
-2026-11-20,VALECHAENG,RESULTS,Financial Results
-2026-11-20,VENUSPIPES,DIVIDEND,Ex-date: Interim Dividend - Re 0.50 Per Share
 2026-11-21,EMBDL,BOARD,Fund Raising
 2026-11-21,LAXMICOT,BOARD,Other business matters
 2026-11-21,VIVIANA,BOARD,Fund Raising
@@ -42,7 +23,7 @@ DATE,SYMBOL,KIND,DETAIL
 2026-11-26,DAVANGERE,BOARD,Other business matters
 2026-11-26,MINDACORP,BOARD,Fund Raising
 2026-11-26,PATANJALI,BOARD,Dividend
-2026-11-26,SGMART,BOARD,Board meeting Rescheduled
+2026-11-26,SGMART,BOARD,Fund Raising
 2026-11-26,TEAMGTY,BOARD,Fund Raising/Other business matters
 2026-11-27,662GS2051,ACTION,Ex-date: Interest Payment
 2026-11-27,CCCL,BOARD,Other business matters
@@ -60,6 +41,7 @@ DATE,SYMBOL,KIND,DETAIL
 2026-11-28,RIIT,BOARD,Fund Raising
 2026-11-30,INTERARCH,SPLIT,Ex-date: Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/- Per Share
 2026-11-30,LEEL,BOARD,Other business matters
+2026-11-30,NDRINVIT,BOARD,Other business matters
 2026-11-30,POWERGRID,BOARD,Fund Raising
 2026-11-30,SADHNANIQ,BOARD,Other business matters
 2026-11-30,TECHM,BONUS,Ex-date: Bonus 1:1
